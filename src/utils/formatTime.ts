@@ -1,33 +1,34 @@
-export function formatTime(seconds: number): string {
+export function formatTimeScale(seconds: number): string {
   const label = [];
 
-  if (seconds >= 60) {
-    let minutes = (seconds / 60) | 0;
-    seconds = seconds - minutes * 60;
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60 | 0;
+  const ms = Math.floor((seconds % 1) * 1000);
 
-    if (minutes >= 60) {
-      let hours = (minutes / 60) | 0;
-      minutes = minutes - hours * 60;
-
-      label.push(`${hours}h`);
-    }
-
-    if (minutes) {
-      label.push(`${minutes}m`);
-    }
+  if (h > 0) {
+    label.push(`${h}h`);
   }
 
-  let ms = Math.round(seconds * 1000) % 1000;
-
-  seconds = seconds | 0;
-
-  if (seconds || !(label.length || ms)) {
-    label.push(`${seconds}s`);
+  if (m > 0) {
+    label.push(`${m}m`);
   }
 
-  if (ms) {
+  if (s > 0) {
+    label.push(`${s}s`);
+  }
+
+  if (ms > 0) {
     label.push(`${ms}ms`);
   }
 
   return label.slice(0, 2).join(" ");
+}
+
+export function formatTime(seconds: number): string {
+  const h = String(Math.floor(seconds / 3600)).padStart(2, "0");
+  const m = String(Math.floor((seconds % 3600) / 60)).padStart(2, "0");
+  const s = String(seconds % 60 | 0).padStart(2, "0");
+
+  return `${h}:${m}:${s}`;
 }

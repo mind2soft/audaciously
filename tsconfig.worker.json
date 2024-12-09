@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.worker.tsbuildinfo",
+    "module": "commonjs",
+    "target": "es5",
+    "sourceMap": true,
+    "lib": ["webworker", "es6", "scripthost"],
+    "types": ["@types/audioworklet"]
+  },
+  "include": ["src/workers", "src/worker-env.d.ts"],
+  "exclude": ["node_modules"]
+}

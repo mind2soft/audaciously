@@ -5,7 +5,7 @@ import {
   timelineView,
   type TimelineView,
 } from "../../store/timeline";
-import { formatTime } from "../../utils/formatTime";
+import { formatTimeScale } from "../../utils/formatTime";
 import { createSpring } from "@solid-primitives/spring";
 
 type PointerMoveDelta = {
@@ -20,7 +20,7 @@ const AVG_DELTA_TIMEOUT = 200; // ms
 const render = throttle(function renderTimeline(
   canvas: HTMLCanvasElement,
   view: TimelineView,
-  pointerX: number
+  pointerX?: number
 ): void {
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
@@ -63,12 +63,14 @@ const render = throttle(function renderTimeline(
   }
   ctx.stroke();
 
-  ctx.strokeStyle = fgColor;
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(pointerX, 0);
-  ctx.lineTo(pointerX, canvasHeight);
-  ctx.stroke();
+  if (pointerX !== undefined) {
+    ctx.strokeStyle = fgColor;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(pointerX, 0);
+    ctx.lineTo(pointerX, canvasHeight);
+    ctx.stroke();
+  }
 
   ctx.save();
   ctx.scale(fontScale, fontScale);
@@ -81,7 +83,7 @@ const render = throttle(function renderTimeline(
     i < canvasWidth;
     i = i + tickWidth, step = step + timeIncrement
   ) {
-    ctx.fillText(formatTime(step), (i + 4) / fontScale, 0);
+    ctx.fillText(formatTimeScale(step), (i + 4) / fontScale, 0);
   }
   ctx.restore();
 }, REFRESH_THOTTLE);
@@ -100,6 +102,7 @@ function monitorCanvas(canvas: HTMLCanvasElement): () => void {
 const [pointerOffset, setPointerOffset] = createSignal(0);
 
 function Timeline() {
+  const [drawCursor, setDrawCursor] = createSignal(false);
   const [deltaMove, setDeltaMove] = createSpring(0, { stiffness: 0.03 });
   let canvasRef: HTMLCanvasElement | undefined;
   let isMoving: boolean = false;
@@ -110,6 +113,9 @@ function Timeline() {
   const averageDelta: PointerMoveDelta[] = [];
 
   const handleCanvasScroll = (e: WheelEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
     const factor = Math.sign(e.deltaY);
 
     if (factor && canvasRef) {
@@ -202,8 +208,11 @@ function Timeline() {
     }
   });
   createEffect(() => {
+    const pointerX = pointerOffset();
+    const showCursor = drawCursor();
+
     if (canvasRef) {
-      render(canvasRef, timelineView(), pointerOffset());
+      render(canvasRef, timelineView(), showCursor ? pointerX : undefined);
     }
   });
   createEffect(() => {
@@ -229,7 +238,9 @@ function Timeline() {
   return (
     <canvas
       ref={canvasRef}
-      class="w-full h-6 cursor-pointer"
+      class="w-full h-full cursor-pointer"
+      on:mouseenter={() => setDrawCursor(true)}
+      on:mouseleave={() => setDrawCursor(false)}
       on:wheel={handleCanvasScroll}
       on:touchmove={handleCanvasTouch}
     ></canvas>

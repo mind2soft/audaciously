@@ -1,4 +1,3 @@
-import AddTrackButton from "./buttons/AddTrack";
 import PlayButton from "./buttons/Play";
 import RecordButton from "./buttons/Record";
 
@@ -20,8 +19,8 @@ function Navbar() {
             <PlayButton class="join-item" title="Start playback" />
             <RecordButton class="join-item" title="Resume recording" />
           </div>
-          <div class="flex-1 justify-end">
-            <AddTrackButton title="Add new track" />
+          <div class="flex-1 min-w-0">
+            <div class="truncate">Untitled project</div>
           </div>
         </nav>
       </div>
