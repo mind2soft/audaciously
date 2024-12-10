@@ -1,6 +1,9 @@
-import { createEffect, createSignal, onCleanup } from "solid-js";
+import { createEffect, createMemo, createSignal, onCleanup } from "solid-js";
 import { Portal } from "solid-js/web";
-import { useAudioRecorder } from "../../../context/audio-recorder";
+import {
+  RecorderState,
+  useAudioRecorder,
+} from "../../../context/audio-recorder";
 import { createAudioAnalyser } from "../../../signals/audio-analyser";
 /* @ts-ignore */
 import { linearPath, polarPath } from "waveform-path";
@@ -31,9 +34,19 @@ function RecordModal(props: RecordModalProps) {
   let svgRef: SVGSVGElement | undefined;
   let analyzerPathRef: SVGPathElement | undefined;
 
-  const [recorderStore, recorderControls] = useAudioRecorder();
+  const [recorderStore, recorderData, recorderControls] = useAudioRecorder();
   const [analyserData, analyserControls] = createAudioAnalyser();
   const [seconds, setSeconds] = createSignal(0);
+  const isRecording = createMemo(() => {
+    const recorderState = recorderStore.state;
+    return (
+      recorderState === RecorderState.RECORDING ||
+      recorderState === RecorderState.PAUSED
+    );
+  });
+  const isPaused = createMemo(() => {
+    return recorderStore.state === RecorderState.PAUSED;
+  });
   const closeModal = () => {
     if (!dialogRef) return;
 
@@ -71,26 +84,47 @@ function RecordModal(props: RecordModalProps) {
       dialogRef?.showModal();
 
       // TODO: below, manual start, separate counter
-      recorderControls.start();
-
-      setSeconds(0);
+      //recorderControls.start();
+      recorderControls.setActive(true);
 
       const timer = setInterval(() => {
-        setSeconds((s) => s + 1);
-      }, 1000);
+        setSeconds(recorderControls.recordingTime);
+      }, 200);
 
       onCleanup(() => clearInterval(timer));
     } else {
       dialogRef?.close();
+      setSeconds(0);
 
       // TODO: below, manual stop
-      recorderControls.stop();
+      //recorderControls.stop();
+      recorderControls.setActive(false);
     }
   });
 
   const handleModalClose = (e: SubmitEvent) => {
     e.preventDefault();
     closeModal();
+  };
+
+  const handleToggleRecording = () => {
+    if (isRecording()) {
+      recorderControls.stop();
+    } else {
+      recorderControls.start();
+    }
+  };
+
+  const handleToggleSuspend = () => {
+    if (!isRecording()) return;
+
+    if (isPaused()) {
+      console.log("Resume");
+      recorderControls.resume();
+    } else {
+      console.log("pause");
+      recorderControls.pause();
+    }
   };
 
   return (
@@ -101,12 +135,29 @@ function RecordModal(props: RecordModalProps) {
             <svg ref={svgRef} class="round" height="400px" width="400px">
               <path
                 ref={analyzerPathRef}
-                class="stroke-1 stroke-red-600 fill-none"
+                class={
+                  "stroke-1 fill-none " +
+                  (recorderStore.state === RecorderState.RECORDING
+                    ? "stroke-red-600"
+                    : "stroke-red-900")
+                }
               />
             </svg>
             <div class="flex absolute top-0 left-0 justify-center items-center w-full h-full text-3xl font-bold">
               {formatTime(seconds())}
             </div>
+          </div>
+          <div>
+            <button class="btn" onClick={handleToggleRecording}>
+              {isRecording() ? "Stop" : "Record"}
+            </button>
+            <button
+              class="btn"
+              onClick={handleToggleSuspend}
+              disabled={!isRecording()}
+            >
+              {isPaused() ? "Resume" : "Pause"}
+            </button>
           </div>
 
           <div class="modal-action">
