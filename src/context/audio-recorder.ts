@@ -1,4 +1,4 @@
-import { noop } from "@solid-primitives/utils";
+import { falseFn, noop } from "@solid-primitives/utils";
 import {
   Accessor,
   createContext,
@@ -30,26 +30,30 @@ export interface RecorderStore {
   device: MediaDeviceInfo | null;
 }
 
-export interface RecorderInternalStore {
-  enabled: boolean;
+export interface RecorderStaticStore {
+  active: boolean;
   duration: number;
   lastTimestamp: number;
+  ignoreData: boolean;
 }
 
 export interface AudioRecorder {
+  state: RecorderState; // TODO: remove this duplicate property
   recordingTime: number;
+  stream: MediaStream | void;
+  isActive(): boolean;
   setActive(active: boolean): void;
+  isReady(): boolean;
+  isRecording(): boolean;
+  isPaused(): boolean;
   start(timeslice?: number): void;
   pause(): void;
   resume(): void;
   stop(): void;
+  clear(): void;
 }
 
-type AudioRecorderContext = [
-  RecorderStore,
-  Accessor<Blob | undefined>,
-  AudioRecorder,
-];
+type AudioRecorderContext = [Accessor<Blob[] | void>, AudioRecorder];
 
 type MediaRecorderEventHandlers = Partial<{
   [K in keyof MediaRecorderEventMap]: (e: MediaRecorderEventMap[K]) => void;
@@ -87,8 +91,8 @@ const cleanupRecorder = (
 };
 
 const updateRecordingDuration = (
-  store: RecorderInternalStore
-): RecorderInternalStore => {
+  store: RecorderStaticStore
+): RecorderStaticStore => {
   if (store.lastTimestamp > 0) {
     store = { ...store };
 
@@ -104,29 +108,31 @@ const updateRecordingDuration = (
 const createAudioRecorder = (): AudioRecorderContext => {
   if (isServer) {
     return [
+      noop as () => Blob[],
       {
         state: RecorderState.LOADING,
-        recorder: null,
-        device: null,
-      },
-      noop as () => Blob | undefined,
-      {
         recordingTime: 0,
+        stream: undefined,
+        isActive: falseFn,
         setActive: noop,
+        isReady: falseFn,
+        isRecording: falseFn,
+        isPaused: falseFn,
         start: noop,
         pause: noop,
         resume: noop,
         stop: noop,
+        clear: noop,
       },
     ];
   }
 
-  const [internalStore, setInternalStore] =
-    createStaticStore<RecorderInternalStore>({
-      enabled: false,
-      lastTimestamp: 0,
-      duration: 0,
-    });
+  const [staticStore, setStaticStore] = createStaticStore<RecorderStaticStore>({
+    active: false,
+    lastTimestamp: 0,
+    duration: 0,
+    ignoreData: false,
+  });
   const [store, setStore] = createStore<RecorderStore>({
     state: RecorderState.LOADING,
     recorder: null,
@@ -137,29 +143,35 @@ const createAudioRecorder = (): AudioRecorderContext => {
 
   const [constraints, setContraints] = createSignal<MediaStreamConstraints>();
   const [localStream, { mute, stop, refetch }] = createStream(constraints);
-  const [recorderData, setRecorderData] = createSignal<Blob>();
+  const [audioBlobs, setAudioBlobs] = createSignal<Blob[]>([]);
+  const [recorderData, setRecorderData] = createSignal<Blob[]>();
 
   const recorderHandlers: MediaRecorderEventHandlers = {
     dataavailable(e) {
-      setRecorderData(e.data);
+      if (!staticStore.ignoreData) {
+        setAudioBlobs((blobs) => {
+          blobs.push(e.data);
+          return blobs.slice();
+        });
+      }
     },
     start() {
-      setInternalStore("lastTimestamp", Date.now());
+      setStaticStore("lastTimestamp", Date.now());
       setStore("state", RecorderState.RECORDING);
     },
     stop() {
-      setInternalStore({
+      setStaticStore({
         duration: 0,
         lastTimestamp: 0,
       });
       setStore("state", RecorderState.READY);
     },
     pause() {
-      setInternalStore(updateRecordingDuration);
+      setStaticStore(updateRecordingDuration);
       setStore("state", RecorderState.PAUSED);
     },
     resume() {
-      setInternalStore("lastTimestamp", Date.now());
+      setStaticStore("lastTimestamp", Date.now());
       setStore("state", RecorderState.RECORDING);
     },
     error() {
@@ -209,6 +221,15 @@ const createAudioRecorder = (): AudioRecorderContext => {
     }
   });
 
+  createEffect(() => {
+    const recorder = store.recorder;
+    const blobs = audioBlobs();
+
+    if (recorder?.state === "inactive" && blobs.length) {
+      setRecorderData(blobs);
+    }
+  });
+
   onCleanup(() => {
     mute(true);
     stop();
@@ -219,14 +240,23 @@ const createAudioRecorder = (): AudioRecorderContext => {
   });
 
   const controls: AudioRecorder = {
+    get state() {
+      return store.state;
+    },
     get recordingTime() {
-      let recTime = internalStore.duration;
+      let recTime = staticStore.duration;
 
-      if (internalStore.lastTimestamp) {
-        recTime = recTime + (Date.now() - internalStore.lastTimestamp);
+      if (staticStore.lastTimestamp) {
+        recTime = recTime + (Date.now() - staticStore.lastTimestamp);
       }
 
       return recTime / 1000;
+    },
+    get stream() {
+      return store.recorder?.stream;
+    },
+    isActive() {
+      return staticStore.active;
     },
     setActive(active) {
       const recorderState = untrack(() => store.state);
@@ -247,18 +277,39 @@ const createAudioRecorder = (): AudioRecorderContext => {
           }
         }
 
-        setInternalStore("enabled", active);
+        setRecorderData(undefined);
+        setStaticStore({
+          active: true,
+          ignoreData: false,
+        });
       } else if (!active) {
         setStore((store) => ({
           state: store.device ? RecorderState.READY : RecorderState.ERROR,
           recorder: cleanupRecorder(store.recorder, recorderHandlers),
         }));
-        setInternalStore({
+        setStaticStore({
+          active: false,
           duration: 0,
           lastTimestamp: 0,
+          ignoreData: true,
         });
+        setAudioBlobs([]);
         stop();
       }
+    },
+    isReady() {
+      return !!store.recorder;
+    },
+    isRecording() {
+      const recorderState = store.state;
+      return (
+        recorderState === RecorderState.RECORDING ||
+        recorderState === RecorderState.PAUSED
+      );
+    },
+    isPaused() {
+      const recorderState = store.state;
+      return recorderState === RecorderState.PAUSED;
     },
     start(timeslice?: number) {
       const recorder = untrack(() => store.recorder);
@@ -276,9 +327,12 @@ const createAudioRecorder = (): AudioRecorderContext => {
       const recorder = untrack(() => store.recorder);
       recorder?.stop();
     },
+    clear() {
+      setRecorderData(undefined);
+    },
   };
 
-  return [store, recorderData, controls];
+  return [recorderData, controls];
 };
 
 const AudioRecorderContext = createContext<AudioRecorderContext>();

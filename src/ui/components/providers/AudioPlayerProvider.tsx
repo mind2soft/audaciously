@@ -1,3 +1,4 @@
+import { createEffect, createSignal } from "solid-js";
 import {
   AudioPlayerContext,
   createAudioPlayer,
@@ -5,11 +6,17 @@ import {
 import type { JSX } from "solid-js/jsx-runtime";
 
 interface AudioPlayerProviderProps {
+  audioBuffer?: AudioBuffer;
   children?: JSX.Element;
 }
 
 function AudioPlayerProvider(props: AudioPlayerProviderProps) {
-  const audioPlayer = createAudioPlayer();
+  //const [audioBuffer, setAudioBuffer] = createSignal(props.audioBuffer);
+  const audioPlayer = createAudioPlayer(() => props.audioBuffer);
+
+  //createEffect(() => {
+  //  setAudioBuffer(props.audioBuffer);
+  //});
 
   return (
     <AudioPlayerContext.Provider value={audioPlayer}>

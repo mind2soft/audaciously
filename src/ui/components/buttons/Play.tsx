@@ -6,14 +6,16 @@ export interface PlayButtonProps
   extends JSX.ButtonHTMLAttributes<HTMLButtonElement> {}
 
 function PlayButton({ class: className, ...props }: PlayButtonProps) {
-  const [audio, controls] = useAudioPlayer();
+  const player = useAudioPlayer();
 
   const handlePlayback = () => {
-    if (audio.state === AudioState.PLAYING) {
-      controls.pause();
-    } else {
-      controls.play();
-    }
+    //if (audio.state === AudioState.PLAYING) {
+    //controls.pause();
+    //} else {
+    //controls.play();
+    //}
+    console.log("WTF", player.currentTime);
+    player.play();
   };
 
   return (

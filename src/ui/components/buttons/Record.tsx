@@ -1,7 +1,5 @@
-// import { createMicrophones } from "@solid-primitives/devices";
-// import { createPermission } from "@solid-primitives/permission";
 import { createEffect, createSignal, splitProps } from "solid-js";
-import RecordModal from "../modals/RecordModal";
+import RecorderModal from "../modals/RecorderModal";
 
 import {
   RecorderState,
@@ -15,36 +13,36 @@ export interface RecordButtonProps
 function RecordButton(props: RecordButtonProps) {
   const [customProps, buttonProps] = splitProps(props, ["class", "disabled"]);
 
-  const [recorderStore] = useAudioRecorder();
+  const [, recorderControls] = useAudioRecorder();
   const [showDialog, setShowDialog] = createSignal(false);
   const [disableRecording, setDisableRecording] = createSignal(true);
 
   createEffect(() => {
     const userDisabled = customProps.disabled;
-    const recorderState = recorderStore.state;
-    const recorderReady = recorderState === RecorderState.READY;
+    const recorderReady = recorderControls.state === RecorderState.READY;
+    const isRecording = recorderControls.isActive();
 
-    setDisableRecording(userDisabled || !recorderReady);
+    setDisableRecording(userDisabled || !recorderReady || isRecording);
   });
 
-  const handleRecordModalOpen = () => {
+  const handleRecorderModalOpen = () => {
     setShowDialog(true);
   };
-  const handleRecordModalClose = () => {
+  const handleRecorderModalClose = () => {
     setShowDialog(false);
   };
 
   return (
     <>
       <button
-        class={`text-red-500 btn ${customProps.class}`}
-        onClick={handleRecordModalOpen}
+        class={["text-red-500 btn", customProps.class].join(" ")}
+        onClick={handleRecorderModalOpen}
         disabled={disableRecording()}
         {...buttonProps}
       >
         <span class="iconify mdi--record size-7"></span>
       </button>
-      <RecordModal open={showDialog()} onClose={handleRecordModalClose} />
+      <RecorderModal open={showDialog()} onClose={handleRecorderModalClose} />
     </>
   );
 }
