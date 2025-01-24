@@ -5,7 +5,7 @@ export default {
   daisyui: {
     themes: ["dark", "light"],
   },
-  content: ["./src/**/*.{js,jsx,ts,tsx}"],
+  content: ["./src/**/*.{vue,ts,tsx}"],
   theme: {
     extend: {},
   },
