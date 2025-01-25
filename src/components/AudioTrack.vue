@@ -4,25 +4,14 @@ import { playerKey, timelineKey } from "../lib/provider-keys";
 import Waveform from "./Waveform.vue";
 import type { AudioTrack } from "../lib/audio/track";
 import type { AudioPlayer } from "../lib/audio/player";
-import {
-  formatPixelToTime,
-  formatTimeToPixel,
-  ScaleDirection,
-  scaleRatio,
-  type TImeline,
-} from "../lib/timeline";
+import { formatTimeToPixel, type Timeline } from "../lib/timeline";
 
 defineProps<{
   track: AudioTrack;
 }>();
 
-const emit = defineEmits<{
-  mousedown: [evt: MouseEvent];
-}>();
-
-const scale = 16;
 const player = inject<AudioPlayer>(playerKey);
-const timeline = inject<TImeline>(timelineKey);
+const timeline = inject<Timeline>(timelineKey);
 
 if (!player) {
   throw new Error("missing player");
@@ -30,66 +19,32 @@ if (!player) {
   throw new Error("missing timeline");
 }
 
-const cursorRef = ref<HTMLDivElement>();
-const trackOffset = ref<number>(
-  -formatTimeToPixel(timeline.ratio, timeline.offsetTime)
+// const trackOffset = ref<number>(
+//   -formatTimeToPixel(timeline.ratio, timeline.offsetTime)
+// );
+const trackOffset = ref<number>(0);
+const baseWidth = ref<number>(formatTimeToPixel(timeline.ratio, 1));
+const cursorPosition = ref<number>(
+  formatTimeToPixel(timeline.ratio, player.currentTime)
 );
-const baseWidth = ref<number>(timeline.ratio * scale);
 
-const updateCursor = () => {
-  if (!cursorRef.value) {
-    return;
-  }
-
-  const left = player.currentTime * baseWidth.value;
-
-  cursorRef.value.style.left = `${left}px`;
+const handleUpdateCursor = () => {
+  cursorPosition.value = formatTimeToPixel(timeline.ratio, player.currentTime);
 };
 
-const handleMouseDown = (evt: MouseEvent) => {
-  emit("mousedown", evt);
-};
-const handleMouseWheel = (evt: WheelEvent) => {
-  const delta = evt.deltaY;
-
-  if (evt.shiftKey) {
-    evt.preventDefault();
-    evt.stopPropagation();
-
-    const deltaPx = delta > 0 ? 64 : -64;
-
-    timeline.offsetTime =
-      timeline.offsetTime + formatPixelToTime(timeline.ratio, deltaPx);
-  } else if (evt.ctrlKey) {
-    evt.preventDefault();
-    evt.stopPropagation();
-
-    timeline.ratio = scaleRatio(
-      timeline.ratio,
-      delta > 0 ? ScaleDirection.UP : ScaleDirection.DOWN
-    );
-  }
-};
-
-player.addEventListener("timeupdate", updateCursor);
-player.addEventListener("stop", updateCursor);
+player.addEventListener("timeupdate", handleUpdateCursor);
+player.addEventListener("stop", handleUpdateCursor);
 
 timeline.addEventListener("change", () => {
-  baseWidth.value = timeline.ratio * scale;
-  trackOffset.value = -formatTimeToPixel(timeline.ratio, timeline.offsetTime);
-  updateCursor();
+  baseWidth.value = formatTimeToPixel(timeline.ratio, 1);
+  // trackOffset.value = -formatTimeToPixel(timeline.ratio, timeline.offsetTime);
+  trackOffset.value = 0;
+  handleUpdateCursor();
 });
 </script>
 
 <template>
-  <div class="pr-2">
-    {{ track.name }}
-  </div>
-  <div
-    class="overflow-hidden w-full h-48"
-    v-on:mousedown="handleMouseDown"
-    v-on:wheel="handleMouseWheel"
-  >
+  <div class="h-48">
     <div
       class="flex relative flex-nowrap h-full"
       :style="{
@@ -106,11 +61,11 @@ timeline.addEventListener("change", () => {
         }"
       >
         <Waveform
-          class="border border-yellow-400"
+          class="border border-primary"
+          :current-time="cursorPosition - sequence.time * baseWidth"
           :audio-buffer="sequence.buffer"
         />
       </div>
-      <div ref="cursorRef" class="absolute w-[2px] h-full bg-white/50"></div>
     </div>
   </div>
 </template>

@@ -2,7 +2,7 @@ import { createEmitter, type Emitter } from "./emitter";
 
 interface TimelineEvent<EventType extends TimelineEventType> {
   type: EventType;
-  timeline: TImeline;
+  timeline: Timeline;
 }
 
 type TimelineEventMap = {
@@ -21,7 +21,7 @@ export type TimelineOptions = {
   offsetTime?: number;
 };
 
-export interface TImeline extends Emitter<TimelineEventType, TimelineEventMap> {
+export interface Timeline extends Emitter<TimelineEventType, TimelineEventMap> {
   ratio: number;
   offsetTime: number;
 
@@ -35,6 +35,7 @@ export enum ScaleDirection {
   DOWN,
 }
 
+const baseWidth = 16;
 const scale_a = 5;
 const scale_b = 4;
 const scale_min = 0.1;
@@ -49,14 +50,14 @@ export const scaleRatio = (ratio: number, dir: ScaleDirection) => {
 };
 
 export const formatTimeToPixel = (ratio: number, time: number) => {
-  return ratio * time * 16;
+  return ratio * time * baseWidth;
 };
 
 export const formatPixelToTime = (ratio: number, px: number) => {
-  return px / 16 / ratio;
+  return px / baseWidth / ratio;
 };
 
-export const createTimeline = (options?: TimelineOptions): TImeline => {
+export const createTimeline = (options?: TimelineOptions): Timeline => {
   const internal: TimelineInternal = {
     ratio: options?.ratio ?? 1,
     offsetTime: options?.offsetTime ?? 0,
@@ -71,7 +72,7 @@ export const createTimeline = (options?: TimelineOptions): TImeline => {
     return event;
   });
 
-  const timeline: TImeline = {
+  const timeline: Timeline = {
     get ratio() {
       return internal.ratio;
     },

@@ -2,23 +2,18 @@
 import { inject, ref } from "vue";
 import { playerKey, recorderKey } from "../lib/provider-keys";
 
-import AudioPlayerView from "./AudioPlayer.vue";
-import AudioTracks from "./AudioTracks.vue";
-
-import type { Recorder } from "../lib/audio/recorder";
-import type { AudioPlayer } from "../lib/audio/player";
 import { createAudioTrack } from "../lib/audio/track";
 import { createAudioSequence } from "../lib/audio/sequence";
 
-defineProps<{ msg: string }>();
+import type { Recorder } from "../lib/audio/recorder";
+import type { AudioPlayer } from "../lib/audio/player";
 
 const recorder = inject<Recorder>(recorderKey);
 const player = inject<AudioPlayer>(playerKey);
 
 if (!recorder) {
   throw new Error("missing recorder");
-}
-if (!player) {
+} else if (!player) {
   throw new Error("missing player");
 }
 
@@ -55,26 +50,15 @@ const handleRecordToggle = () => {
 </script>
 
 <template>
-  <h1 class="text-center">{{ msg }}</h1>
-
-  <div class="card">
-    <p class="flex items-center card-body">
-      Recorder state :
-      <code>{{ recorderState }}</code>
-    </p>
-  </div>
-
-  <div class="card">
-    <div class="card-body">
-      <button
-        class="btn"
-        v-on:click="handleRecordToggle"
-        :disabled="recorderState === 'error'"
-      >
-        REC
-      </button>
-      <AudioPlayerView />
-      <AudioTracks />
-    </div>
-  </div>
+  <p class="flex items-center card-body">
+    Recorder state :
+    <code>{{ recorderState }}</code>
+  </p>
+  <button
+    class="btn"
+    v-on:click="handleRecordToggle"
+    :disabled="recorderState === 'error'"
+  >
+    REC
+  </button>
 </template>

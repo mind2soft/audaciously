@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, useId } from "vue";
+import { onBeforeUnmount, onMounted, ref, useId, watchEffect } from "vue";
 import { createWaveformProcessor } from "../lib/audio/waveform";
 
-const { audioBuffer } = defineProps<{
+const props = defineProps<{
+  currentTime: number;
   audioBuffer: AudioBuffer;
 }>();
 
@@ -11,17 +12,26 @@ const waveform = createWaveformProcessor();
 const id = useId();
 const svgRef = ref<SVGSVGElement>();
 const path = ref<string>();
+const position = ref<number>(0);
+
+const updatePosition = () => {
+  const width = svgRef.value?.clientWidth ?? 1;
+
+  position.value = Math.min(Math.max(props.currentTime / width, 0), 1) * 100;
+};
 
 const updatePath = () => {
-  if (!svgRef.value || !audioBuffer || !audioBuffer.length) {
+  if (!svgRef.value || !props.audioBuffer?.length) {
     return undefined;
   }
 
   const rect = svgRef.value.getBoundingClientRect();
 
+  updatePosition();
+
   // path.value = "";
   waveform
-    .getLinearPath(audioBuffer, {
+    .getLinearPath(props.audioBuffer, {
       channel: 0,
       samples: rect.width / 3,
       type: "steps",
@@ -47,6 +57,10 @@ const updatePath = () => {
 
 const resizeObserver = new ResizeObserver(updatePath);
 
+watchEffect(() => {
+  updatePosition();
+});
+
 onMounted(() => {
   if (!svgRef.value) return;
 
@@ -71,10 +85,24 @@ onBeforeUnmount(() => {
         y2="0"
         gradientUnits="objectBoundingBox"
       >
-        <stop offset="0%" stop-color="blue" />
-        <stop ref="svgStopEnd" offset="0%" stop-color="blue" />
-        <stop ref="svgStopStart" offset="0%" stop-color="yellow" />
-        <stop offset="100%" stop-color="yellow" />
+        <stop
+          offset="0%"
+          stop-color="var(--fallback-s,oklch(var(--s)/var(--tw-border-opacity, 1)))"
+        />
+        <stop
+          ref="svgStopEnd"
+          :offset="`${position}%`"
+          stop-color="var(--fallback-s,oklch(var(--s)/var(--tw-border-opacity, 1)))"
+        />
+        <stop
+          ref="svgStopStart"
+          :offset="`${position}%`"
+          stop-color="var(--fallback-p,oklch(var(--p)/var(--tw-border-opacity, 1)))"
+        />
+        <stop
+          offset="100%"
+          stop-color="var(--fallback-p,oklch(var(--p)/var(--tw-border-opacity, 1)))"
+        />
       </linearGradient>
     </defs>
     <path
