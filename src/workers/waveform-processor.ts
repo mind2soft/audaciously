@@ -124,10 +124,31 @@ export interface LinearPathOptions {
   end?: number;
 }
 
-export const linearPath = (
+interface ProcessAbortSignal {
+  readonly isAborted: boolean;
+  abort(): void;
+}
+
+const createSignal = (): ProcessAbortSignal => {
+  let aborted = false;
+
+  return {
+    get isAborted() {
+      return aborted;
+    },
+    abort() {
+      aborted = true;
+    },
+  };
+};
+
+const signals = new Map<string, ProcessAbortSignal>();
+
+const linearPath = (
   framesData: Float32Array[],
-  options: LinearPathOptions
-): string => {
+  options: LinearPathOptions,
+  signal: ProcessAbortSignal
+): string | null => {
   const {
     samples = framesData.length,
     height = 100,
@@ -153,7 +174,7 @@ export const linearPath = (
 
   const normalizeDataLength = normalizeData.length;
 
-  for (let f = 0; f < normalizeDataLength; f++) {
+  for (let f = 0; f < normalizeDataLength && !signal.isAborted; f++) {
     if (f > 0) {
       const pathlength = path.length;
       const lastvalue = path.charAt(pathlength - 1);
@@ -402,7 +423,7 @@ export const linearPath = (
       }
     }
   }
-  return path;
+  return !signal.isAborted ? path : null;
 };
 
 const getFilterData = (framesData: Float32Array[], samples: number) => {
@@ -444,17 +465,26 @@ const getNormalizeData = (filteredData: number[][]) => {
 self.addEventListener("message", (e: any) => {
   const data = e.data as WaveformMessage;
 
+  signals.get(data.id)?.abort();
+
   if (data.type === "linear") {
+    const signal = createSignal();
+
+    signals.set(data.id, signal);
+
     const path = linearPath(
       data.framesData,
-      data.options || ({} as LinearPathOptions)
+      data.options || ({} as LinearPathOptions),
+      signal
     );
 
-    postMessage({
-      id: data.id,
-      seqNum: data.seqNum,
-      path,
-    } satisfies WaveformResponse);
+    if (path && !signal.isAborted) {
+      postMessage({
+        id: data.id,
+        seqNum: data.seqNum,
+        path,
+      } satisfies WaveformResponse);
+    }
   }
 });
 

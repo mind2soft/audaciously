@@ -1,4 +1,5 @@
 import { createEmitter, type Emitter } from "./emitter";
+import { formatTimeScale } from "./util/formatTime";
 
 interface TimelineEvent<EventType extends TimelineEventType> {
   type: EventType;
@@ -27,7 +28,7 @@ export interface Timeline extends Emitter<TimelineEventType, TimelineEventMap> {
 
   setValues(ratio: number, offsetTime: number): void;
 
-  render(canvas: HTMLCanvasElement): void;
+  render(canvas: HTMLCanvasElement, currentTime: number): void;
 }
 
 export enum ScaleDirection {
@@ -35,11 +36,25 @@ export enum ScaleDirection {
   DOWN,
 }
 
+const tickWidth = 128;
 const baseWidth = 16;
-const scale_a = 5;
-const scale_b = 4;
-const scale_min = 0.1;
-const scale_max = 1000;
+const scale_a = 4;
+const scale_b = 3;
+const scale_min = 0.01;
+const scale_max = 5000;
+
+const getOptimalTimeStep = (ratio: number) => {
+  let timeStep = 1;
+
+  while (formatTimeToPixel(ratio, timeStep) <= tickWidth) {
+    timeStep = timeStep * 2;
+  }
+  while (formatTimeToPixel(ratio, timeStep) > tickWidth) {
+    timeStep = timeStep / 2;
+  }
+
+  return timeStep;
+};
 
 export const scaleRatio = (ratio: number, dir: ScaleDirection) => {
   const scaleValue =
@@ -108,8 +123,61 @@ export const createTimeline = (options?: TimelineOptions): Timeline => {
       }
     },
 
-    render(canvas) {
-      // ...
+    render(canvas, currentTime) {
+      const ctx = canvas.getContext("2d");
+
+      if (!ctx) return;
+
+      canvas.width = canvas.clientWidth;
+      canvas.height = canvas.clientHeight;
+
+      const maxOffset = canvas.clientWidth;
+      const tickHeight = canvas.clientHeight / 2;
+
+      const computedStyle = getComputedStyle(canvas);
+      const fgColor = computedStyle.getPropertyValue("color");
+      const font = computedStyle.getPropertyValue("font");
+
+      const timeStep = getOptimalTimeStep(internal.ratio);
+      const offsetWidth = formatTimeToPixel(internal.ratio, timeStep);
+      const scrollOffset = (offsetWidth / timeStep) * internal.offsetTime;
+      let offset = -(scrollOffset % offsetWidth) - offsetWidth;
+      let time = ((scrollOffset / offsetWidth) | 0) * timeStep - timeStep;
+      let lblText: string;
+      let lblMetrics: TextMetrics;
+      let lblPrevLimit: number = -offsetWidth;
+
+      ctx.beginPath();
+
+      ctx.textAlign = "start";
+      ctx.textBaseline = "top";
+      ctx.fillStyle = fgColor;
+      ctx.strokeStyle = fgColor;
+      ctx.font = font;
+
+      const table: [number, number, string][] = [];
+
+      while (offset < maxOffset) {
+        lblText = formatTimeScale(time);
+        lblMetrics = ctx.measureText(lblText);
+
+        ctx.moveTo(offset, tickHeight);
+        ctx.lineTo(offset, canvas.height);
+
+        if (offset > lblPrevLimit) {
+          ctx.fillText(lblText, offset, 5);
+          lblPrevLimit = offset + lblMetrics.width;
+        }
+
+        table.push([offset, time, formatTimeScale(time)]);
+
+        offset = offset + offsetWidth;
+        time = time + timeStep;
+      }
+
+      // console.table(table);
+
+      ctx.stroke();
     },
 
     ...emitter,

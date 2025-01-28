@@ -19,9 +19,6 @@ if (!player) {
   throw new Error("missing timeline");
 }
 
-// const trackOffset = ref<number>(
-//   -formatTimeToPixel(timeline.ratio, timeline.offsetTime)
-// );
 const trackOffset = ref<number>(0);
 const baseWidth = ref<number>(formatTimeToPixel(timeline.ratio, 1));
 const cursorPosition = ref<number>(

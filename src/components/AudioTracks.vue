@@ -13,6 +13,7 @@ import {
   scaleRatio,
   type Timeline,
 } from "../lib/timeline";
+import TrackHeader from "./TrackHeader.vue";
 
 type TrackDrag =
   | {
@@ -24,6 +25,7 @@ type TrackDrag =
       isDragging: false;
     };
 
+const scrollSpeed = 64; // px
 const player = inject<AudioPlayer>(playerKey);
 const timeline = inject<Timeline>(timelineKey);
 
@@ -71,11 +73,11 @@ const handleMouseWheel = (evt: WheelEvent) => {
     evt.preventDefault();
     evt.stopPropagation();
 
-    const deltaPx = delta > 0 ? 64 : -64;
+    const deltaPx = delta > 0 ? scrollSpeed : -scrollSpeed;
 
     timeline.offsetTime =
       timeline.offsetTime + formatPixelToTime(timeline.ratio, deltaPx);
-  } else if (evt.ctrlKey) {
+  } else if (evt.altKey) {
     evt.preventDefault();
     evt.stopPropagation();
 
@@ -98,7 +100,6 @@ player.addEventListener("timeupdate", handleUpdateCursor);
 player.addEventListener("stop", handleUpdateCursor);
 
 timeline.addEventListener("change", () => {
-  //baseWidth.value = formatTimeToPixel(timeline.ratio, 1);
   tracksPosition.value = -formatTimeToPixel(
     timeline.ratio,
     timeline.offsetTime
@@ -117,32 +118,44 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="flex-1 grid grid-cols-[96px_auto]" v-on:wheel="handleMouseWheel">
-    <div class="grid grid-rows-[46px_192px]">
+  <div
+    class="flex flex-col flex-1"
+    v-on:wheel="handleMouseWheel"
+    v-on:mousedown="handleMouseDown"
+  >
+    <div class="grid grid-cols-[96px_auto]">
       <div></div>
-      <div v-for="track in tracks" class="h-24">
-        {{ track.name }}
+      <div class="h-12">
+        <TimelineView />
       </div>
     </div>
 
-    <div class="relative flex-1 overflow-clip" v-on:mousedown="handleMouseDown">
-      <div class="grid grid-rows-[46px_192px]">
-        <TimelineView />
-        <div
-          class="relative w-auto"
-          :style="{
-            left: `${tracksPosition}px`,
-          }"
-        >
-          <AudioTrackView v-for="track in tracks" :track="track" />
+    <div class="relative flex-1">
+      <div
+        class="overflow-y-auto absolute top-0 right-0 bottom-0 left-0 overflow-x-clip bg-base-200"
+      >
+        <div class="relative grid grid-cols-[96px_auto]">
+          <template v-for="track in tracks">
+            <div class="z-20 bg-base-100">
+              <TrackHeader :track="track" />
+            </div>
+            <div
+              class="relative"
+              :style="{
+                left: `${tracksPosition}px`,
+              }"
+            >
+              <AudioTrackView :track="track" />
+              <div
+                class="absolute top-0 w-[2px] h-full bg-white/50 z-10"
+                :style="{
+                  left: `${cursorPosition}px`,
+                }"
+              ></div>
+            </div>
+          </template>
         </div>
       </div>
-      <div
-        class="absolute top-0 w-[2px] h-full bg-white/50"
-        :style="{
-          left: `${cursorPosition + tracksPosition}px`,
-        }"
-      ></div>
     </div>
   </div>
 </template>
