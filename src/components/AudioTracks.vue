@@ -47,6 +47,10 @@ const cursorPosition = ref<number>(
 );
 
 const handleMouseDown = (evt: MouseEvent) => {
+  if ((evt.target as HTMLDivElement).closest("[data-track-header]")) {
+    return;
+  }
+
   document.documentElement.style.userSelect = "none";
   trackDrag.value = {
     isDragging: true,
@@ -136,7 +140,7 @@ onUnmounted(() => {
       >
         <div class="relative grid grid-cols-[96px_auto]">
           <template v-for="track in tracks">
-            <div class="z-20 bg-base-100">
+            <div class="z-20 bg-base-100" data-track-header>
               <TrackHeader :track="track" />
             </div>
             <div

@@ -42,7 +42,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="w-full h-full border border-primary">
+  <div class="w-full h-full">
     <canvas ref="canvasRef" class="w-full h-full"></canvas>
   </div>
 </template>

@@ -7,9 +7,12 @@ export type AudioTrackPlayOptions = {
 };
 
 interface AudioTrackInternal {
+  locked: boolean;
+  muted: boolean;
   playbackRate: number;
   sequences: AudioSequence[];
   activeSources: Set<AudioBufferSourceNode>;
+  activeGain?: GainNode;
   resolvePlaying?: Function;
 }
 
@@ -19,6 +22,8 @@ export interface AudioTrack {
   readonly name: string;
   readonly duration: number;
 
+  locked: boolean;
+  muted: boolean;
   playbackRate: number;
 
   addSequence(sequence: AudioSequence, index?: number): void;
@@ -45,6 +50,8 @@ function checkOverlap(a: AudioSequence, b: AudioSequence) {
 
 const createAudioTrack = (name: string): AudioTrack => {
   const internal: AudioTrackInternal = {
+    locked: false,
+    muted: false,
     playbackRate: 1,
     sequences: [],
     activeSources: new Set(),
@@ -76,8 +83,28 @@ const createAudioTrack = (name: string): AudioTrack => {
     set playbackRate(value) {
       internal.playbackRate = value;
 
-      for (const source of internal.activeSources) {
-        source.playbackRate.value = value;
+      for (const sourceNode of internal.activeSources) {
+        sourceNode.playbackRate.value = value;
+      }
+    },
+
+    get locked() {
+      return internal.locked;
+    },
+    set locked(value) {
+      internal.locked = value;
+
+      // TODO : update selection
+    },
+
+    get muted() {
+      return internal.muted;
+    },
+    set muted(value) {
+      internal.muted = value;
+
+      if (internal.activeGain) {
+        internal.activeGain.gain.value = +!value;
       }
     },
 
@@ -121,17 +148,19 @@ const createAudioTrack = (name: string): AudioTrack => {
       const outputNode = options.output ?? context.destination;
 
       return new Promise((resolve) => {
+        const gainNode = context.createGain();
+        gainNode.gain.value = +!internal.muted;
+        gainNode.connect(outputNode);
+
         internal.resolvePlaying = resolve;
+        internal.activeGain = gainNode;
 
         for (const sequence of internal.sequences) {
           const sourceTime = sequence.time - startTime;
-          const source = context.createBufferSource();
+          const sourceNode = sequence.getSource(context, gainNode);
 
-          source.buffer = sequence.buffer;
-
-          source.connect(outputNode);
-          source.addEventListener("ended", () => {
-            internal.activeSources.delete(source);
+          sourceNode.addEventListener("ended", () => {
+            internal.activeSources.delete(sourceNode);
 
             if (internal.activeSources.size === 0) {
               const resolvePlaying = internal.resolvePlaying;
@@ -140,22 +169,25 @@ const createAudioTrack = (name: string): AudioTrack => {
               resolvePlaying?.();
             }
           });
-          internal.activeSources.add(source);
+          internal.activeSources.add(sourceNode);
 
           if (sourceTime >= 0) {
-            source.start(currentTime + sourceTime);
+            sourceNode.start(currentTime + sourceTime);
           } else {
-            source.start(currentTime, -sourceTime);
+            sourceNode.start(currentTime, -sourceTime);
           }
         }
       });
     },
     stop() {
-      internal.activeSources.forEach((source) => {
-        source.stop();
-        source.disconnect();
+      internal.activeSources.forEach((sourceNode) => {
+        sourceNode.stop();
+        sourceNode.disconnect();
       });
       internal.activeSources.clear();
+
+      internal.activeGain?.disconnect();
+      internal.activeGain = undefined;
 
       const resolvePlaying = internal.resolvePlaying;
       internal.resolvePlaying = undefined;
