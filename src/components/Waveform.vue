@@ -5,6 +5,7 @@ import { createWaveformProcessor } from "../lib/audio/waveform";
 const props = defineProps<{
   currentTime: number;
   audioBuffer: AudioBuffer;
+  disabled?: boolean;
 }>();
 
 const waveform = createWaveformProcessor();
@@ -75,7 +76,14 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <svg ref="svgRef" class="w-full h-full">
+  <svg
+    ref="svgRef"
+    class="w-full h-full"
+    :class="{
+      'transition-opacity': true,
+      'opacity-40': disabled,
+    }"
+  >
     <defs>
       <linearGradient
         :id="`svgGrad_${id}`"
@@ -85,24 +93,18 @@ onBeforeUnmount(() => {
         y2="0"
         gradientUnits="objectBoundingBox"
       >
-        <stop
-          offset="0%"
-          stop-color="var(--fallback-s,oklch(var(--s)/var(--tw-border-opacity, 1)))"
-        />
+        <stop offset="0%" stop-color="var(--color-accent)" />
         <stop
           ref="svgStopEnd"
           :offset="`${position}%`"
-          stop-color="var(--fallback-s,oklch(var(--s)/var(--tw-border-opacity, 1)))"
+          stop-color="var(--color-accent)"
         />
         <stop
           ref="svgStopStart"
           :offset="`${position}%`"
-          stop-color="var(--fallback-p,oklch(var(--p)/var(--tw-border-opacity, 1)))"
+          stop-color="var(--color-base-content)"
         />
-        <stop
-          offset="100%"
-          stop-color="var(--fallback-p,oklch(var(--p)/var(--tw-border-opacity, 1)))"
-        />
+        <stop offset="100%" stop-color="var(--color-base-content)" />
       </linearGradient>
     </defs>
     <path

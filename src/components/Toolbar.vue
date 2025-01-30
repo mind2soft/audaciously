@@ -1,10 +1,10 @@
-<script setup lang="ts"></script>
+<script setup lang="ts">
+import AudioRecorder from "./AudioRecorder.vue";
+</script>
 
 <template>
-  <div class="flex gap-1 p-2">
-    <button class="btn btn-square size-16" title="Record new sequence">
-      <i class="iconify mdi--record size-10" />
-    </button>
+  <div class="flex gap-1 p-2 bg-base-200">
+    <AudioRecorder />
     <button class="btn btn-square size-16" title="Split sequence">
       <i class="iconify mdi--paper-cut-vertical size-10" />
     </button>

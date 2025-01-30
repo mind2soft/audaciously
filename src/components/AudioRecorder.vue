@@ -50,15 +50,14 @@ const handleRecordToggle = () => {
 </script>
 
 <template>
-  <p class="flex items-center card-body">
-    Recorder state :
-    <code>{{ recorderState }}</code>
-  </p>
   <button
-    class="btn"
+    :class="{
+      'btn btn-square size-16': true,
+      'text-red-500': recorderState === 'recording',
+    }"
+    title="Record new sequence"
     v-on:click="handleRecordToggle"
-    :disabled="recorderState === 'error'"
   >
-    REC
+    <i class="iconify mdi--record size-10" />
   </button>
 </template>

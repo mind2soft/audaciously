@@ -58,9 +58,10 @@ timeline.addEventListener("change", () => {
         }"
       >
         <Waveform
-          class="border border-primary"
+          class="border border-dotted border-current/70"
           :current-time="cursorPosition - sequence.time * baseWidth"
           :audio-buffer="sequence.buffer"
+          :disabled="track.muted"
         />
       </div>
     </div>

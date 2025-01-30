@@ -30,25 +30,24 @@ export interface AudioPlayer
   extends Emitter<AudioPlayerEventType, AudioPlayerEventMap> {
   readonly state: AudioPlayerState;
   readonly trackCount: number;
-  readonly currentTime: number;
   readonly totalDuration: number;
 
+  currentTime: number;
   volume: number;
   playbackRate: number;
 
   addTrack(track: AudioTrack, insertIndex?: number): void;
   setTrack(track: AudioTrack, index: number): void;
-  removeTrack(...index: number[]): void;
+  removeTrack(track: AudioTrack): boolean;
   getTracks(): Iterable<AudioTrack>;
   setTracks(tracks: AudioTrack[]): void;
 
   /**
    * @param timeSec the start time in seconds (ex: 0.5 for half a second)
    */
-  play(timeSec?: number): Promise<void>;
+  play(): Promise<void>;
   pause(): void;
   resume(): void;
-  seek(time: number): void;
   stop(): void;
 }
 
@@ -162,11 +161,10 @@ const createPlayer = (): AudioPlayer => {
 
     return analyserNode.audioFrame;
   }
-  function initPlayback(time: number = 0) {
+  function initPlayback() {
     const audioContext = new AudioContext();
 
     internal.audioContext = audioContext;
-    internal.pauseTime = time;
     internal.resumeTime = 0;
   }
   function updatePlaybackTime() {
@@ -252,11 +250,15 @@ const createPlayer = (): AudioPlayer => {
     }
   }
   function seekPlayback(time: number) {
+    const isPlaying = internal.state === "playing";
+
     pausePlayback();
-    if (internal.state === "paused") {
-      internal.pauseTime = time;
+    internal.pauseTime = time;
+
+    if (isPlaying) {
+      dispatchEvent({ type: "seek" });
+      startPlayback();
     }
-    startPlayback();
   }
   function stopPlayback(resetTime: boolean) {
     if (internal.state !== "ready") {
@@ -291,11 +293,15 @@ const createPlayer = (): AudioPlayer => {
     get trackCount() {
       return internal.tracks.length;
     },
+    get totalDuration() {
+      return getTotalDuration();
+    },
     get currentTime() {
       return getCurrentTime();
     },
-    get totalDuration() {
-      return getTotalDuration();
+    set currentTime(value) {
+      seekPlayback(value);
+      dispatchEvent({ type: "seek" });
     },
 
     get volume() {
@@ -338,14 +344,18 @@ const createPlayer = (): AudioPlayer => {
 
       dispatchEvent({ type: "change" });
     },
-    removeTrack(...index) {
+    removeTrack(track) {
       stopPlayback(true);
+      const trackIndex = internal.tracks.findIndex((t) => t === track);
+      const trackFound = trackIndex >= 0;
 
-      for (const i of index.slice().sort().reverse()) {
-        internal.tracks.splice(i, 1);
+      if (trackFound) {
+        internal.tracks.splice(trackIndex, 1);
       }
 
       dispatchEvent({ type: "change" });
+
+      return trackFound;
     },
     *getTracks() {
       for (const track of internal.tracks) {
@@ -359,14 +369,14 @@ const createPlayer = (): AudioPlayer => {
       dispatchEvent({ type: "change" });
     },
 
-    async play(time) {
+    async play() {
       if (internal.state !== "ready") {
         stopPlayback(true);
       } else if (!internal.tracks.length) {
         return;
       }
 
-      initPlayback(time);
+      initPlayback();
       startPlayback();
       dispatchEvent({ type: "play" });
     },
@@ -385,10 +395,6 @@ const createPlayer = (): AudioPlayer => {
 
       startPlayback();
       dispatchEvent({ type: "play" });
-    },
-    seek(time) {
-      seekPlayback(time);
-      dispatchEvent({ type: "seek" });
     },
     stop() {
       if (internal.state === "ready") {

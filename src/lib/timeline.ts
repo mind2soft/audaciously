@@ -141,6 +141,8 @@ export const createTimeline = (options?: TimelineOptions): Timeline => {
       const timeStep = getOptimalTimeStep(internal.ratio);
       const offsetWidth = formatTimeToPixel(internal.ratio, timeStep);
       const scrollOffset = (offsetWidth / timeStep) * internal.offsetTime;
+      const currentOffset =
+        (offsetWidth / timeStep) * currentTime - scrollOffset;
       let offset = -(scrollOffset % offsetWidth) - offsetWidth;
       let time = ((scrollOffset / offsetWidth) | 0) * timeStep - timeStep;
       let lblText: string;
@@ -154,8 +156,7 @@ export const createTimeline = (options?: TimelineOptions): Timeline => {
       ctx.fillStyle = fgColor;
       ctx.strokeStyle = fgColor;
       ctx.font = font;
-
-      const table: [number, number, string][] = [];
+      ctx.lineWidth = 1;
 
       while (offset < maxOffset) {
         lblText = formatTimeScale(time);
@@ -169,15 +170,18 @@ export const createTimeline = (options?: TimelineOptions): Timeline => {
           lblPrevLimit = offset + lblMetrics.width;
         }
 
-        table.push([offset, time, formatTimeScale(time)]);
-
         offset = offset + offsetWidth;
         time = time + timeStep;
       }
 
-      // console.table(table);
-
       ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(currentOffset - 8, tickHeight + 5);
+      ctx.lineTo(currentOffset + 8, tickHeight + 5);
+      ctx.lineTo(currentOffset, canvas.height);
+      ctx.lineTo(currentOffset - 8, tickHeight + 5);
+      ctx.fill();
     },
 
     ...emitter,

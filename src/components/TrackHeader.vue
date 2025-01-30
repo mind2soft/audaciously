@@ -2,13 +2,24 @@
 import { ref } from "vue";
 import type { AudioTrack } from "../lib/audio/track";
 
+export type DeleteTrackEvent = {
+  track: AudioTrack;
+};
+
 const props = defineProps<{
   track: AudioTrack;
+}>();
+
+const emit = defineEmits<{
+  trackDelete: [DeleteTrackEvent];
 }>();
 
 const isMuted = ref(props.track.muted);
 const isLocked = ref(props.track.locked);
 
+const handleTrackDelete = () => {
+  emit("trackDelete", { track: props.track });
+};
 const handleToggleMute = () => {
   props.track.muted = !props.track.muted;
   isMuted.value = props.track.muted;
@@ -20,11 +31,18 @@ const handleToggleLock = () => {
 </script>
 
 <template>
-  <div class="flex flex-col gap-4 p-1 h-48 border border-primary">
+  <div
+    :class="{
+      'flex flex-col gap-4 p-1 h-48 border transition-all': true,
+      'bg-base-200 border-primary': !track.muted,
+      'bg-base-300 border-secondary': track.muted,
+    }"
+  >
     <div class="flex gap-1">
       <button
         class="btn btn-xs btn-square btn-outline btn-error"
         title="Delete track"
+        v-on:click="handleTrackDelete"
       >
         <i class="iconify mdi--trash size-4" />
       </button>

@@ -13,7 +13,7 @@ import {
   scaleRatio,
   type Timeline,
 } from "../lib/timeline";
-import TrackHeader from "./TrackHeader.vue";
+import TrackHeader, { type DeleteTrackEvent } from "./TrackHeader.vue";
 
 type TrackDrag =
   | {
@@ -47,7 +47,10 @@ const cursorPosition = ref<number>(
 );
 
 const handleMouseDown = (evt: MouseEvent) => {
-  if ((evt.target as HTMLDivElement).closest("[data-track-header]")) {
+  if (
+    evt.buttons !== 1 ||
+    (evt.target as HTMLDivElement).closest("[data-track-header]")
+  ) {
     return;
   }
 
@@ -91,6 +94,13 @@ const handleMouseWheel = (evt: WheelEvent) => {
     );
   }
 };
+const handleContextMenu = (evt: MouseEvent) => {
+  evt.preventDefault();
+};
+
+const handleTrackDelete = (evt: DeleteTrackEvent) => {
+  player.removeTrack(evt.track);
+};
 
 const handleUpdateCursor = () => {
   cursorPosition.value = formatTimeToPixel(timeline.ratio, player.currentTime);
@@ -100,6 +110,7 @@ player.addEventListener("change", () => {
   tracks.value = [...player.getTracks()];
   handleUpdateCursor();
 });
+player.addEventListener("seek", handleUpdateCursor);
 player.addEventListener("timeupdate", handleUpdateCursor);
 player.addEventListener("stop", handleUpdateCursor);
 
@@ -123,41 +134,47 @@ onUnmounted(() => {
 
 <template>
   <div
-    class="flex flex-col flex-1"
+    class="flex relative flex-col flex-1 bg-base-200"
     v-on:wheel="handleMouseWheel"
     v-on:mousedown="handleMouseDown"
+    v-on:contextmenu="handleContextMenu"
   >
-    <div class="grid grid-cols-[96px_auto]">
-      <div></div>
-      <div class="h-12">
-        <TimelineView />
-      </div>
+    <div class="relative ml-24 h-10">
+      <TimelineView />
     </div>
 
     <div class="relative flex-1">
       <div
-        class="overflow-y-auto absolute top-0 right-0 bottom-0 left-0 overflow-x-clip bg-base-200"
+        class="overflow-y-auto absolute top-0 right-0 bottom-0 left-0 overflow-x-clip bg-base-100"
       >
-        <div class="relative grid grid-cols-[96px_auto]">
-          <template v-for="track in tracks">
-            <div class="z-20 bg-base-100" data-track-header>
-              <TrackHeader :track="track" />
+        <div class="flex min-h-full">
+          <div class="flex z-10 flex-col w-24 min-h-full bg-base-200">
+            <div class="relative">
+              <TrackHeader
+                v-for="track in tracks"
+                :track="track"
+                v-on:track-delete="handleTrackDelete"
+              />
             </div>
+          </div>
+          <div class="flex z-0 flex-col flex-1">
             <div
-              class="relative"
+              class="relative min-h-full"
               :style="{
                 left: `${tracksPosition}px`,
               }"
             >
-              <AudioTrackView :track="track" />
+              <div class="relative">
+                <AudioTrackView v-for="track in tracks" :track="track" />
+              </div>
               <div
-                class="absolute top-0 w-[2px] h-full bg-white/50 z-10"
+                class="absolute top-0 w-[2px] bottom-0 bg-white/50 z-10"
                 :style="{
                   left: `${cursorPosition}px`,
                 }"
               ></div>
             </div>
-          </template>
+          </div>
         </div>
       </div>
     </div>

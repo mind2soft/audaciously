@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { inject, onMounted, ref } from "vue";
+import { inject, onBeforeUnmount, onMounted, ref } from "vue";
 import { playerKey } from "../lib/provider-keys";
 import { formatTime } from "../lib/util/formatTime";
 /* @ts-ignore */
@@ -23,6 +23,7 @@ const inputVolumeRef = ref<HTMLInputElement>();
 
 const isPlaying = ref(player.state === "playing");
 const isPaused = ref(player.state === "paused");
+const currentFrame = ref<AudioBuffer>();
 const currentTime = ref(player.currentTime);
 const totalDuration = ref(player.totalDuration);
 
@@ -44,16 +45,18 @@ player.addEventListener("stop", () => {
   isPlaying.value = false;
   isPaused.value = false;
   currentTime.value = player.currentTime;
+  currentFrame.value = undefined;
 
-  handleAnalyserUpdate(null);
+  handleAnalyserUpdate();
 });
 player.addEventListener("change", () => {
   totalDuration.value = player.totalDuration;
 });
 player.addEventListener("timeupdate", (event) => {
   currentTime.value = player.currentTime;
+  currentFrame.value = event.audioFrame;
 
-  handleAnalyserUpdate(event.audioFrame);
+  handleAnalyserUpdate();
 });
 player.addEventListener("volumechange", () => {
   if (inputVolumeRef.value) {
@@ -94,7 +97,9 @@ const getPath = (audioBuffer: AudioBuffer, svg: SVGSVGElement) => {
   }) as string;
 };
 
-const handleAnalyserUpdate = (audioBuffer: AudioBuffer | null) => {
+const handleAnalyserUpdate = () => {
+  const audioBuffer = currentFrame.value;
+
   if (svgRef.value && svgPathRef.value) {
     if (audioBuffer?.length) {
       const path = getPath(audioBuffer, svgRef.value);
@@ -157,10 +162,24 @@ const handleVolumeChange = () => {
   const inputValue = inputVolumeRef.value?.valueAsNumber ?? 0;
   player.volume = inputValue / 100;
 };
+
+const resizeObserver = new ResizeObserver(handleAnalyserUpdate);
+
+onMounted(() => {
+  if (!svgRef.value) return;
+
+  resizeObserver.observe(svgRef.value);
+  handleAnalyserUpdate();
+});
+onBeforeUnmount(() => {
+  if (!svgRef.value) return;
+
+  resizeObserver.unobserve(svgRef.value);
+});
 </script>
 
 <template>
-  <div class="flex gap-2 items-center">
+  <div class="flex gap-3 items-center px-4 bg-base-200">
     <button class="btn" v-on:click="handleInit">TEST</button>
     <button class="btn btn-circle btn-lg" v-on:click="handlePlayToggle">
       <i v-if="isPlaying" class="iconify mdi--pause size-8" />
@@ -183,8 +202,8 @@ const handleVolumeChange = () => {
       </div>
     </div>
 
-    <div class="flex-1">
-      <svg ref="svgRef" class="w-full h-10">
+    <div class="flex-1 xs:hidden md:block">
+      <svg ref="svgRef" class="px-2 w-full h-10">
         <defs>
           <linearGradient
             id="waveformgrad"
@@ -194,10 +213,18 @@ const handleVolumeChange = () => {
             y2="0"
             gradientUnits="objectBoundingBox"
           >
-            <stop offset="0%" stop-color="blue" />
-            <stop ref="svgStopEnd" offset="0%" stop-color="blue" />
-            <stop ref="svgStopStart" offset="0%" stop-color="yellow" />
-            <stop offset="100%" stop-color="yellow" />
+            <stop offset="0%" stop-color="var(--color-accent)" />
+            <stop
+              ref="svgStopEnd"
+              offset="0%"
+              stop-color="var(--color-accent)"
+            />
+            <stop
+              ref="svgStopStart"
+              offset="0%"
+              stop-color="var(--color-base-content)"
+            />
+            <stop offset="100%" stop-color="var(--color-base-content)" />
           </linearGradient>
         </defs>
         <path
