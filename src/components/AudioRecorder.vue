@@ -3,10 +3,11 @@ import { inject, ref } from "vue";
 import { playerKey, recorderKey } from "../lib/provider-keys";
 
 import { createAudioTrack } from "../lib/audio/track";
-import { createAudioSequence } from "../lib/audio/sequence";
+import { createBufferAudioSequence } from "../lib/audio/sequence";
 
 import type { Recorder } from "../lib/audio/recorder";
 import type { AudioPlayer } from "../lib/audio/player";
+import type { AudioTrack } from "../lib/audio/track";
 
 const recorder = inject<Recorder>(recorderKey);
 const player = inject<AudioPlayer>(playerKey);
@@ -18,19 +19,42 @@ if (!recorder) {
 }
 
 const recorderState = ref(recorder.state);
+const dummyTrack = ref<AudioTrack>();
+const recordingStart = ref<number>(0);
 
-recorder.addEventListener("ready", () => {
+const handleUpdateRecorderState = () => {
   recorderState.value = recorder.state;
+};
+
+recorder.addEventListener("ready", handleUpdateRecorderState);
+recorder.addEventListener("record", () => {
+  //dummyTrack.value = createDummyTrack("Recording");
+  recordingStart.value = player.currentTime;
+
+  //player.addTrack(dummyTrack.value);
+  //player.play();
+
+  handleUpdateRecorderState();
 });
-recorder.addEventListener("error", () => {
-  recorderState.value = recorder.state;
+recorder.addEventListener("pause", handleUpdateRecorderState);
+recorder.addEventListener("resume", handleUpdateRecorderState);
+recorder.addEventListener("stop", () => {
+  player.stop();
+  if (dummyTrack.value) {
+    player.removeTrack(dummyTrack.value);
+  }
+
+  handleUpdateRecorderState();
 });
+recorder.addEventListener("error", handleUpdateRecorderState);
 recorder.addEventListener("data", () => {
   recorder.getAudioBuffer().then(
     (buffer) => {
       const track = createAudioTrack("test");
 
-      track.addSequence(createAudioSequence(buffer, 0));
+      track.addSequence(
+        createBufferAudioSequence(buffer, recordingStart.value)
+      );
 
       player.addTrack(track);
     },

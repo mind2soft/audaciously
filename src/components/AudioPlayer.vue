@@ -4,7 +4,7 @@ import { playerKey } from "../lib/provider-keys";
 import { formatTime } from "../lib/util/formatTime";
 /* @ts-ignore */
 import { linearPath } from "waveform-path";
-import { createAudioSequence } from "../lib/audio/sequence";
+import { createBufferAudioSequence } from "../lib/audio/sequence";
 import { createAudioTrack } from "../lib/audio/track";
 import type { AudioPlayer } from "../lib/audio/player";
 
@@ -58,6 +58,9 @@ player.addEventListener("timeupdate", (event) => {
 
   handleAnalyserUpdate();
 });
+player.addEventListener("seek", () => {
+  currentTime.value = player.currentTime;
+});
 player.addEventListener("volumechange", () => {
   if (inputVolumeRef.value) {
     inputVolumeRef.value.value = String(player.volume * 100);
@@ -76,7 +79,7 @@ const loadMp3 = async (name: string, ...sources: string[]) => {
   for (const data of bufferData) {
     const buffer = await ctx.decodeAudioData(data);
 
-    track.addSequence(createAudioSequence(buffer, time));
+    track.addSequence(createBufferAudioSequence(buffer, time));
 
     time = time + buffer.duration + 1 + Math.random() * 1;
   }
@@ -145,9 +148,9 @@ const handlePlayToggle = () => {
   } else if (player.state === "paused") {
     player.resume();
   } else {
-    player.play(0).then(
+    player.play().then(
       () => {
-        console.log("playing...");
+        //console.log("playing...");
       },
       (err: any) => {
         console.error(err);

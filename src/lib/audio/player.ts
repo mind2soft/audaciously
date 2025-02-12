@@ -34,9 +34,9 @@ export interface AudioPlayer
 
   currentTime: number;
   volume: number;
-  playbackRate: number;
 
   addTrack(track: AudioTrack, insertIndex?: number): void;
+  countTracks(): number;
   setTrack(track: AudioTrack, index: number): void;
   removeTrack(track: AudioTrack): boolean;
   getTracks(): Iterable<AudioTrack>;
@@ -100,7 +100,6 @@ interface AudioPlayerInternal {
   state: AudioPlayerState;
   tracks: AudioTrack[];
   volume: number;
-  playbackRate: number;
   audioContext?: AudioContext;
   nodes?: AudioPlayerNodes;
   pauseTime: number;
@@ -111,7 +110,6 @@ const createPlayer = (): AudioPlayer => {
   const internal: AudioPlayerInternal = {
     state: "ready",
     volume: 1,
-    playbackRate: 1,
     tracks: [],
     pauseTime: 0,
     resumeTime: 0,
@@ -195,8 +193,9 @@ const createPlayer = (): AudioPlayer => {
       requestAnimationFrame(updatePlaybackTime);
     }
   }
-  function startPlayback() {
+  async function startPlayback() {
     if (internal.audioContext) {
+      const promises: Promise<void>[] = [];
       const analyserNode = internal.audioContext.createAnalyser();
       const gainNode = internal.audioContext.createGain();
 
@@ -222,14 +221,16 @@ const createPlayer = (): AudioPlayer => {
       internal.resumeTime = internal.audioContext.currentTime;
 
       for (const track of internal.tracks) {
-        track.playbackRate = internal.playbackRate;
-
-        track.play(internal.audioContext, {
-          currentTime: internal.resumeTime,
-          output: gainNode,
-          startTime: internal.pauseTime,
-        });
+        promises.push(
+          track.play(internal.audioContext, {
+            currentTime: internal.resumeTime,
+            output: gainNode,
+            startTime: internal.pauseTime,
+          })
+        );
       }
+
+      await Promise.all(promises);
 
       internal.state = "playing";
       requestAnimationFrame(updatePlaybackTime);
@@ -239,25 +240,27 @@ const createPlayer = (): AudioPlayer => {
     if (internal.state === "playing") {
       const currentTime = internal.audioContext?.currentTime ?? 0;
 
+      internal.state = "paused";
       internal.pauseTime =
         internal.pauseTime + currentTime - internal.resumeTime;
 
       for (const track of internal.tracks) {
         track.stop();
       }
-
-      internal.state = "paused";
     }
   }
   function seekPlayback(time: number) {
     const isPlaying = internal.state === "playing";
+    const currentTime = internal.audioContext?.currentTime ?? 0;
 
-    pausePlayback();
-    internal.pauseTime = time;
+    internal.pauseTime = Math.max(time, 0);
 
     if (isPlaying) {
-      dispatchEvent({ type: "seek" });
-      startPlayback();
+      internal.resumeTime = currentTime;
+
+      for (const track of internal.tracks) {
+        track.seek(time);
+      }
     }
   }
   function stopPlayback(resetTime: boolean) {
@@ -316,16 +319,6 @@ const createPlayer = (): AudioPlayer => {
 
       dispatchEvent({ type: "volumechange" });
     },
-    get playbackRate() {
-      return internal.playbackRate;
-    },
-    set playbackRate(value) {
-      internal.playbackRate = value;
-
-      for (const track of internal.tracks) {
-        track.playbackRate = value;
-      }
-    },
 
     addTrack(track, insertIndex) {
       if (insertIndex !== undefined) {
@@ -337,6 +330,9 @@ const createPlayer = (): AudioPlayer => {
 
       dispatchEvent({ type: "change" });
     },
+    countTracks() {
+      return internal.tracks.length;
+    },
     setTrack(track, index) {
       index = Math.min(index, internal.tracks.length);
 
@@ -346,7 +342,7 @@ const createPlayer = (): AudioPlayer => {
     },
     removeTrack(track) {
       stopPlayback(true);
-      const trackIndex = internal.tracks.findIndex((t) => t === track);
+      const trackIndex = internal.tracks.findIndex((t) => t.id === track.id);
       const trackFound = trackIndex >= 0;
 
       if (trackFound) {
@@ -377,8 +373,9 @@ const createPlayer = (): AudioPlayer => {
       }
 
       initPlayback();
-      startPlayback();
-      dispatchEvent({ type: "play" });
+      return startPlayback().then(() => {
+        dispatchEvent({ type: "play" });
+      });
     },
     pause() {
       if (internal.state !== "playing") {
@@ -393,8 +390,9 @@ const createPlayer = (): AudioPlayer => {
         return;
       }
 
-      startPlayback();
-      dispatchEvent({ type: "play" });
+      startPlayback().then(() => {
+        dispatchEvent({ type: "play" });
+      });
     },
     stop() {
       if (internal.state === "ready") {
