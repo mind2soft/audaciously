@@ -12,7 +12,7 @@ interface AudioTrackInternal {
   id: string;
   locked: boolean;
   muted: boolean;
-  sequences: AudioSequence[];
+  sequences: AudioSequence<any>[];
   activeGain?: GainNode;
 }
 
@@ -40,11 +40,13 @@ export interface AudioTrack
   locked: boolean;
   muted: boolean;
 
-  addSequence(sequence: AudioSequence): void;
+  addSequence<Type extends string>(sequence: AudioSequence<Type>): void;
   countSequences(): number;
-  getSequence(id: string): AudioSequence | void;
-  getSequences(): Iterable<AudioSequence>;
-  removeSequence(sequence: AudioSequence | string): boolean;
+  getSequence<Type extends string>(id: string): AudioSequence<Type> | void;
+  getSequences<Type extends string>(): Iterable<AudioSequence<Type>>;
+  removeSequence<Type extends string>(
+    sequence: AudioSequence<Type> | string
+  ): boolean;
 
   /**
    * Start track playback, resolve when ended
@@ -54,7 +56,7 @@ export interface AudioTrack
   stop(): void;
 }
 
-function checkOverlap(a: AudioSequence, b: AudioSequence) {
+function checkOverlap(a: AudioSequence<any>, b: AudioSequence<any>) {
   const a1 = a.time;
   const a2 = a1 + a.playbackDuration;
   const b1 = b.time;
@@ -135,7 +137,7 @@ export const createAudioTrack = (name: string): AudioTrack => {
       }
     },
 
-    addSequence(sequence: AudioSequence) {
+    addSequence(sequence) {
       for (const seq of internal.sequences) {
         if (checkOverlap(seq, sequence)) {
           throw new Error("audio sequence overlap");
@@ -170,10 +172,13 @@ export const createAudioTrack = (name: string): AudioTrack => {
       if (foundSeq) {
         internal.sequences.splice(seqIndex, 1).forEach((seq) => {
           seq.removeEventListener("stop", handleSequenceStop);
+          seq.stop();
         });
-      }
 
-      dispatchEvent({ type: "change" });
+        dispatchEvent({ type: "change" });
+
+        handleSequenceStop();
+      }
 
       return foundSeq;
     },

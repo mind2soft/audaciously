@@ -4,7 +4,7 @@ import { playerKey } from "../lib/provider-keys";
 import { formatTime } from "../lib/util/formatTime";
 /* @ts-ignore */
 import { linearPath } from "waveform-path";
-import { createBufferAudioSequence } from "../lib/audio/sequence";
+import { createAudioBufferSequence } from "../lib/audio/sequence/AudioBufferSequence";
 import { createAudioTrack } from "../lib/audio/track";
 import type { AudioPlayer } from "../lib/audio/player";
 
@@ -79,7 +79,7 @@ const loadMp3 = async (name: string, ...sources: string[]) => {
   for (const data of bufferData) {
     const buffer = await ctx.decodeAudioData(data);
 
-    track.addSequence(createBufferAudioSequence(buffer, time));
+    track.addSequence(createAudioBufferSequence(buffer, time));
 
     time = time + buffer.duration + 1 + Math.random() * 1;
   }

@@ -3,8 +3,12 @@ import { inject, ref } from "vue";
 import { playerKey, recorderKey } from "../lib/provider-keys";
 
 import { createAudioTrack } from "../lib/audio/track";
-import { createBufferAudioSequence } from "../lib/audio/sequence";
+import { createAudioBufferSequence } from "../lib/audio/sequence/AudioBufferSequence";
 
+import {
+  createDummySequence,
+  type DummySequence,
+} from "../lib/audio/sequence/DummySequence";
 import type { Recorder } from "../lib/audio/recorder";
 import type { AudioPlayer } from "../lib/audio/player";
 import type { AudioTrack } from "../lib/audio/track";
@@ -19,7 +23,8 @@ if (!recorder) {
 }
 
 const recorderState = ref(recorder.state);
-const dummyTrack = ref<AudioTrack>();
+const recordingTrack = ref<AudioTrack>();
+const recordingSequence = ref<DummySequence>();
 const recordingStart = ref<number>(0);
 
 const handleUpdateRecorderState = () => {
@@ -28,20 +33,26 @@ const handleUpdateRecorderState = () => {
 
 recorder.addEventListener("ready", handleUpdateRecorderState);
 recorder.addEventListener("record", () => {
-  //dummyTrack.value = createDummyTrack("Recording");
   recordingStart.value = player.currentTime;
 
-  //player.addTrack(dummyTrack.value);
-  //player.play();
+  recordingSequence.value = createDummySequence(recordingStart.value, Infinity);
+
+  recordingTrack.value = createAudioTrack("test");
+  recordingTrack.value.addSequence(recordingSequence.value);
+
+  player.addTrack(recordingTrack.value);
+  player.play();
 
   handleUpdateRecorderState();
 });
 recorder.addEventListener("pause", handleUpdateRecorderState);
 recorder.addEventListener("resume", handleUpdateRecorderState);
 recorder.addEventListener("stop", () => {
-  player.stop();
-  if (dummyTrack.value) {
-    player.removeTrack(dummyTrack.value);
+  player.pause();
+
+  if (recordingTrack.value && recordingSequence.value) {
+    recordingTrack.value.removeSequence(recordingSequence.value);
+    recordingSequence.value = undefined;
   }
 
   handleUpdateRecorderState();
@@ -50,13 +61,13 @@ recorder.addEventListener("error", handleUpdateRecorderState);
 recorder.addEventListener("data", () => {
   recorder.getAudioBuffer().then(
     (buffer) => {
-      const track = createAudioTrack("test");
+      if (recordingTrack.value) {
+        recordingTrack.value.addSequence(
+          createAudioBufferSequence(buffer, recordingStart.value)
+        );
 
-      track.addSequence(
-        createBufferAudioSequence(buffer, recordingStart.value)
-      );
-
-      player.addTrack(track);
+        recordingTrack.value = undefined;
+      }
     },
     (err) => {
       console.error(err);

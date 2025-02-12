@@ -346,10 +346,12 @@ const createPlayer = (): AudioPlayer => {
       const trackFound = trackIndex >= 0;
 
       if (trackFound) {
-        internal.tracks.splice(trackIndex, 1);
-      }
+        internal.tracks.splice(trackIndex, 1).forEach((track) => {
+          track.stop();
+        });
 
-      dispatchEvent({ type: "change" });
+        dispatchEvent({ type: "change" });
+      }
 
       return trackFound;
     },
