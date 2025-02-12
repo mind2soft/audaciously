@@ -42,9 +42,9 @@ export interface AudioTrack
 
   addSequence(sequence: AudioSequence): void;
   countSequences(): number;
-  getSequence(index: number): AudioSequence | void;
+  getSequence(id: string): AudioSequence | void;
   getSequences(): Iterable<AudioSequence>;
-  removeSequence(sequence: AudioSequence): boolean;
+  removeSequence(sequence: AudioSequence | string): boolean;
 
   /**
    * Start track playback, resolve when ended
@@ -152,18 +152,19 @@ export const createAudioTrack = (name: string): AudioTrack => {
     countSequences() {
       return internal.sequences.length;
     },
-    getSequence(index) {
-      return internal.sequences[index];
+    getSequence(id) {
+      return internal.sequences.find((seq) => id === seq.id);
     },
     *getSequences() {
       for (const sequence of internal.sequences) {
         yield sequence;
       }
     },
-    removeSequence(sequence: AudioSequence) {
-      const seqIndex = internal.sequences.findIndex(
-        (s) => s.id === sequence.id
-      );
+    removeSequence(sequence) {
+      const seqId = (sequence =
+        typeof sequence === "string" ? sequence : sequence.id);
+
+      const seqIndex = internal.sequences.findIndex((s) => s.id === seqId);
       const foundSeq = seqIndex >= 0;
 
       if (foundSeq) {
