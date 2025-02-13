@@ -10,7 +10,8 @@ import type {
 
 interface AudioDummySequenceInternal extends AudioSequenceInternal {
   playing: boolean;
-  duration: number;
+  startTime: number;
+  startTS?: number;
 }
 
 export type DummySequenceType = typeof dummySequenceType;
@@ -19,16 +20,13 @@ export interface DummySequence extends AudioSequence<DummySequenceType> {}
 
 export const dummySequenceType = "dummy" as const;
 
-export function createDummySequence(
-  time: number,
-  duration: number
-): DummySequence {
+export function createDummySequence(time: number): DummySequence {
   const internal: AudioDummySequenceInternal = {
     id: nanoid(),
     playbackRate: 1,
     playing: false,
+    startTime: 0,
     time,
-    duration,
   };
 
   const { dispatchEvent, ...emitter } = createEmitter<
@@ -39,6 +37,12 @@ export function createDummySequence(
     event.sequence = sequence;
     return event;
   });
+
+  const getDuration = () => {
+    const ts = internal.startTS ?? Date.now();
+
+    return (Date.now() - ts) / 1000;
+  };
 
   const sequence: DummySequence = {
     get type() {
@@ -63,10 +67,10 @@ export function createDummySequence(
     },
 
     get duration() {
-      return internal.duration;
+      return getDuration();
     },
     get playbackDuration() {
-      return internal.duration / internal.playbackRate;
+      return getDuration();
     },
 
     get isPlaying() {
@@ -77,35 +81,35 @@ export function createDummySequence(
       return internal.playbackRate;
     },
     set playbackRate(value) {
-      const hasChanged = value !== internal.playbackRate;
-
-      internal.playbackRate = value;
-
-      if (hasChanged) {
-        dispatchEvent({ type: "change" });
-      }
+      throw new Error(
+        `Cannot change the playback rate of a dummy audio sequence (${value}x)`
+      );
     },
 
-    async play() {
+    async play(_, options) {
       if (internal.playing) {
         return;
       }
 
       internal.playing = true;
+      internal.startTime = options?.startTime ?? 0;
+      internal.startTS = Date.now();
 
       dispatchEvent({ type: "play" });
     },
-    seek() {
-      if (!internal.playing) {
-        return;
-      }
+    seek(time) {
+      internal.startTime = time;
 
-      dispatchEvent({ type: "seek" });
+      if (internal.playing) {
+        dispatchEvent({ type: "seek" });
+      }
     },
     stop() {
       if (!internal.playing) {
         return;
       }
+
+      internal.playing = false;
 
       dispatchEvent({ type: "stop" });
     },

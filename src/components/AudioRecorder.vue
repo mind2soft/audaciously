@@ -35,7 +35,7 @@ recorder.addEventListener("ready", handleUpdateRecorderState);
 recorder.addEventListener("record", () => {
   recordingStart.value = player.currentTime;
 
-  recordingSequence.value = createDummySequence(recordingStart.value, Infinity);
+  recordingSequence.value = createDummySequence(recordingStart.value);
 
   recordingTrack.value = createAudioTrack("test");
   recordingTrack.value.addSequence(recordingSequence.value);
@@ -88,7 +88,7 @@ const handleRecordToggle = () => {
   <button
     :class="{
       'btn btn-square size-16': true,
-      'text-red-500': recorderState === 'recording',
+      'btn-soft text-red-500': recorderState === 'recording',
     }"
     title="Record new sequence"
     v-on:click="handleRecordToggle"

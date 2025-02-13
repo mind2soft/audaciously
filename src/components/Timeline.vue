@@ -62,6 +62,7 @@ const resizeObserver = new ResizeObserver(handleTimelineUpdate);
 player.addEventListener("seek", handleTimelineUpdate);
 player.addEventListener("timeupdate", handleTimelineUpdate);
 player.addEventListener("stop", handleTimelineUpdate);
+player.addEventListener("change", handleTimelineUpdate);
 
 timeline.addEventListener("change", handleTimelineUpdate);
 

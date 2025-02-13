@@ -55,6 +55,7 @@ player.addEventListener("change", () => {
 player.addEventListener("timeupdate", (event) => {
   currentTime.value = player.currentTime;
   currentFrame.value = event.audioFrame;
+  totalDuration.value = player.totalDuration;
 
   handleAnalyserUpdate();
 });
@@ -145,8 +146,6 @@ const handleInit = async () => {
 const handlePlayToggle = () => {
   if (player.state === "playing") {
     player.pause();
-  } else if (player.state === "paused") {
-    player.resume();
   } else {
     player.play().then(
       () => {

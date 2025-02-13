@@ -47,7 +47,6 @@ export interface AudioPlayer
    */
   play(): Promise<void>;
   pause(): void;
-  resume(): void;
   stop(): void;
 }
 
@@ -139,7 +138,9 @@ const createPlayer = (): AudioPlayer => {
     let trackIndex = internal.tracks.length;
     while (--trackIndex >= 0) {
       const track = internal.tracks[trackIndex];
-      totalDuration = Math.max(track.duration, totalDuration);
+      if (isFinite(track.duration)) {
+        totalDuration = Math.max(track.duration, totalDuration);
+      }
     }
 
     return totalDuration;
@@ -368,13 +369,13 @@ const createPlayer = (): AudioPlayer => {
     },
 
     async play() {
-      if (internal.state !== "ready") {
-        stopPlayback(true);
-      } else if (!internal.tracks.length) {
+      if (internal.state === "playing" || !internal.tracks.length) {
         return;
       }
 
-      initPlayback();
+      if (internal.state === "ready") {
+        initPlayback();
+      }
       return startPlayback().then(() => {
         dispatchEvent({ type: "play" });
       });
@@ -386,15 +387,6 @@ const createPlayer = (): AudioPlayer => {
 
       pausePlayback();
       dispatchEvent({ type: "pause" });
-    },
-    resume() {
-      if (internal.state !== "paused") {
-        return;
-      }
-
-      startPlayback().then(() => {
-        dispatchEvent({ type: "play" });
-      });
     },
     stop() {
       if (internal.state === "ready") {

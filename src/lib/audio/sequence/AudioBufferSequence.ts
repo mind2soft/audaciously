@@ -81,7 +81,6 @@ export function createAudioBufferSequence(
       () => {
         cleanupPlayback();
         dispatchEvent({ type: "stop" });
-        console.log("sequence ended");
       },
       { signal: controller.signal }
     );
