@@ -1,13 +1,14 @@
 import { nanoid } from "nanoid";
 import { createEmitter } from "../../emitter";
-import type {
-  AudioEffect,
-  AudioSequence,
-  AudioSequenceEvent,
-  AudioSequenceEventMap,
-  AudioSequenceEventType,
-  AudioSequenceInternal,
-  AudioSequencePlayback,
+import {
+  trackPropertySymbol,
+  type AudioEffect,
+  type AudioSequence,
+  type AudioSequenceEvent,
+  type AudioSequenceEventMap,
+  type AudioSequenceEventType,
+  type AudioSequenceInternal,
+  type AudioSequencePlayback,
 } from "../sequence";
 
 interface AudioBufferSequencePlayback extends AudioSequencePlayback {
@@ -35,6 +36,7 @@ export function createAudioBufferSequence(
 ): AudioBufferSequence {
   const internal: AudioBufferSequenceInternal = {
     id: nanoid(),
+    selected: false,
     playbackRate: 1,
     time,
   };
@@ -57,11 +59,11 @@ export function createAudioBufferSequence(
     };
   }
   function startPlayback(startTime: number, currentTime?: number) {
-    if (!internal.playback || time + buffer.duration < startTime) {
+    if (!internal.playback || internal.time + buffer.duration < startTime) {
       return;
     }
 
-    const sourceTime = time - startTime;
+    const sourceTime = internal.time - startTime;
     const controller = new AbortController();
     const source = internal.playback.context.createBufferSource();
 
@@ -105,8 +107,19 @@ export function createAudioBufferSequence(
   }
 
   const sequence: AudioBufferSequence = {
+    get [trackPropertySymbol]() {
+      return internal.track;
+    },
+    set [trackPropertySymbol](value) {
+      internal.track = value;
+    },
+
     get type() {
       return audioBufferSequenceType;
+    },
+
+    get track() {
+      return internal.track;
     },
 
     get id() {
@@ -149,6 +162,18 @@ export function createAudioBufferSequence(
         internal.playback.activeSource.playbackRate.value =
           internal.playbackRate;
 
+        dispatchEvent({ type: "change" });
+      }
+    },
+    get selected() {
+      return internal.selected;
+    },
+    set selected(value) {
+      const hasChanged = internal.selected !== value;
+
+      internal.selected = value;
+
+      if (hasChanged) {
         dispatchEvent({ type: "change" });
       }
     },

@@ -1,5 +1,5 @@
 import { createEmitter, type Emitter } from "./emitter";
-import { formatTimeScale } from "./util/formatTime";
+import { formatTimeScale, formatTimeToPixel } from "./util/formatTime";
 
 interface TimelineEvent<EventType extends TimelineEventType> {
   type: EventType;
@@ -37,7 +37,6 @@ export enum ScaleDirection {
 }
 
 const tickWidth = 128;
-const baseWidth = 16;
 const scale_a = 4;
 const scale_b = 3;
 const scale_min = 0.01;
@@ -62,14 +61,6 @@ export const scaleRatio = (ratio: number, dir: ScaleDirection) => {
   const newRatio = ratio * scaleValue;
 
   return newRatio > scale_min && newRatio < scale_max ? newRatio : ratio;
-};
-
-export const formatTimeToPixel = (ratio: number, time: number) => {
-  return ratio * time * baseWidth;
-};
-
-export const formatPixelToTime = (ratio: number, px: number) => {
-  return px / baseWidth / ratio;
 };
 
 export const createTimeline = (options?: TimelineOptions): Timeline => {

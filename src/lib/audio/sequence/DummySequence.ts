@@ -1,11 +1,12 @@
 import { nanoid } from "nanoid";
 import { createEmitter } from "../../emitter";
-import type {
-  AudioSequence,
-  AudioSequenceEvent,
-  AudioSequenceEventMap,
-  AudioSequenceEventType,
-  AudioSequenceInternal,
+import {
+  trackPropertySymbol,
+  type AudioSequence,
+  type AudioSequenceEvent,
+  type AudioSequenceEventMap,
+  type AudioSequenceEventType,
+  type AudioSequenceInternal,
 } from "../sequence";
 
 interface AudioDummySequenceInternal extends AudioSequenceInternal {
@@ -23,6 +24,7 @@ export const dummySequenceType = "dummy" as const;
 export function createDummySequence(time: number): DummySequence {
   const internal: AudioDummySequenceInternal = {
     id: nanoid(),
+    selected: false,
     playbackRate: 1,
     playing: false,
     startTime: 0,
@@ -45,12 +47,23 @@ export function createDummySequence(time: number): DummySequence {
   };
 
   const sequence: DummySequence = {
+    get [trackPropertySymbol]() {
+      return internal.track;
+    },
+    set [trackPropertySymbol](value) {
+      internal.track = value;
+    },
+
     get type() {
       return dummySequenceType;
     },
 
     get id() {
       return internal.id;
+    },
+
+    get track() {
+      return internal.track;
     },
 
     get time() {
@@ -84,6 +97,18 @@ export function createDummySequence(time: number): DummySequence {
       throw new Error(
         `Cannot change the playback rate of a dummy audio sequence (${value}x)`
       );
+    },
+    get selected() {
+      return internal.selected;
+    },
+    set selected(value) {
+      const hasChanged = internal.selected !== value;
+
+      internal.selected = value;
+
+      if (hasChanged) {
+        dispatchEvent({ type: "change" });
+      }
     },
 
     async play(_, options) {

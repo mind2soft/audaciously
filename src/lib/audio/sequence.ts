@@ -1,4 +1,5 @@
 import type { Emitter } from "../emitter";
+import type { AudioTrack } from "./track";
 
 export type AudioEffectStep =
   | {
@@ -30,7 +31,9 @@ export interface AudioSequencePlayback {
 
 export interface AudioSequenceInternal {
   id: string;
+  track?: AudioTrack;
   playbackRate: number;
+  selected: boolean;
   time: number;
 }
 
@@ -53,14 +56,18 @@ export type AudioSequenceEventType = keyof AudioSequenceEventMap<any>;
 
 export interface AudioSequence<Type extends string>
   extends Emitter<AudioSequenceEventType, AudioSequenceEventMap<Type>> {
+  [trackPropertySymbol]?: AudioTrack;
+
   readonly type: Type;
   readonly id: string;
   readonly duration: number;
   readonly playbackDuration: number;
   readonly isPlaying: boolean;
+  readonly track?: AudioTrack;
 
   time: number;
   playbackRate: number;
+  selected: boolean;
 
   play(
     context: AudioContext,
@@ -69,3 +76,5 @@ export interface AudioSequence<Type extends string>
   seek(time: number): void;
   stop(): void;
 }
+
+export const trackPropertySymbol = Symbol.for("@@trackProperty");

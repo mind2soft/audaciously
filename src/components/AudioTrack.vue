@@ -1,22 +1,12 @@
 <script setup lang="ts">
-import {
-  inject,
-  ref,
-  onMounted,
-  onBeforeUpdate,
-  onBeforeUnmount,
-  onUpdated,
-} from "vue";
+import { inject, ref, onMounted, onBeforeUnmount } from "vue";
 import { playerKey, timelineKey } from "../lib/provider-keys";
-import Waveform from "./Waveform.vue";
+import AudioSequenceVue from "./AudioSequence.vue";
 import type { AudioTrack } from "../lib/audio/track";
 import type { AudioPlayer } from "../lib/audio/player";
-import { formatTimeToPixel, type Timeline } from "../lib/timeline";
-import {
-  audioBufferSequenceType,
-  type AudioBufferSequence,
-} from "../lib/audio/sequence/AudioBufferSequence";
+import type { Timeline } from "../lib/timeline";
 import type { AudioSequence } from "../lib/audio/sequence";
+import { formatTimeToPixel } from "../lib/util/formatTime";
 
 const props = defineProps<{
   track: AudioTrack;
@@ -34,7 +24,6 @@ if (!player) {
 const sequences = ref<AudioSequence<any>[]>(
   Array.from(props.track.getSequences())
 );
-const trackOffset = ref<number>(0);
 const baseWidth = ref<number>(formatTimeToPixel(timeline.ratio, 1));
 const cursorPosition = ref<number>(
   formatTimeToPixel(timeline.ratio, player.currentTime)
@@ -49,27 +38,18 @@ const handleUpdateCursor = () => {
 };
 
 player.addEventListener("timeupdate", handleUpdateCursor);
+player.addEventListener("change", handleUpdateCursor);
+player.addEventListener("seek", handleUpdateCursor);
 player.addEventListener("stop", handleUpdateCursor);
 
 timeline.addEventListener("change", () => {
   baseWidth.value = formatTimeToPixel(timeline.ratio, 1);
-  // trackOffset.value = -formatTimeToPixel(timeline.ratio, timeline.offsetTime);
-  trackOffset.value = 0;
   handleUpdateCursor();
 });
 
 onMounted(() => {
   props.track.addEventListener("change", handleUpdateSequences);
 });
-
-onBeforeUpdate(() => {
-  props.track.removeEventListener("change", handleUpdateSequences);
-});
-
-onUpdated(() => {
-  props.track.addEventListener("change", handleUpdateSequences);
-});
-
 onBeforeUnmount(() => {
   props.track.removeEventListener("change", handleUpdateSequences);
 });
@@ -77,29 +57,14 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="h-48">
-    <div
-      class="flex relative flex-nowrap h-full"
-      :style="{
-        left: `${trackOffset}px`,
-      }"
-    >
-      <div
+    <div class="flex relative flex-nowrap h-full">
+      <AudioSequenceVue
         v-for="sequence in sequences"
-        class="absolute top-0 h-full"
-        :style="{
-          left: `${sequence.time * baseWidth}px`,
-          minWidth: `${sequence.playbackDuration * baseWidth}px`,
-          maxWidth: `${sequence.playbackDuration * baseWidth}px`,
-        }"
-      >
-        <Waveform
-          v-if="sequence.type === audioBufferSequenceType"
-          class="border border-dotted border-current/70"
-          :current-time="cursorPosition - sequence.time * baseWidth"
-          :audio-buffer="(sequence as AudioBufferSequence).buffer"
-          :disabled="track.muted"
-        />
-      </div>
+        :base-width="baseWidth"
+        :cursor-position="cursorPosition"
+        :sequence="sequence"
+        :muted="track.muted"
+      />
     </div>
   </div>
 </template>

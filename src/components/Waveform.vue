@@ -3,6 +3,7 @@ import { onBeforeUnmount, onMounted, ref, useId, watchEffect } from "vue";
 import { createWaveformProcessor } from "../lib/audio/waveform";
 
 const props = defineProps<{
+  color: string;
   currentTime: number;
   audioBuffer: AudioBuffer;
   disabled?: boolean;
@@ -99,12 +100,8 @@ onBeforeUnmount(() => {
           :offset="`${position}%`"
           stop-color="var(--color-accent)"
         />
-        <stop
-          ref="svgStopStart"
-          :offset="`${position}%`"
-          stop-color="var(--color-base-content)"
-        />
-        <stop offset="100%" stop-color="var(--color-base-content)" />
+        <stop ref="svgStopStart" :offset="`${position}%`" :stop-color="color" />
+        <stop offset="100%" :stop-color="color" />
       </linearGradient>
     </defs>
     <path

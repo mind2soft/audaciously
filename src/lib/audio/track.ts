@@ -1,6 +1,6 @@
 import { nanoid } from "nanoid";
 import { createEmitter, type Emitter } from "../emitter";
-import type { AudioSequence } from "./sequence";
+import { trackPropertySymbol, type AudioSequence } from "./sequence";
 
 export type AudioTrackPlayOptions = {
   output?: AudioNode;
@@ -92,6 +92,9 @@ export const createAudioTrack = (name: string): AudioTrack => {
       dispatchEvent({ type: "stop" });
     }
   };
+  const handleSequenceChange = () => {
+    dispatchEvent({ type: "change" });
+  };
 
   const track: AudioTrack = {
     get id() {
@@ -138,16 +141,23 @@ export const createAudioTrack = (name: string): AudioTrack => {
     },
 
     addSequence(sequence) {
+      if (sequence.track) {
+        throw new Error("sequence already in a track");
+      }
+
       for (const seq of internal.sequences) {
         if (checkOverlap(seq, sequence)) {
           throw new Error("audio sequence overlap");
         }
       }
 
+      sequence[trackPropertySymbol] = track;
+
       internal.sequences.push(sequence);
       internal.sequences.sort((a, b) => a.time - b.time);
 
       sequence.addEventListener("stop", handleSequenceStop);
+      sequence.addEventListener("change", handleSequenceChange);
 
       dispatchEvent({ type: "change" });
     },
@@ -172,7 +182,9 @@ export const createAudioTrack = (name: string): AudioTrack => {
       if (foundSeq) {
         internal.sequences.splice(seqIndex, 1).forEach((seq) => {
           seq.removeEventListener("stop", handleSequenceStop);
+          seq.removeEventListener("change", handleSequenceChange);
           seq.stop();
+          seq[trackPropertySymbol] = undefined;
         });
 
         dispatchEvent({ type: "change" });

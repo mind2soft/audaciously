@@ -6,14 +6,9 @@ import AudioTrackView from "./AudioTrack.vue";
 
 import type { AudioPlayer } from "../lib/audio/player";
 import type { AudioTrack } from "../lib/audio/track";
-import {
-  formatPixelToTime,
-  formatTimeToPixel,
-  ScaleDirection,
-  scaleRatio,
-  type Timeline,
-} from "../lib/timeline";
+import { ScaleDirection, scaleRatio, type Timeline } from "../lib/timeline";
 import TrackHeader, { type DeleteTrackEvent } from "./TrackHeader.vue";
+import { formatTimeToPixel, formatPixelToTime } from "../lib/util/formatTime";
 
 type TrackDrag =
   | {

@@ -2,7 +2,8 @@
 import { inject, ref, onMounted, onBeforeUnmount } from "vue";
 import { playerKey, timelineKey } from "../lib/provider-keys";
 import type { AudioPlayer } from "../lib/audio/player";
-import { formatPixelToTime, type Timeline } from "../lib/timeline";
+import type { Timeline } from "../lib/timeline";
+import { formatPixelToTime } from "../lib/util/formatTime";
 
 const player = inject<AudioPlayer>(playerKey);
 const timeline = inject<Timeline>(timelineKey);

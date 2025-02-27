@@ -1,3 +1,5 @@
+export const baseSecondWidthInPixels = 16;
+
 export function formatTimeScale(seconds: number): string {
   const label = [];
 
@@ -42,3 +44,11 @@ export function formatTime(seconds: number): string {
     return `${m}:${s}.${ms}`;
   }
 }
+
+export const formatTimeToPixel = (ratio: number, seconds: number) => {
+  return ratio * seconds * baseSecondWidthInPixels;
+};
+
+export const formatPixelToTime = (ratio: number, px: number) => {
+  return px / baseSecondWidthInPixels / ratio;
+};

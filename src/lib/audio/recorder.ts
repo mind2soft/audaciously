@@ -95,7 +95,7 @@ const createRecorder = (options?: RecorderOptions): Recorder => {
   }
 
   function initAudioContext() {
-    if (!internal.audioContext) {
+    if (!internal.audioContext || internal.audioContext.state === "closed") {
       internal.audioContext = new AudioContext(options?.contextOptions);
     }
     return internal.audioContext;
@@ -128,6 +128,8 @@ const createRecorder = (options?: RecorderOptions): Recorder => {
     );
     internal.mediaRecorder?.removeEventListener("stop", stopEventListener);
 
+    internal.mediaRecorder?.stream.getTracks().forEach((track) => track.stop());
+
     internal.analyserData = null;
     internal.analyserNode = null;
     internal.sourceNode = null;
@@ -142,6 +144,9 @@ const createRecorder = (options?: RecorderOptions): Recorder => {
         timestamp: Date.now(),
         data: internal.blobs,
       } as RecorderDataEvent);
+
+      internal.audioContext.close();
+      internal.audioContext = null;
     }
   }
   function updateAnalyserData() {
