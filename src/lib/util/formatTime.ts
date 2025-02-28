@@ -32,6 +32,9 @@ export function formatTime(seconds: number): string {
     return "--:--";
   }
 
+  const prefix = seconds < 0 ? "-" : "";
+  seconds = Math.abs(seconds);
+
   const m = String(Math.floor((seconds % 3600) / 60)).padStart(2, "0");
   const s = String(seconds % 60 | 0).padStart(2, "0");
   const ms = String(Math.floor((seconds % 1) * 1000)).padStart(3, "0");
@@ -39,9 +42,9 @@ export function formatTime(seconds: number): string {
   if (seconds >= 3600) {
     const h = String(Math.floor(seconds / 3600));
 
-    return `${h}:${m}:${s}.${ms}`;
+    return `${prefix}${h}:${m}:${s}.${ms}`;
   } else {
-    return `${m}:${s}.${ms}`;
+    return `${prefix}${m}:${s}.${ms}`;
   }
 }
 

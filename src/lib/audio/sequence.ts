@@ -64,6 +64,7 @@ export interface AudioSequence<Type extends string>
   readonly playbackDuration: number;
   readonly isPlaying: boolean;
   readonly track?: AudioTrack;
+  readonly buffer: AudioBuffer;
 
   time: number;
   playbackRate: number;

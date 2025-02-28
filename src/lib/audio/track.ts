@@ -56,13 +56,33 @@ export interface AudioTrack
   stop(): void;
 }
 
-function checkOverlap(a: AudioSequence<any>, b: AudioSequence<any>) {
+function checkOverlap(
+  a: AudioSequence<any>,
+  b: AudioSequence<any>,
+  tolerance = 0.001
+) {
   const a1 = a.time;
   const a2 = a1 + a.playbackDuration;
   const b1 = b.time;
   const b2 = b1 + b.playbackDuration;
+  const overlap =
+    (a1 > b1 + tolerance && a1 < b2 - tolerance) ||
+    (b1 > a1 + tolerance && b1 < a2 - tolerance);
 
-  return (a1 >= b1 && a1 <= b2) || (b1 >= a1 && b1 <= a2);
+  if (overlap)
+    console.warn(
+      "Overlap detected",
+      a1,
+      a2,
+      b1,
+      b2,
+      a1 > b1 + tolerance,
+      a1 < b2 - tolerance,
+      b1 > a1 + tolerance,
+      b1 < a2 - tolerance
+    );
+
+  return overlap;
 }
 
 export const createAudioTrack = (name: string): AudioTrack => {

@@ -23,9 +23,7 @@ interface AudioBufferSequenceInternal extends AudioSequenceInternal {
 export type AudioBufferSequenceType = typeof audioBufferSequenceType;
 
 export interface AudioBufferSequence
-  extends AudioSequence<AudioBufferSequenceType> {
-  readonly buffer: AudioBuffer;
-}
+  extends AudioSequence<AudioBufferSequenceType> {}
 
 export const audioBufferSequenceType = "audioBuffer" as const;
 

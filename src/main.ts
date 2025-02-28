@@ -11,10 +11,8 @@ import {
 import { createPlayer } from "./lib/audio/player";
 import { createTimeline } from "./lib/timeline";
 import { createTools } from "./lib/audio/tools";
-import {
-  createeStartTimeTool, // Modified
-  startTimeToolKey,
-} from "./lib/audio/tool/start-time";
+import { createeSequenceMoveTool } from "./lib/audio/tool/sequence-move";
+import { createSequenceSplitTool } from "./lib/audio/tool/sequence-split";
 
 const timeline = createTimeline();
 createApp(App)
@@ -24,8 +22,10 @@ createApp(App)
   .provide(
     toolsKey,
     createTools({
-      tools: [createeStartTimeTool(timeline)], // inject timeline
-      selectedTool: startTimeToolKey,
+      tools: [
+        createeSequenceMoveTool(timeline),
+        createSequenceSplitTool(timeline),
+      ],
     })
   )
   .mount("#app");

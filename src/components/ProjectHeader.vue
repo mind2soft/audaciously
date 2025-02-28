@@ -10,12 +10,17 @@
       </button>
     </div>
     <div class="flex-1">
-      <a class="text-xl btn btn-ghost">Untitled project</a>
+      <button class="text-xl btn btn-ghost">Untitled project</button>
     </div>
     <div class="flex-none">
-      <button class="btn btn-square btn-ghost">
-        <i class="iconify mdi--user-circle size-10" />
-      </button>
+      <a
+        class="btn btn-square btn-ghost"
+        target="_blank"
+        href="https://github.com/mind2soft/audaciously"
+        title="View on GitHub"
+      >
+        <i class="iconify mdi--github-circle size-10" />
+      </a>
     </div>
   </div>
 </template>

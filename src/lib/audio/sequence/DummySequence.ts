@@ -66,6 +66,10 @@ export function createDummySequence(time: number): DummySequence {
       return internal.track;
     },
 
+    get buffer() {
+      return new AudioBuffer({ length: 1, sampleRate: 44100 });
+    },
+
     get time() {
       return internal.time;
     },
