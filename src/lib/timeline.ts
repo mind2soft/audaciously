@@ -22,7 +22,7 @@ export type TimelineOptions = {
   offsetTime?: number;
 };
 
-export interface Timeline extends Emitter<TimelineEventType, TimelineEventMap> {
+export interface Timeline extends Emitter<TimelineEventMap> {
   ratio: number;
   offsetTime: number;
 
@@ -69,14 +69,12 @@ export const createTimeline = (options?: TimelineOptions): Timeline => {
     offsetTime: options?.offsetTime ?? 0,
   };
 
-  const { dispatchEvent, ...emitter } = createEmitter<
-    TimelineEventType,
-    TimelineEventMap,
-    TimelineEvent<TimelineEventType>
-  >((event) => {
-    event.timeline = timeline;
-    return event;
-  });
+  const { dispatchEvent, ...emitter } = createEmitter<TimelineEventMap>(
+    (event) => {
+      event.timeline = timeline;
+      return event;
+    }
+  );
 
   const timeline: Timeline = {
     get ratio() {

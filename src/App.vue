@@ -3,17 +3,20 @@ import AudioPlayer from "./components/AudioPlayer.vue";
 import ProjectHeader from "./components/ProjectHeader.vue";
 import AudioTracks from "./components/AudioTracks.vue";
 import Toolbar from "./components/Toolbar.vue";
+import SideMenu from "./components/SideMenu.vue";
 </script>
 
 <template>
-  <header>
-    <ProjectHeader />
-  </header>
+  <SideMenu>
+    <header>
+      <ProjectHeader />
+    </header>
 
-  <main>
-    <AudioPlayer />
-    <AudioTracks />
-  </main>
+    <main>
+      <AudioPlayer />
+      <AudioTracks />
+    </main>
 
-  <footer><Toolbar /></footer>
+    <footer><Toolbar /></footer>
+  </SideMenu>
 </template>

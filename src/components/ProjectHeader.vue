@@ -1,13 +1,15 @@
 <script setup lang="ts">
+import { sideMenuId } from "../lib/provider-keys";
+
 // TODO
 </script>
 
 <template>
   <div class="shadow-sm navbar bg-base-200">
     <div class="flex-none">
-      <button class="btn btn-square btn-ghost">
-        <i class="iconify mdi--menu size-7" />
-      </button>
+      <label :for="sideMenuId" class="btn drawer-button"
+        ><i class="iconify mdi--menu size-7"
+      /></label>
     </div>
     <div class="flex-1">
       <button class="text-xl btn btn-ghost">Untitled project</button>
