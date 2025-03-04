@@ -4,8 +4,6 @@ import { playerKey } from "../lib/provider-keys";
 import { formatTime } from "../lib/util/formatTime";
 /* @ts-ignore */
 import { linearPath } from "waveform-path";
-import { createAudioBufferSequence } from "../lib/audio/sequence/AudioBufferSequence";
-import { createAudioTrack } from "../lib/audio/track";
 import type { AudioPlayer } from "../lib/audio/player";
 
 const player = inject<AudioPlayer>(playerKey);
@@ -68,26 +66,6 @@ player.addEventListener("volumechange", () => {
   }
 });
 
-const loadMp3 = async (name: string, ...sources: string[]) => {
-  const bufferData = await Promise.all(
-    sources.map((source) => fetch(source).then((res) => res.arrayBuffer()))
-  );
-
-  const ctx = new AudioContext();
-  const track = createAudioTrack(name);
-  let time = Math.random() * 2;
-
-  for (const data of bufferData) {
-    const buffer = await ctx.decodeAudioData(data);
-
-    track.addSequence(createAudioBufferSequence(buffer, time));
-
-    time = time + buffer.duration + 1 + Math.random() * 1;
-  }
-
-  player.addTrack(track);
-};
-
 const getPath = (audioBuffer: AudioBuffer, svg: SVGSVGElement) => {
   return linearPath(audioBuffer, {
     samples: svg.clientWidth / 2,
@@ -126,21 +104,6 @@ const handleAnalyserUpdate = () => {
       `${Math.min(progress + 1, 100)}%`
     );
   }
-};
-
-const handleInit = async () => {
-  const assets = [
-    "/assets/audio/sample-3s.mp3",
-    "/assets/audio/sample-4s.mp3",
-    "/assets/audio/sample-9s.mp3",
-    "/assets/audio/sample-19s.mp3",
-  ];
-  const sequenceCount = (1 + Math.random() * (assets.length - 1)) | 0;
-  const sequences = Array.from({ length: sequenceCount }).map(
-    () => assets[(Math.random() * assets.length) | 0]
-  );
-
-  await loadMp3("Test " + (player.trackCount + 1), ...sequences);
 };
 
 const handlePlayToggle = () => {
@@ -182,7 +145,6 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="flex gap-3 items-center px-4 bg-base-200">
-    <button class="btn" v-on:click="handleInit">TEST</button>
     <button class="btn btn-circle btn-lg" v-on:click="handlePlayToggle">
       <i v-if="isPlaying" class="iconify mdi--pause size-8" />
       <i v-else class="iconify mdi--play size-8" />
@@ -205,7 +167,7 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="flex-1 xs:hidden md:block">
-      <svg ref="svgRef" class="px-2 w-full h-10">
+      <svg ref="svgRef" class="px-2 w-full h-10 max-w-48">
         <defs>
           <linearGradient
             id="waveformgrad"

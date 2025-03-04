@@ -1,7 +1,7 @@
 import { createEmitter, type Emitter } from "../emitter";
 import type { AudioTrack } from "./track";
 
-interface AudioPlayerEvent<EventType extends AudioPlayerEventType> {
+interface AudioPlayerEvent<EventType extends string> {
   type: EventType;
   player: AudioPlayer;
 }
@@ -22,12 +22,9 @@ type AudioPlayerEventMap = {
   // error: (event: PlayerEvent<"error">) => void;
 };
 
-type AudioPlayerEventType = keyof AudioPlayerEventMap;
-
 type AudioPlayerState = "ready" | "playing" | "paused";
 
-export interface AudioPlayer
-  extends Emitter<AudioPlayerEventType, AudioPlayerEventMap> {
+export interface AudioPlayer extends Emitter<AudioPlayerEventMap> {
   readonly state: AudioPlayerState;
   readonly trackCount: number;
   readonly totalDuration: number;
@@ -114,14 +111,12 @@ const createPlayer = (): AudioPlayer => {
     resumeTime: 0,
   };
 
-  const { dispatchEvent, ...emitter } = createEmitter<
-    AudioPlayerEventType,
-    AudioPlayerEventMap,
-    AudioPlayerEvent<AudioPlayerEventType>
-  >((event) => {
-    event.player = player;
-    return event;
-  });
+  const { dispatchEvent, ...emitter } = createEmitter<AudioPlayerEventMap>(
+    (event) => {
+      event.player = player;
+      return event;
+    }
+  );
 
   function getCurrentTime() {
     const baseTime = internal.pauseTime;

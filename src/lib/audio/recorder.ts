@@ -1,4 +1,6 @@
-interface RecorderEvent<EventType extends RecorderEventType> {
+import { createEmitter, type Emitter } from "../emitter";
+
+interface RecorderEvent<EventType extends string> {
   type: EventType;
   timestamp: number;
   recorder: Recorder;
@@ -23,8 +25,7 @@ type RecorderEventMap = {
   error: (event: RecorderEvent<"error">) => void;
 };
 
-type RecorderEventType = keyof RecorderEventMap;
-type RecorderEventCallback<T extends RecorderEventType> = RecorderEventMap[T];
+// type RecorderEventCallback<T extends RecorderEventType> = RecorderEventMap[T];
 
 type RecorderOptions = {
   contextOptions?: AudioContextOptions;
@@ -34,7 +35,7 @@ type RecorderOptions = {
 
 type RecorderState = "ready" | "loading" | "recording" | "error";
 
-export interface Recorder {
+export interface Recorder extends Emitter<RecorderEventMap> {
   readonly state: RecorderState;
 
   record(timeslice?: number): Promise<void>;
@@ -48,20 +49,10 @@ export interface Recorder {
   getAudioBuffer(): Promise<AudioBuffer>;
   getRecordedData(): Blob[];
   clearRecordedData(): void;
-
-  addEventListener<EventType extends RecorderEventType>(
-    type: EventType,
-    callback: RecorderEventCallback<EventType>
-  ): void;
-  removeEventListener<EventType extends RecorderEventType>(
-    type: EventType,
-    callback: RecorderEventCallback<EventType>
-  ): void;
 }
 
 interface RecorderInternal {
   state: RecorderState;
-  listeners: Map<RecorderEventType, Set<Function>>;
   mediaStreamConstraints: MediaStreamConstraints;
   audioContext?: AudioContext | null;
   mediaRecorder?: MediaRecorder | null;
@@ -81,18 +72,17 @@ const sanitizeMediaRecorderOptions = (options?: MediaRecorderOptions) => {
 const createRecorder = (options?: RecorderOptions): Recorder => {
   const internal: RecorderInternal = {
     state: "loading",
-    listeners: new Map<RecorderEventType, Set<Function>>(),
     mediaStreamConstraints: options?.mediaStreamConstraints ?? { audio: true },
     blobs: [],
   };
 
-  function dispatchEvent<EventType extends RecorderEventType>(
-    event: Omit<RecorderEvent<EventType>, "timestamp" | "recorder">
-  ) {
-    (event as RecorderEvent<EventType>).timestamp = Date.now();
-    (event as RecorderEvent<EventType>).recorder = recorder;
-    internal.listeners.get(event.type)?.forEach((callback) => callback(event));
-  }
+  const { dispatchEvent, ...emitter } = createEmitter<RecorderEventMap>(
+    (event) => {
+      event.recorder = recorder;
+      event.timestamp = Date.now();
+      return event;
+    }
+  );
 
   function initAudioContext() {
     if (!internal.audioContext || internal.audioContext.state === "closed") {
@@ -307,24 +297,7 @@ const createRecorder = (options?: RecorderOptions): Recorder => {
       internal.blobs = [];
     },
 
-    addEventListener(type, callback) {
-      if (!internal.listeners.has(type)) {
-        internal.listeners.set(type, new Set());
-      }
-
-      internal.listeners.get(type)?.add(callback);
-    },
-    removeEventListener(type, callback) {
-      const callbacks = internal.listeners.get(type);
-
-      if (callbacks?.size) {
-        callbacks.delete(callback);
-
-        if (!callbacks.size) {
-          internal.listeners.delete(type);
-        }
-      }
-    },
+    ...emitter,
   };
 
   return recorder;

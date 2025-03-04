@@ -11,8 +11,10 @@ import {
 import { createPlayer } from "./lib/audio/player";
 import { createTimeline } from "./lib/timeline";
 import { createTools } from "./lib/audio/tools";
+import { createSelectTool } from "./lib/audio/tool/select";
 import { createeSequenceMoveTool } from "./lib/audio/tool/sequence-move";
 import { createSequenceSplitTool } from "./lib/audio/tool/sequence-split";
+import { createSequenceCutTool } from "./lib/audio/tool/sequence-cut";
 
 const timeline = createTimeline();
 createApp(App)
@@ -23,8 +25,10 @@ createApp(App)
     toolsKey,
     createTools({
       tools: [
+        createSelectTool(timeline),
         createeSequenceMoveTool(timeline),
         createSequenceSplitTool(timeline),
+        createSequenceCutTool(),
       ],
     })
   )

@@ -6,7 +6,7 @@ export type ToolsOptions = {
   defaultToolKey?: string;
 };
 
-interface ToolsEvent<EventType extends ToolsEventType> {
+interface ToolsEvent<EventType extends string> {
   type: EventType;
 }
 
@@ -14,9 +14,7 @@ type ToolsEventMap = {
   change: (event: ToolsEvent<"change">) => void;
 };
 
-type ToolsEventType = keyof ToolsEventMap;
-
-export interface Tools extends Emitter<ToolsEventType, ToolsEventMap> {
+export interface Tools extends Emitter<ToolsEventMap> {
   registerSequence(sequence: AudioSequence<any>, target: HTMLElement): void;
   unregisterSequence(sequence: AudioSequence<any>): void;
   selectTool(toolKey: string): void;
@@ -52,11 +50,9 @@ export function createTools(options: ToolsOptions) {
     toolmap.get(selectedKey)?.registerHandlers(sequence, target);
   }
 
-  const { dispatchEvent, ...emitter } = createEmitter<
-    ToolsEventType,
-    ToolsEventMap,
-    ToolsEvent<ToolsEventType>
-  >((event) => event);
+  const { dispatchEvent, ...emitter } = createEmitter<ToolsEventMap>(
+    (event) => event
+  );
 
   const tools: Tools = {
     registerSequence(sequence, target): void {

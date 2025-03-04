@@ -38,24 +38,22 @@ export interface AudioSequenceInternal {
 }
 
 export interface AudioSequenceEvent<
-  Type extends string,
-  EventType extends AudioSequenceEventType
+  EventType extends string,
+  Type extends string
 > {
   type: EventType;
   sequence: AudioSequence<Type>;
 }
 
 export type AudioSequenceEventMap<Type extends string> = {
-  play: (event: AudioSequenceEvent<Type, "play">) => void;
-  seek: (event: AudioSequenceEvent<Type, "seek">) => void;
-  stop: (event: AudioSequenceEvent<Type, "stop">) => void;
-  change: (event: AudioSequenceEvent<Type, "change">) => void;
+  play: (event: AudioSequenceEvent<"play", Type>) => void;
+  seek: (event: AudioSequenceEvent<"seek", Type>) => void;
+  stop: (event: AudioSequenceEvent<"stop", Type>) => void;
+  change: (event: AudioSequenceEvent<"change", Type>) => void;
 };
 
-export type AudioSequenceEventType = keyof AudioSequenceEventMap<any>;
-
 export interface AudioSequence<Type extends string>
-  extends Emitter<AudioSequenceEventType, AudioSequenceEventMap<Type>> {
+  extends Emitter<AudioSequenceEventMap<Type>> {
   [trackPropertySymbol]?: AudioTrack;
 
   readonly type: Type;

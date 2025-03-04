@@ -87,8 +87,9 @@ const handleRecordToggle = () => {
 <template>
   <button
     :class="{
-      'btn btn-square size-16': true,
-      'btn-soft text-red-500': recorderState === 'recording',
+      'btn btn-circle size-16': true,
+      'border-white': recorderState !== 'recording',
+      'btn-soft text-red-500 border-red-500': recorderState === 'recording',
     }"
     title="Record new sequence"
     v-on:click="handleRecordToggle"

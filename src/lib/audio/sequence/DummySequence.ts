@@ -3,9 +3,7 @@ import { createEmitter } from "../../emitter";
 import {
   trackPropertySymbol,
   type AudioSequence,
-  type AudioSequenceEvent,
   type AudioSequenceEventMap,
-  type AudioSequenceEventType,
   type AudioSequenceInternal,
 } from "../sequence";
 
@@ -32,9 +30,7 @@ export function createDummySequence(time: number): DummySequence {
   };
 
   const { dispatchEvent, ...emitter } = createEmitter<
-    AudioSequenceEventType,
-    AudioSequenceEventMap<DummySequenceType>,
-    AudioSequenceEvent<DummySequenceType, AudioSequenceEventType>
+    AudioSequenceEventMap<DummySequenceType>
   >((event) => {
     event.sequence = sequence;
     return event;

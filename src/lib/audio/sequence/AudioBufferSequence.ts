@@ -4,9 +4,7 @@ import {
   trackPropertySymbol,
   type AudioEffect,
   type AudioSequence,
-  type AudioSequenceEvent,
   type AudioSequenceEventMap,
-  type AudioSequenceEventType,
   type AudioSequenceInternal,
   type AudioSequencePlayback,
 } from "../sequence";
@@ -40,9 +38,7 @@ export function createAudioBufferSequence(
   };
 
   const { dispatchEvent, ...emitter } = createEmitter<
-    AudioSequenceEventType,
-    AudioSequenceEventMap<AudioBufferSequenceType>,
-    AudioSequenceEvent<AudioBufferSequenceType, AudioSequenceEventType>
+    AudioSequenceEventMap<AudioBufferSequenceType>
   >((event) => {
     event.sequence = sequence;
     return event;

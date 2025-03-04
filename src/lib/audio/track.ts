@@ -16,7 +16,7 @@ interface AudioTrackInternal {
   activeGain?: GainNode;
 }
 
-interface AudioTrackEvent<EventType extends AudioTrackEventType> {
+interface AudioTrackEvent<EventType extends string> {
   type: EventType;
   track: AudioTrack;
 }
@@ -27,10 +27,7 @@ type AudioTrackEventMap = {
   change: (event: AudioTrackEvent<"change">) => void;
 };
 
-type AudioTrackEventType = keyof AudioTrackEventMap;
-
-export interface AudioTrack
-  extends Emitter<AudioTrackEventType, AudioTrackEventMap> {
+export interface AudioTrack extends Emitter<AudioTrackEventMap> {
   readonly id: string;
   readonly isPlaying: boolean;
 
@@ -93,14 +90,12 @@ export const createAudioTrack = (name: string): AudioTrack => {
     sequences: [],
   };
 
-  const { dispatchEvent, ...emitter } = createEmitter<
-    AudioTrackEventType,
-    AudioTrackEventMap,
-    AudioTrackEvent<AudioTrackEventType>
-  >((event) => {
-    event.track = track;
-    return event;
-  });
+  const { dispatchEvent, ...emitter } = createEmitter<AudioTrackEventMap>(
+    (event) => {
+      event.track = track;
+      return event;
+    }
+  );
 
   const handleSequenceStop = () => {
     const anyPlaying = internal.sequences.some((seq) => seq.isPlaying);

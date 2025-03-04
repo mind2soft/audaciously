@@ -1,48 +1,59 @@
-type EventCreator<EventType, Event extends { type: EventType }> = (
-  event: Event
-) => Event;
+type BaseEventArg<Type> = { type: Type };
 
-export type EventHandler<
-  EventType extends string,
-  EventArg extends { type: EventType } = any
-> = {
-  [K in EventType]: (event: EventArg) => void;
+type EventArgType<Event> = Event extends (
+  event: infer U extends BaseEventArg<string>
+) => any
+  ? U["type"]
+  : never;
+
+type EventArg<Event> = Event extends (
+  event: infer U extends BaseEventArg<string>
+) => any
+  ? U
+  : never;
+
+type EventArgDispatch<Event> = { type: EventArgType<Event> } & Partial<
+  Omit<EventArg<Event>, "type">
+>;
+
+type EventType<EventMap> = Extract<keyof EventMap, string>;
+
+export type EventHandlers<EventMap> = {
+  [K in Extract<keyof EventMap, string>]: EventMap[K] extends (
+    event: infer U
+  ) => any
+    ? U extends BaseEventArg<K>
+      ? EventMap[K]
+      : never
+    : never;
 };
 
-export interface Emitter<
-  EventType extends string,
-  EventMap extends EventHandler<EventType>
-> {
-  addEventListener<Type extends keyof EventMap>(
+type EventCreator<EventMap> = <Type extends EventType<EventMap>>(
+  event: EventArg<EventMap[Type]>
+) => EventArg<EventMap[Type]>;
+
+export interface Emitter<EventMap extends EventHandlers<{}>> {
+  addEventListener<Type extends EventType<EventMap>>(
     type: Type,
     callback: EventMap[Type]
   ): void;
-  removeEventListener<Type extends keyof EventMap>(
+  removeEventListener<Type extends EventType<EventMap>>(
     type: Type,
     callback: EventMap[Type]
   ): void;
 }
 
-export interface EmitterDispatcher<
-  EventType extends string,
-  EventMap extends EventHandler<EventType>,
-  Event extends { type: EventType }
-> extends Emitter<EventType, EventMap> {
-  dispatchEvent<
-    EventArg extends { type: keyof EventMap } & Partial<Omit<Event, "type">>
-  >(
-    event: EventArg
+export interface EmitterDispatcher<EventMap extends EventHandlers<{}>>
+  extends Emitter<EventMap> {
+  dispatchEvent<Type extends Extract<keyof EventMap, string>>(
+    event: EventArgDispatch<EventMap[Type]>
   ): void;
 }
 
-function createEmitter<
-  EventType extends string,
-  EventMap extends EventHandler<EventType>,
-  Event extends { type: EventType }
->(
-  createEvent: EventCreator<keyof EventMap, Event>
-): EmitterDispatcher<EventType, EventMap, Event> {
-  const listeners: Map<keyof EventMap, Set<Function>> = new Map();
+function createEmitter<EventMap extends EventHandlers<{}>>(
+  createEvent: EventCreator<EventMap>
+): EmitterDispatcher<EventMap> {
+  const listeners: Map<string, Set<any>> = new Map();
 
   return {
     dispatchEvent(event) {
