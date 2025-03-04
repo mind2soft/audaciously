@@ -10,6 +10,8 @@ import { createAudioBufferSequence } from "../lib/audio/sequence/AudioBufferSequ
 import { createAudioTrack } from "../lib/audio/track";
 import type { AudioPlayer } from "../lib/audio/player";
 
+const baseUrl = import.meta.env.BASE_URL;
+
 const player = inject<AudioPlayer>(playerKey);
 
 if (!player) {
@@ -18,7 +20,9 @@ if (!player) {
 
 const loadMp3 = async (name: string, ...sources: string[]) => {
   const bufferData = await Promise.all(
-    sources.map((source) => fetch(source).then((res) => res.arrayBuffer()))
+    sources.map((source) =>
+      fetch(`${baseUrl}/${source}`).then((res) => res.arrayBuffer())
+    )
   );
 
   const ctx = new AudioContext();
