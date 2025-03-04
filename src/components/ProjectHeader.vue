@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { sideMenuId } from "../lib/provider-keys";
+import ProjectName from "./ProjectName.vue";
 
 // TODO
 </script>
@@ -12,7 +13,7 @@ import { sideMenuId } from "../lib/provider-keys";
       /></label>
     </div>
     <div class="flex-1">
-      <button class="text-xl btn btn-ghost">Untitled project</button>
+      <ProjectName />
     </div>
     <div class="flex-none">
       <a
