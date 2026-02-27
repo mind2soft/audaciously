@@ -20,7 +20,7 @@ const handleCloseDialog = () => {
 onUpdated(() => {
   if (dialogRef.value) {
     if (props.open) {
-      dialogRef.value.show();
+      dialogRef.value.showModal();
     } else {
       dialogRef.value.close();
     }

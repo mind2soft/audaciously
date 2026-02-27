@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, useId, watchEffect } from "vue";
+import { onBeforeUnmount, onMounted, ref, useId, watch, watchEffect } from "vue";
 import { createWaveformProcessor } from "../lib/audio/waveform";
 
 const props = defineProps<{
@@ -62,6 +62,13 @@ const resizeObserver = new ResizeObserver(updatePath);
 watchEffect(() => {
   updatePosition();
 });
+
+watch(
+  () => props.audioBuffer,
+  () => {
+    updatePath();
+  }
+);
 
 onMounted(() => {
   if (!svgRef.value) return;

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { inject, onMounted, onUnmounted, ref } from "vue";
-import { playerKey, timelineKey } from "../lib/provider-keys";
+import type { Ref } from "vue";
+import { playerKey, timelineKey, selectedTrackKey } from "../lib/provider-keys";
 import TimelineView from "./Timeline.vue";
 import AudioTrackView from "./AudioTrack.vue";
 
@@ -23,6 +24,7 @@ type TrackDrag =
 const scrollSpeed = 64; // px
 const player = inject<AudioPlayer>(playerKey);
 const timeline = inject<Timeline>(timelineKey);
+const selectedTrackRef = inject<Ref<AudioTrack | null>>(selectedTrackKey);
 
 if (!player) {
   throw new Error("missing player");
@@ -94,28 +96,41 @@ const handleContextMenu = (evt: MouseEvent) => {
 };
 
 const handleTrackDelete = (evt: DeleteTrackEvent) => {
+  if (selectedTrackRef?.value?.id === evt.track.id) {
+    selectedTrackRef.value = null;
+  }
   player.removeTrack(evt.track);
+};
+
+const handleTrackSelect = (track: AudioTrack | null) => {
+  if (selectedTrackRef) {
+    selectedTrackRef.value = track;
+  }
 };
 
 const handleUpdateCursor = () => {
   cursorPosition.value = formatTimeToPixel(timeline.ratio, player.currentTime);
 };
 
-player.addEventListener("change", () => {
+const handlePlayerChange = () => {
   tracks.value = [...player.getTracks()];
   handleUpdateCursor();
-});
-player.addEventListener("seek", handleUpdateCursor);
-player.addEventListener("timeupdate", handleUpdateCursor);
-player.addEventListener("stop", handleUpdateCursor);
+};
 
-timeline.addEventListener("change", () => {
+const handleTimelineChange = () => {
   tracksPosition.value = -formatTimeToPixel(
     timeline.ratio,
     timeline.offsetTime
   );
   handleUpdateCursor();
-});
+};
+
+player.addEventListener("change", handlePlayerChange);
+player.addEventListener("seek", handleUpdateCursor);
+player.addEventListener("timeupdate", handleUpdateCursor);
+player.addEventListener("stop", handleUpdateCursor);
+
+timeline.addEventListener("change", handleTimelineChange);
 
 onMounted(() => {
   document.addEventListener("mousemove", handleMouseMove);
@@ -124,6 +139,13 @@ onMounted(() => {
 onUnmounted(() => {
   document.removeEventListener("mousemove", handleMouseMove);
   document.removeEventListener("mouseup", handleMouseUp);
+
+  player.removeEventListener("change", handlePlayerChange);
+  player.removeEventListener("seek", handleUpdateCursor);
+  player.removeEventListener("timeupdate", handleUpdateCursor);
+  player.removeEventListener("stop", handleUpdateCursor);
+
+  timeline.removeEventListener("change", handleTimelineChange);
 });
 </script>
 
@@ -134,7 +156,7 @@ onUnmounted(() => {
     v-on:mousedown="handleMouseDown"
     v-on:contextmenu="handleContextMenu"
   >
-    <div class="relative ml-24 h-10">
+    <div class="relative ml-10 sm:ml-40 h-10">
       <TimelineView />
     </div>
 
@@ -143,12 +165,15 @@ onUnmounted(() => {
         class="overflow-y-auto absolute top-0 right-0 bottom-0 left-0 overflow-x-clip bg-base-100"
       >
         <div class="flex min-h-full">
-          <div class="flex z-10 flex-col w-24 min-h-full bg-base-200">
+          <div class="flex z-10 flex-col w-10 sm:w-40 min-h-full bg-base-200">
             <div class="relative">
               <TrackHeader
                 v-for="track in tracks"
+                :key="track.id"
                 :track="track"
+                :is-selected="selectedTrackRef?.id === track.id"
                 v-on:track-delete="handleTrackDelete"
+                v-on:select="handleTrackSelect"
               />
             </div>
           </div>
@@ -160,7 +185,7 @@ onUnmounted(() => {
               }"
             >
               <div class="relative">
-                <AudioTrackView v-for="track in tracks" :track="track" />
+                <AudioTrackView v-for="track in tracks" :key="track.id" :track="track" />
               </div>
               <div
                 class="absolute top-0 w-[2px] bottom-0 bg-white/50 z-10"

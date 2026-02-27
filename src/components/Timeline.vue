@@ -81,6 +81,13 @@ onBeforeUnmount(() => {
     resizeObserver.unobserve(canvasRef.value);
   }
 
+  player.removeEventListener("seek", handleTimelineUpdate);
+  player.removeEventListener("timeupdate", handleTimelineUpdate);
+  player.removeEventListener("stop", handleTimelineUpdate);
+  player.removeEventListener("change", handleTimelineUpdate);
+
+  timeline.removeEventListener("change", handleTimelineUpdate);
+
   document.removeEventListener("mouseup", handlePointerRelease);
   document.removeEventListener("mousemove", handlePlaybackSeek);
 });

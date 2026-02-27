@@ -1,28 +1,124 @@
 # Audaciously
 
-This project was done using [Vue 3](https://vuejs.org/) (Composition API) and
-[Tailwind CSS 4](https://tailwindcss.com/) (using [Daisy UI v5](https://v5.daisyui.com/)).
+> A browser-based audio recorder and editor inspired by [Audacity](https://www.audacityteam.org/) — built entirely with the Web Audio API, Vue 3, and TypeScript.
 
-The goal is to reproduce [Audacity](https://www.audacityteam.org/), or similar audio
-recording project, in the browser.
+**[🎙️ Try it live →](https://mind2soft.github.io/audaciously/)**
 
-## What's implemented?
+---
 
-- Master volume with 2x volume boost
-- Recording from default microphone
-- Playback (seeking, pause, resume, stop, etc.)
-- Audio tools (split, move, cut)
-- Using Web Workers for background processing
+## What is it?
 
-## What's not completed?
+Audaciously is an experiment in how far the modern browser's audio capabilities can take you. It gives you a familiar multi-track DAW-style interface — record from your microphone, layer tracks, cut and rearrange sequences, control volume — all without installing anything, without a server, and without any native audio libraries.
 
-- Audio filters (fading, balance, equaliser, normalise, pitch, noise cancelling, etc.)
-- Changing playback speek per audio sequence
-- Saving and loading projects
-- Exporting project to other formats
-- Scrolling and zooming improvements
+Under the hood everything runs on the raw [Web Audio API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API), with waveform rendering offloaded to a Web Worker so the UI stays smooth no matter how large your project gets.
 
-## Bugs?
+---
 
-- Recording while playing sound affect recording quality
-- Updating sequences (e.g. splitting a sequence) does not update the track correctly
+## Features
+
+### Recording
+- Record from any connected microphone
+- Overdub safely: echo cancellation, noise suppression, and auto gain control are **off by default** so playback audio doesn't bleed into your recording
+- Live waveform visualisation while recording
+
+### Playback
+- Multi-track simultaneous playback
+- Play, pause, resume, stop, and seek
+- Master volume with up to **3× boost** (300%)
+- Real-time output waveform display
+
+### Editing tools
+| Tool | What it does |
+|------|--------------|
+| **Select** | Click a sequence to select it |
+| **Split** | Cut a sequence at any point into two independent clips |
+| **Move** | Drag a sequence to reposition it on the timeline |
+| **Cut** | Remove a sequence from its track |
+
+### Settings
+- Choose your **input device** (microphone) and **output device** (speakers / headphones)
+- Toggle **echo cancellation**, **noise suppression**, and **auto gain control** per session
+- Output device changes take effect immediately in supported browsers (Chrome 110+)
+
+### Under the hood
+- Waveforms computed as SVG paths in a **Web Worker** — no main-thread blocking
+- Custom **stereo balance node** built on top of the Web Audio graph (the API doesn't ship one)
+- Zero audio libraries — pure `AudioContext`, `GainNode`, `AnalyserNode`, `AudioBufferSourceNode`, `MediaRecorder`
+
+---
+
+## Tech stack
+
+| Layer | Technology |
+|-------|-----------|
+| Framework | [Vue 3](https://vuejs.org/) — Composition API |
+| Language | [TypeScript 5](https://www.typescriptlang.org/) |
+| Styling | [Tailwind CSS 4](https://tailwindcss.com/) + [DaisyUI 5](https://v5.daisyui.com/) |
+| Build | [Vite 6](https://vite.dev/) |
+| Icons | [Iconify / Material Design Icons](https://icon-sets.iconify.design/mdi/) |
+| CI / CD | GitHub Actions → GitHub Pages |
+| License | GPL-3.0 |
+
+---
+
+## Getting started
+
+### Prerequisites
+
+- [Node.js](https://nodejs.org/) 20+
+- [pnpm](https://pnpm.io/) 10+
+
+### Install & run
+
+```bash
+# Install dependencies
+pnpm install
+
+# Start the dev server (http://localhost:5173)
+pnpm dev
+```
+
+### Build for production
+
+```bash
+# Type-check + bundle
+pnpm build
+
+# Preview the production build locally
+pnpm preview
+```
+
+The output lands in `dist/`. The project is automatically deployed to GitHub Pages on every push to `main` via the workflow in `.github/workflows/static.yml`.
+
+---
+
+## Browser compatibility
+
+Audaciously requires a modern browser with full Web Audio API support.
+
+| Feature | Chrome | Firefox | Safari |
+|---------|--------|---------|--------|
+| Playback & recording | ✅ | ✅ | ✅ |
+| Output device selection | ✅ 110+ | ❌ | ❌ |
+
+> **Tip:** Use headphones when recording with other tracks playing back. This eliminates acoustic feedback and lets you record with audio processing fully disabled for the cleanest overdubs.
+
+---
+
+## Roadmap
+
+Things that are not yet implemented but are planned:
+
+- **Audio filters** — fade in/out, equaliser, normalise, pitch shift, noise reduction
+- **Per-sequence playback speed** control
+- **Save and load projects** (JSON or binary format)
+- **Export** to WAV, MP3, OGG, and other formats
+- **Paste operations** — splice, fill, overwrite
+- **Scrolling and zooming** improvements on the timeline
+
+---
+
+## License
+
+Audaciously is free software released under the [GNU General Public License v3.0](LICENSE).  
+Copyright © 2025 Yanick Rochon

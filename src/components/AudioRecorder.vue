@@ -1,17 +1,21 @@
 <script setup lang="ts">
-import { inject, ref } from "vue";
+import { inject, onBeforeUnmount, ref } from "vue";
 import { playerKey, recorderKey } from "../lib/provider-keys";
 
 import { createAudioTrack } from "../lib/audio/track";
 import { createAudioBufferSequence } from "../lib/audio/sequence/AudioBufferSequence";
 
 import {
-  createDummySequence,
-  type DummySequence,
-} from "../lib/audio/sequence/DummySequence";
-import type { Recorder } from "../lib/audio/recorder";
+  createRecordingSequence,
+  type RecordingSequence,
+} from "../lib/audio/sequence/RecordingSequence";
+import type { Recorder, RecorderBufferUpdateEvent } from "../lib/audio/recorder";
 import type { AudioPlayer } from "../lib/audio/player";
 import type { AudioTrack } from "../lib/audio/track";
+
+const props = defineProps<{
+  isPlayerPlaying?: boolean;
+}>();
 
 const recorder = inject<Recorder>(recorderKey);
 const player = inject<AudioPlayer>(playerKey);
@@ -24,30 +28,31 @@ if (!recorder) {
 
 const recorderState = ref(recorder.state);
 const recordingTrack = ref<AudioTrack>();
-const recordingSequence = ref<DummySequence>();
+const recordingSequence = ref<RecordingSequence>();
 const recordingStart = ref<number>(0);
 
 const handleUpdateRecorderState = () => {
   recorderState.value = recorder.state;
 };
 
-recorder.addEventListener("ready", handleUpdateRecorderState);
-recorder.addEventListener("record", () => {
+const handleRecord = async () => {
   recordingStart.value = player.currentTime;
 
-  recordingSequence.value = createDummySequence(recordingStart.value);
+  recordingSequence.value = createRecordingSequence(recordingStart.value);
 
   recordingTrack.value = createAudioTrack("test");
   recordingTrack.value.addSequence(recordingSequence.value);
 
   player.addTrack(recordingTrack.value);
-  player.play();
+  // Await playback start so the recording timestamp and playback are
+  // synchronised (player.play() returns a Promise that resolves once the
+  // AudioContext has been resumed and playback has begun).
+  await player.play();
 
   handleUpdateRecorderState();
-});
-recorder.addEventListener("pause", handleUpdateRecorderState);
-recorder.addEventListener("resume", handleUpdateRecorderState);
-recorder.addEventListener("stop", () => {
+};
+
+const handleRecorderStop = () => {
   player.pause();
 
   if (recordingTrack.value && recordingSequence.value) {
@@ -56,9 +61,9 @@ recorder.addEventListener("stop", () => {
   }
 
   handleUpdateRecorderState();
-});
-recorder.addEventListener("error", handleUpdateRecorderState);
-recorder.addEventListener("data", () => {
+};
+
+const handleRecorderData = () => {
   recorder.getAudioBuffer().then(
     (buffer) => {
       if (recordingTrack.value) {
@@ -73,6 +78,30 @@ recorder.addEventListener("data", () => {
       console.error(err);
     }
   );
+};
+
+const handleBufferUpdate = (event: RecorderBufferUpdateEvent) => {
+  recordingSequence.value?.updateBuffer(event.buffer);
+};
+
+recorder.addEventListener("ready", handleUpdateRecorderState);
+recorder.addEventListener("record", handleRecord);
+recorder.addEventListener("pause", handleUpdateRecorderState);
+recorder.addEventListener("resume", handleUpdateRecorderState);
+recorder.addEventListener("stop", handleRecorderStop);
+recorder.addEventListener("error", handleUpdateRecorderState);
+recorder.addEventListener("data", handleRecorderData);
+recorder.addEventListener("bufferupdate", handleBufferUpdate);
+
+onBeforeUnmount(() => {
+  recorder.removeEventListener("ready", handleUpdateRecorderState);
+  recorder.removeEventListener("record", handleRecord);
+  recorder.removeEventListener("pause", handleUpdateRecorderState);
+  recorder.removeEventListener("resume", handleUpdateRecorderState);
+  recorder.removeEventListener("stop", handleRecorderStop);
+  recorder.removeEventListener("error", handleUpdateRecorderState);
+  recorder.removeEventListener("data", handleRecorderData);
+  recorder.removeEventListener("bufferupdate", handleBufferUpdate);
 });
 
 const handleRecordToggle = () => {
@@ -87,13 +116,19 @@ const handleRecordToggle = () => {
 <template>
   <button
     :class="{
-      'btn btn-circle size-16': true,
-      'border-white': recorderState !== 'recording',
-      'btn-soft text-red-500 border-red-500': recorderState === 'recording',
+      'btn btn-circle': true,
+      'btn-error btn-outline': recorderState !== 'recording',
+      'btn-error': recorderState === 'recording',
     }"
+    :disabled="props.isPlayerPlaying && recorderState !== 'recording'"
     title="Record new sequence"
     v-on:click="handleRecordToggle"
   >
-    <i class="iconify mdi--record size-10" />
+    <i
+      :class="{
+        'iconify mdi--record size-5': true,
+        'animate-pulse': recorderState === 'recording',
+      }"
+    />
   </button>
 </template>

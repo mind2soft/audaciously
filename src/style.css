@@ -72,4 +72,32 @@ main {
   display: flex;
   flex-direction: column;
   flex: 1;
+  min-height: 0;
+}
+
+/* Smooth transitions for interactive elements */
+button,
+input,
+select {
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+}
+
+/* Thin scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: oklch(40% 0.01 260 / 0.5);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(55% 0.01 260 / 0.7);
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: oklch(40% 0.01 260 / 0.5) transparent;
 }

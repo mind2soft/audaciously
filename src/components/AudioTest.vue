@@ -58,10 +58,11 @@ const handleInit = async () => {
 
 <template>
   <button
-    class="h-16 btn"
+    class="btn btn-sm btn-ghost"
     title="Add a new track with random sequences"
     v-on:click="handleInit"
   >
-    TEST
+    <i class="iconify mdi--plus size-4" />
+    <span class="hidden sm:inline">Add Track</span>
   </button>
 </template>

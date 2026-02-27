@@ -14,6 +14,11 @@ interface RecorderDataEvent extends RecorderEvent<"data"> {
   data: Blob[];
 }
 
+export interface RecorderBufferUpdateEvent extends RecorderEvent<"bufferupdate"> {
+  /** Decoded AudioBuffer containing everything recorded so far. */
+  buffer: AudioBuffer;
+}
+
 type RecorderEventMap = {
   ready: (event: RecorderEvent<"ready">) => void;
   timeupdate: (event: RecorderTimeUpdateEvent) => void;
@@ -22,6 +27,8 @@ type RecorderEventMap = {
   resume: (event: RecorderEvent<"resume">) => void;
   stop: (event: RecorderEvent<"stop">) => void;
   data: (event: RecorderDataEvent) => void;
+  /** Fired whenever a new recording chunk is decoded; use for live waveform preview. */
+  bufferupdate: (event: RecorderBufferUpdateEvent) => void;
   error: (event: RecorderEvent<"error">) => void;
 };
 
@@ -58,8 +65,10 @@ interface RecorderInternal {
   mediaRecorder?: MediaRecorder | null;
   sourceNode?: MediaStreamAudioSourceNode | null;
   analyserNode?: AnalyserNode | null;
-  analyserData?: Float32Array | null;
+  analyserData?: Float32Array<ArrayBuffer> | null;
   blobs: Blob[];
+  /** Monotonically-increasing counter used to discard stale preview decodes. */
+  previewSeq: number;
 }
 
 const sanitizeMediaRecorderOptions = (options?: MediaRecorderOptions) => {
@@ -72,8 +81,21 @@ const sanitizeMediaRecorderOptions = (options?: MediaRecorderOptions) => {
 const createRecorder = (options?: RecorderOptions): Recorder => {
   const internal: RecorderInternal = {
     state: "loading",
-    mediaStreamConstraints: options?.mediaStreamConstraints ?? { audio: true },
+    // Default to disabling browser echo-cancellation, noise-suppression and
+    // auto-gain-control so that overdubbing (recording while tracks play back)
+    // does not cause the browser's AEC to strip playback frequencies from the
+    // microphone signal, which would produce a muffled / cut-out recording.
+    // Users are expected to use headphones in a DAW context; these can be
+    // re-enabled via the Settings dialog if desired.
+    mediaStreamConstraints: options?.mediaStreamConstraints ?? {
+      audio: {
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false,
+      },
+    },
     blobs: [],
+    previewSeq: 0,
   };
 
   const { dispatchEvent, ...emitter } = createEmitter<RecorderEventMap>(
@@ -97,6 +119,8 @@ const createRecorder = (options?: RecorderOptions): Recorder => {
   }
   function dateAvailableEventListener(event: BlobEvent) {
     internal.blobs?.push(event.data);
+    // Fire-and-forget: decode accumulated audio for the live waveform preview.
+    decodeAndDispatchPreview();
   }
   function pauseEventListener() {
     dispatchEvent({ type: "pause" });
@@ -105,6 +129,9 @@ const createRecorder = (options?: RecorderOptions): Recorder => {
     dispatchEvent({ type: "resume" });
   }
   function stopEventListener() {
+    // Cancel any in-flight preview decode.
+    internal.previewSeq++;
+
     internal.analyserNode?.disconnect();
     internal.sourceNode?.disconnect();
     internal.mediaRecorder?.stream.getTracks().forEach((track) => track.stop());
@@ -169,6 +196,47 @@ const createRecorder = (options?: RecorderOptions): Recorder => {
     if (newRecorderState !== internal.state) {
       internal.state = newRecorderState;
       dispatchEvent({ type: internal.state });
+    }
+  }
+
+  /**
+   * Decode all accumulated blobs so far and dispatch a `bufferupdate` event
+   * so listeners can render a live waveform preview.  Fires after each
+   * `dataavailable` chunk.  Stale decodes (superseded by a newer chunk) are
+   * silently discarded via the `previewSeq` counter.
+   */
+  async function decodeAndDispatchPreview(): Promise<void> {
+    const seq = ++internal.previewSeq;
+    if (!internal.audioContext || !internal.blobs.length) return;
+
+    try {
+      // Take a snapshot so new blobs pushed while we await don't corrupt the
+      // current decode pass.
+      const blobs = internal.blobs.slice();
+      const bufferSize = blobs.reduce((len, blob) => len + blob.size, 0);
+      if (!bufferSize) return;
+
+      const arrayBuffer = new ArrayBuffer(bufferSize);
+      const byteArray = new Int8Array(arrayBuffer);
+      let offset = 0;
+
+      for (const blob of blobs) {
+        const ab = await blob.arrayBuffer();
+        if (seq !== internal.previewSeq) return; // superseded by newer chunk
+        byteArray.set(new Int8Array(ab), offset);
+        offset += ab.byteLength;
+      }
+
+      const audioBuffer = await internal.audioContext.decodeAudioData(arrayBuffer);
+
+      // Guard: discard if superseded or recording already stopped
+      if (seq !== internal.previewSeq || internal.state !== "recording") return;
+
+      dispatchEvent({ type: "bufferupdate", buffer: audioBuffer } as RecorderBufferUpdateEvent);
+    } catch {
+      // Decode can legitimately fail on partial/incomplete container data
+      // (common on Safari with AAC/MP4).  Silently ignore and wait for the
+      // next chunk.
     }
   }
 

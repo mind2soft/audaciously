@@ -53,7 +53,10 @@ export function createAudioBufferSequence(
     };
   }
   function startPlayback(startTime: number, currentTime?: number) {
-    if (!internal.playback || internal.time + buffer.duration < startTime) {
+    if (
+      !internal.playback ||
+      internal.time + buffer.duration / internal.playbackRate < startTime
+    ) {
       return;
     }
 

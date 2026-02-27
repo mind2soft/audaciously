@@ -23,7 +23,7 @@ onUpdated(() => {
   <label class="ml-1 input input-ghost" v-if="selectedRef">
     <input
       ref="inputRef"
-      type="input"
+      type="text"
       required
       placeholder="Project name"
       pattern="[A-Za-z][A-Za-z0-9\-]*"

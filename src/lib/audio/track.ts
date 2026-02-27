@@ -12,8 +12,11 @@ interface AudioTrackInternal {
   id: string;
   locked: boolean;
   muted: boolean;
+  volume: number;
+  balance: number;
   sequences: AudioSequence<any>[];
   activeGain?: GainNode;
+  activePanner?: StereoPannerNode;
 }
 
 interface AudioTrackEvent<EventType extends string> {
@@ -36,6 +39,8 @@ export interface AudioTrack extends Emitter<AudioTrackEventMap> {
 
   locked: boolean;
   muted: boolean;
+  volume: number;
+  balance: number;
 
   addSequence<Type extends string>(sequence: AudioSequence<Type>): void;
   countSequences(): number;
@@ -87,6 +92,8 @@ export const createAudioTrack = (name: string): AudioTrack => {
     id: nanoid(),
     locked: false,
     muted: false,
+    volume: 1,
+    balance: 0,
     sequences: [],
   };
 
@@ -104,10 +111,14 @@ export const createAudioTrack = (name: string): AudioTrack => {
       internal.activeGain?.disconnect();
       internal.activeGain = undefined;
 
+      internal.activePanner?.disconnect();
+      internal.activePanner = undefined;
+
       dispatchEvent({ type: "stop" });
     }
   };
   const handleSequenceChange = () => {
+    internal.sequences.sort((a, b) => a.time - b.time);
     dispatchEvent({ type: "change" });
   };
 
@@ -126,10 +137,9 @@ export const createAudioTrack = (name: string): AudioTrack => {
 
     get duration() {
       if (internal.sequences.length) {
-        const seqCount = internal.sequences.length;
-        const lastSequence = internal.sequences[seqCount - 1];
-
-        return lastSequence.time + lastSequence.playbackDuration;
+        return internal.sequences.reduce((max, seq) => {
+          return Math.max(max, seq.time + seq.playbackDuration);
+        }, 0);
       } else {
         return 0;
       }
@@ -140,8 +150,7 @@ export const createAudioTrack = (name: string): AudioTrack => {
     },
     set locked(value) {
       internal.locked = value;
-
-      // TODO : update selection
+      dispatchEvent({ type: "change" });
     },
 
     get muted() {
@@ -151,8 +160,36 @@ export const createAudioTrack = (name: string): AudioTrack => {
       internal.muted = value;
 
       if (internal.activeGain) {
-        internal.activeGain.gain.value = +!value;
+        internal.activeGain.gain.value = value ? 0 : internal.volume;
       }
+
+      dispatchEvent({ type: "change" });
+    },
+
+    get volume() {
+      return internal.volume;
+    },
+    set volume(value) {
+      internal.volume = value;
+
+      if (internal.activeGain && !internal.muted) {
+        internal.activeGain.gain.value = value;
+      }
+
+      dispatchEvent({ type: "change" });
+    },
+
+    get balance() {
+      return internal.balance;
+    },
+    set balance(value) {
+      internal.balance = value;
+
+      if (internal.activePanner) {
+        internal.activePanner.pan.value = value;
+      }
+
+      dispatchEvent({ type: "change" });
     },
 
     addSequence(sequence) {
@@ -220,11 +257,16 @@ export const createAudioTrack = (name: string): AudioTrack => {
       const startTime = options.startTime ?? 0;
       const outputNode = options.output ?? context.destination;
 
+      const pannerNode = context.createStereoPanner();
+      pannerNode.pan.value = internal.balance;
+      pannerNode.connect(outputNode);
+
       const gainNode = context.createGain();
-      gainNode.gain.value = +!internal.muted;
-      gainNode.connect(outputNode);
+      gainNode.gain.value = internal.muted ? 0 : internal.volume;
+      gainNode.connect(pannerNode);
 
       internal.activeGain = gainNode;
+      internal.activePanner = pannerNode;
 
       for (const sequence of internal.sequences) {
         promises.push(

@@ -4,7 +4,7 @@ import type { AudioTool } from "../tools";
 
 export const selectToolKey = "select@tool";
 
-export function createSelectTool(_timeline: Timeline): AudioTool {
+export function createSelectTool(_timeline: Timeline, options?: { onInteract?: () => void }): AudioTool {
   let abortController: AbortController | null = null;
   let selectedSequence: AudioSequence<any> | null = null;
 
@@ -22,6 +22,7 @@ export function createSelectTool(_timeline: Timeline): AudioTool {
       target.addEventListener(
         "mousedown",
         (event) => {
+          options?.onInteract?.();
           event.stopImmediatePropagation();
           event.preventDefault();
 

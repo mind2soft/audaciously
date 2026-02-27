@@ -2,7 +2,7 @@ import type { AudioTool } from "../tools";
 
 export const sequenceCutToolKey = "sequence-cut@tool";
 
-export function createSequenceCutTool(): AudioTool {
+export function createSequenceCutTool(options?: { onInteract?: () => void }): AudioTool {
   let abortController: AbortController | null = null;
 
   return {
@@ -26,6 +26,7 @@ export function createSequenceCutTool(): AudioTool {
             return;
           }
 
+          options?.onInteract?.();
           event.stopImmediatePropagation();
           event.preventDefault();
 

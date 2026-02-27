@@ -6,7 +6,7 @@ interface AudioPlayerEvent<EventType extends string> {
   player: AudioPlayer;
 }
 
-interface AudioPlayerTImeUpdateEvent extends AudioPlayerEvent<"timeupdate"> {
+export interface AudioPlayerTImeUpdateEvent extends AudioPlayerEvent<"timeupdate"> {
   readonly audioFrame: AudioBuffer;
 }
 
@@ -45,6 +45,18 @@ export interface AudioPlayer extends Emitter<AudioPlayerEventMap> {
   play(): Promise<void>;
   pause(): void;
   stop(): void;
+
+  /** Returns the currently selected audio output device ID, or null if the
+   *  system default is in use. */
+  getOutputDeviceId(): string | null;
+
+  /**
+   * Selects the audio output device.  Pass an empty string to revert to the
+   * system default.  If a playback context is currently active and the browser
+   * supports `AudioContext.setSinkId`, the change takes effect immediately;
+   * otherwise it applies on the next `play()` call.
+   */
+  setOutputDeviceId(deviceId: string): Promise<void>;
 }
 
 export type SequenceEffectStep =
@@ -83,7 +95,7 @@ export type MediaProject = {
 interface PlaybackAnalyser {
   invalidated: boolean;
   node: AnalyserNode;
-  data: Float32Array;
+  data: Float32Array<ArrayBuffer>;
   audioFrame: AudioBuffer;
 }
 
@@ -100,6 +112,7 @@ interface AudioPlayerInternal {
   nodes?: AudioPlayerNodes;
   pauseTime: number;
   resumeTime: number;
+  outputDeviceId?: string;
 }
 
 const createPlayer = (): AudioPlayer => {
@@ -156,7 +169,11 @@ const createPlayer = (): AudioPlayer => {
     return analyserNode.audioFrame;
   }
   function initPlayback() {
-    const audioContext = new AudioContext();
+    const audioContext = new AudioContext(
+      internal.outputDeviceId
+        ? ({ sinkId: internal.outputDeviceId } as AudioContextOptions)
+        : undefined
+    );
 
     internal.audioContext = audioContext;
     internal.resumeTime = 0;
@@ -192,6 +209,14 @@ const createPlayer = (): AudioPlayer => {
   async function startPlayback() {
     if (internal.audioContext) {
       const promises: Promise<void>[] = [];
+
+      // Disconnect any orphaned nodes from a previous pause/resume cycle
+      if (internal.nodes) {
+        internal.nodes.analyser.node.disconnect();
+        internal.nodes.gain.disconnect();
+        internal.nodes = undefined;
+      }
+
       const analyserNode = internal.audioContext.createAnalyser();
       const gainNode = internal.audioContext.createGain();
 
@@ -205,7 +230,7 @@ const createPlayer = (): AudioPlayer => {
         analyser: {
           invalidated: true,
           node: analyserNode,
-          data: new Float32Array(analyserNode.frequencyBinCount),
+          data: new Float32Array(analyserNode.frequencyBinCount) as Float32Array<ArrayBuffer>,
           audioFrame: internal.audioContext.createBuffer(
             1,
             analyserNode.frequencyBinCount,
@@ -390,6 +415,24 @@ const createPlayer = (): AudioPlayer => {
 
       stopPlayback(true);
       dispatchEvent({ type: "stop" });
+    },
+
+    getOutputDeviceId() {
+      return internal.outputDeviceId ?? null;
+    },
+    async setOutputDeviceId(deviceId) {
+      internal.outputDeviceId = deviceId;
+
+      // Apply immediately on an active context if the browser supports setSinkId
+      // (Chrome 110+).  The method is not yet in the standard TypeScript DOM
+      // types so we feature-detect at runtime.
+      if (internal.audioContext && "setSinkId" in internal.audioContext) {
+        await (
+          internal.audioContext as unknown as {
+            setSinkId(id: string): Promise<void>;
+          }
+        ).setSinkId(deviceId);
+      }
     },
 
     ...emitter,

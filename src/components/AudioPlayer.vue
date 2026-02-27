@@ -4,7 +4,9 @@ import { playerKey } from "../lib/provider-keys";
 import { formatTime } from "../lib/util/formatTime";
 /* @ts-ignore */
 import { linearPath } from "waveform-path";
-import type { AudioPlayer } from "../lib/audio/player";
+import type { AudioPlayer, AudioPlayerTImeUpdateEvent } from "../lib/audio/player";
+import { patchSettings } from "../lib/settings";
+import AudioRecorder from "./AudioRecorder.vue";
 
 const player = inject<AudioPlayer>(playerKey);
 
@@ -31,40 +33,48 @@ onMounted(() => {
   }
 });
 
-player.addEventListener("play", () => {
+const handlePlay = () => {
   isPlaying.value = true;
   isPaused.value = false;
-});
-player.addEventListener("pause", () => {
+};
+const handlePause = () => {
   isPlaying.value = false;
   isPaused.value = true;
-});
-player.addEventListener("stop", () => {
+};
+const handleStop = () => {
   isPlaying.value = false;
   isPaused.value = false;
   currentTime.value = player.currentTime;
   currentFrame.value = undefined;
 
   handleAnalyserUpdate();
-});
-player.addEventListener("change", () => {
+};
+const handleChange = () => {
   totalDuration.value = player.totalDuration;
-});
-player.addEventListener("timeupdate", (event) => {
+};
+const handleTimeUpdate = (event: AudioPlayerTImeUpdateEvent) => {
   currentTime.value = player.currentTime;
   currentFrame.value = event.audioFrame;
   totalDuration.value = player.totalDuration;
 
   handleAnalyserUpdate();
-});
-player.addEventListener("seek", () => {
+};
+const handleSeek = () => {
   currentTime.value = player.currentTime;
-});
-player.addEventListener("volumechange", () => {
+};
+const handleVolumeChange = () => {
   if (inputVolumeRef.value) {
     inputVolumeRef.value.value = String(player.volume * 100);
   }
-});
+};
+
+player.addEventListener("play", handlePlay);
+player.addEventListener("pause", handlePause);
+player.addEventListener("stop", handleStop);
+player.addEventListener("change", handleChange);
+player.addEventListener("timeupdate", handleTimeUpdate);
+player.addEventListener("seek", handleSeek);
+player.addEventListener("volumechange", handleVolumeChange);
 
 const getPath = (audioBuffer: AudioBuffer, svg: SVGSVGElement) => {
   return linearPath(audioBuffer, {
@@ -120,12 +130,13 @@ const handlePlayToggle = () => {
     );
   }
 };
-const handleStop = () => {
+const handleStopClick = () => {
   player.stop();
 };
-const handleVolumeChange = () => {
+const handleVolumeInput = () => {
   const inputValue = inputVolumeRef.value?.valueAsNumber ?? 0;
   player.volume = inputValue / 100;
+  patchSettings({ volume: player.volume });
 };
 
 const resizeObserver = new ResizeObserver(handleAnalyserUpdate);
@@ -137,37 +148,64 @@ onMounted(() => {
   handleAnalyserUpdate();
 });
 onBeforeUnmount(() => {
-  if (!svgRef.value) return;
+  if (svgRef.value) {
+    resizeObserver.unobserve(svgRef.value);
+  }
 
-  resizeObserver.unobserve(svgRef.value);
+  player.removeEventListener("play", handlePlay);
+  player.removeEventListener("pause", handlePause);
+  player.removeEventListener("stop", handleStop);
+  player.removeEventListener("change", handleChange);
+  player.removeEventListener("timeupdate", handleTimeUpdate);
+  player.removeEventListener("seek", handleSeek);
+  player.removeEventListener("volumechange", handleVolumeChange);
 });
 </script>
 
 <template>
-  <div class="flex gap-3 items-center px-4 bg-base-200">
-    <button class="btn btn-circle btn-lg" v-on:click="handlePlayToggle">
-      <i v-if="isPlaying" class="iconify mdi--pause size-8" />
-      <i v-else class="iconify mdi--play size-8" />
-    </button>
-    <button
-      class="btn btn-circle btn-md"
-      v-on:click="handleStop"
-      :disabled="!isPlaying && !isPaused"
-    >
-      <i class="iconify mdi--stop size-4" />
-    </button>
-    <div class="flex flex-nowrap font-mono">
-      <div>
-        {{ formatTime(currentTime) }}
-      </div>
-      <div class="px-2">/</div>
-      <div>
-        {{ formatTime(totalDuration) }}
-      </div>
+  <div class="flex h-14 gap-2 items-center px-3 bg-base-200 border-b border-base-300/60">
+    <!-- Transport controls: Stop | Play/Pause | Record -->
+    <div class="flex gap-1 items-center">
+      <button
+        :class="{
+          'btn btn-square': true,
+          'btn-neutral': isPlaying || isPaused,
+          'btn-ghost': !isPlaying && !isPaused,
+        }"
+        title="Stop"
+        v-on:click="handleStopClick"
+        :disabled="!isPlaying && !isPaused"
+      >
+        <i class="iconify mdi--stop size-5" />
+      </button>
+      <button
+        :class="{
+          'btn btn-square': true,
+          'btn-warning': isPlaying,
+          'btn-success': !isPlaying,
+        }"
+        title="Play / Pause"
+        v-on:click="handlePlayToggle"
+      >
+        <i v-if="isPlaying" class="iconify mdi--pause size-5" />
+        <i v-else class="iconify mdi--play size-5" />
+      </button>
+      <AudioRecorder :is-player-playing="isPlaying" />
     </div>
 
-    <div class="flex-1 xs:hidden md:block">
-      <svg ref="svgRef" class="px-2 w-full h-10 max-w-48">
+    <!-- Divider -->
+    <div class="w-px h-8 bg-base-300/60 mx-1"></div>
+
+    <!-- Timecode -->
+    <div class="flex items-center font-mono text-sm tabular-nums text-base-content/70">
+      <span>{{ formatTime(currentTime) }}</span>
+      <span class="px-1 opacity-40">/</span>
+      <span>{{ formatTime(totalDuration) }}</span>
+    </div>
+
+    <!-- Waveform preview (hidden on mobile) -->
+    <div class="hidden md:flex flex-1 items-center max-w-48 px-1">
+      <svg ref="svgRef" class="w-full h-9">
         <defs>
           <linearGradient
             id="waveformgrad"
@@ -198,14 +236,26 @@ onBeforeUnmount(() => {
         />
       </svg>
     </div>
-    <div>
+
+    <!-- BPM placeholder (future tempo control) -->
+    <div class="hidden md:flex items-center gap-1 text-sm text-base-content/40 font-mono ml-auto">
+      <i class="iconify mdi--metronome size-5" />
+      <span>120 BPM</span>
+    </div>
+
+    <!-- Divider -->
+    <div class="w-px h-8 bg-base-300/60 mx-1"></div>
+
+    <!-- Volume -->
+    <div class="flex items-center gap-2 min-w-0">
+      <i class="iconify mdi--volume-medium size-5 text-base-content/50 shrink-0" />
       <input
         ref="inputVolumeRef"
         type="range"
         min="0"
         max="200"
-        v-on:input="handleVolumeChange"
-        class="range range-sm"
+        v-on:input="handleVolumeInput"
+        class="range range-sm w-24"
       />
     </div>
   </div>

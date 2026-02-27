@@ -24,7 +24,7 @@ export function formatTimeScale(seconds: number): string {
     label.push(`${ms}ms`);
   }
 
-  return label.slice(0, 2).join(" ");
+  return label.slice(0, 2).join(" ") || "0s";
 }
 
 export function formatTime(seconds: number): string {

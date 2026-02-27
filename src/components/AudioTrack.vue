@@ -37,21 +37,30 @@ const handleUpdateCursor = () => {
   cursorPosition.value = formatTimeToPixel(timeline.ratio, player.currentTime);
 };
 
+const handleTimelineChange = () => {
+  baseWidth.value = formatTimeToPixel(timeline.ratio, 1);
+  handleUpdateCursor();
+};
+
 player.addEventListener("timeupdate", handleUpdateCursor);
 player.addEventListener("change", handleUpdateCursor);
 player.addEventListener("seek", handleUpdateCursor);
 player.addEventListener("stop", handleUpdateCursor);
 
-timeline.addEventListener("change", () => {
-  baseWidth.value = formatTimeToPixel(timeline.ratio, 1);
-  handleUpdateCursor();
-});
+timeline.addEventListener("change", handleTimelineChange);
 
 onMounted(() => {
   props.track.addEventListener("change", handleUpdateSequences);
 });
 onBeforeUnmount(() => {
   props.track.removeEventListener("change", handleUpdateSequences);
+
+  player.removeEventListener("timeupdate", handleUpdateCursor);
+  player.removeEventListener("change", handleUpdateCursor);
+  player.removeEventListener("seek", handleUpdateCursor);
+  player.removeEventListener("stop", handleUpdateCursor);
+
+  timeline.removeEventListener("change", handleTimelineChange);
 });
 </script>
 
@@ -60,6 +69,7 @@ onBeforeUnmount(() => {
     <div class="flex relative flex-nowrap h-full">
       <AudioSequenceVue
         v-for="sequence in sequences"
+        :key="sequence.id"
         :base-width="baseWidth"
         :cursor-position="cursorPosition"
         :sequence="sequence"

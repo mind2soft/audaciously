@@ -69,7 +69,7 @@ function clampedDetlaX(
   return Math.min(draggable.maxDeltaX, Math.max(draggable.minDeltaX, deltaX));
 }
 
-export function createeSequenceMoveTool(timeline: Timeline): AudioTool {
+export function createSequenceMoveTool(timeline: Timeline, options?: { onInteract?: () => void }): AudioTool {
   let abortController: AbortController | null = null;
   let draggable: DraggableSequence | null = null;
 
@@ -92,6 +92,7 @@ export function createeSequenceMoveTool(timeline: Timeline): AudioTool {
             return;
           }
 
+          options?.onInteract?.();
           event.stopImmediatePropagation();
           event.preventDefault();
           draggable = getDraggable(sequence, timeline, target, event);

@@ -5,7 +5,7 @@ import type { AudioTool } from "../tools";
 
 export const sequenceSplitToolKey = "sequence-split@tool";
 
-export function createSequenceSplitTool(timeline: Timeline): AudioTool {
+export function createSequenceSplitTool(timeline: Timeline, options?: { onInteract?: () => void }): AudioTool {
   let abortController: AbortController | null = null;
 
   return {
@@ -29,6 +29,7 @@ export function createSequenceSplitTool(timeline: Timeline): AudioTool {
             return;
           }
 
+          options?.onInteract?.();
           event.stopImmediatePropagation();
           event.preventDefault();
 

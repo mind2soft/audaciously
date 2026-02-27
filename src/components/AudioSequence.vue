@@ -2,10 +2,6 @@
 import { inject, onMounted, onBeforeUnmount, ref } from "vue";
 
 import Waveform from "./Waveform.vue";
-import {
-  audioBufferSequenceType,
-  type AudioBufferSequence,
-} from "../lib/audio/sequence/AudioBufferSequence";
 import { toolsKey } from "../lib/provider-keys";
 import type { AudioSequence } from "../lib/audio/sequence";
 import type { Tools } from "../lib/audio/tools";
@@ -25,13 +21,28 @@ if (!tools) {
 
 const containerRef = ref<HTMLElement>();
 
+/**
+ * Mirror of `sequence.buffer` kept in a Vue ref so the template re-renders
+ * whenever the buffer is replaced (e.g. when a live recording preview chunk
+ * arrives).  We update it on every `change` event from the sequence because
+ * the sequence object itself is not a Vue reactive proxy and Vue cannot
+ * track its internal property mutations.
+ */
+const sequenceBuffer = ref<AudioBuffer>(props.sequence.buffer);
+
+const handleSequenceChange = () => {
+  sequenceBuffer.value = props.sequence.buffer;
+};
+
 onMounted(() => {
   if (containerRef.value) {
     tools.registerSequence(props.sequence, containerRef.value);
   }
+  props.sequence.addEventListener("change", handleSequenceChange);
 });
 onBeforeUnmount(() => {
   tools.unregisterSequence(props.sequence);
+  props.sequence.removeEventListener("change", handleSequenceChange);
 });
 </script>
 
@@ -45,12 +56,18 @@ onBeforeUnmount(() => {
       maxWidth: `${sequence.playbackDuration * baseWidth}px`,
     }"
   >
+    <!--
+      Show a waveform for any sequence that has real audio data (length > 1).
+      This covers both finished AudioBufferSequences and live RecordingSequences
+      whose preview buffer has been populated by the first decoded chunk.
+      DummySequence returns a 1-sample sentinel, so it is correctly excluded.
+    -->
     <Waveform
-      v-if="sequence.type === audioBufferSequenceType"
-      class="border border-dotted border-current/70"
+      v-if="sequenceBuffer.length > 1"
+      class="border border-base-content/20 bg-base-content/5"
       color="var(--color-base-content)"
       :current-time="cursorPosition - sequence.time * baseWidth"
-      :audio-buffer="(sequence as AudioBufferSequence).buffer"
+      :audio-buffer="sequenceBuffer"
       :disabled="muted"
     />
   </div>

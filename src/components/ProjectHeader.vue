@@ -6,10 +6,10 @@ import ProjectName from "./ProjectName.vue";
 </script>
 
 <template>
-  <div class="shadow-sm navbar bg-base-200">
+  <div class="shadow-sm navbar bg-base-200 border-b border-base-300/60 min-h-12">
     <div class="flex-none">
-      <label :for="sideMenuId" class="btn drawer-button"
-        ><i class="iconify mdi--menu size-7"
+      <label :for="sideMenuId" class="btn btn-square btn-ghost drawer-button min-h-11 min-w-11"
+        ><i class="iconify mdi--menu size-6"
       /></label>
     </div>
     <div class="flex-1">
@@ -17,12 +17,12 @@ import ProjectName from "./ProjectName.vue";
     </div>
     <div class="flex-none">
       <a
-        class="btn btn-square btn-ghost"
+        class="btn btn-square btn-ghost min-h-11 min-w-11"
         target="_blank"
         href="https://github.com/mind2soft/audaciously"
         title="View on GitHub"
       >
-        <i class="iconify mdi--github-circle size-10" />
+        <i class="iconify mdi--github-circle size-6" />
       </a>
     </div>
   </div>
