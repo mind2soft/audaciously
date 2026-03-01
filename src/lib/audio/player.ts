@@ -40,6 +40,28 @@ export interface AudioPlayer extends Emitter<AudioPlayerEventMap> {
   setTracks(tracks: AudioTrack[]): void;
 
   /**
+   * Registers an external callback that contributes additional duration to
+   * `totalDuration` (e.g. instrument track duration when there are no audio
+   * tracks).  Pass `null` to unregister.
+   */
+  setExtraDuration(fn: (() => number) | null): void;
+
+  /**
+   * Returns the active AudioContext, or null when the player is stopped.
+   *
+   * Consumers (e.g. useInstrumentPlayback) can schedule audio into the same
+   * context to guarantee perfect clock synchronisation with the player cursor.
+   */
+  getAudioContext(): AudioContext | null;
+
+  /**
+   * Returns the master output GainNode that all tracks feed into, or null when
+   * the player is stopped.  Scheduling instrument notes into this node ensures
+   * they pass through master volume and the waveform analyser.
+   */
+  getOutputNode(): AudioNode | null;
+
+  /**
    * @param timeSec the start time in seconds (ex: 0.5 for half a second)
    */
   play(): Promise<void>;
@@ -113,6 +135,7 @@ interface AudioPlayerInternal {
   pauseTime: number;
   resumeTime: number;
   outputDeviceId?: string;
+  extraDuration: (() => number) | null;
 }
 
 const createPlayer = (): AudioPlayer => {
@@ -122,6 +145,7 @@ const createPlayer = (): AudioPlayer => {
     tracks: [],
     pauseTime: 0,
     resumeTime: 0,
+    extraDuration: null,
   };
 
   const { dispatchEvent, ...emitter } = createEmitter<AudioPlayerEventMap>(
@@ -132,14 +156,17 @@ const createPlayer = (): AudioPlayer => {
   );
 
   function getCurrentTime() {
-    const baseTime = internal.pauseTime;
-    const currentTime =
-      internal.state === "playing"
-        ? (internal.audioContext?.currentTime ?? 0) - internal.resumeTime
-        : 0;
-    const maxTime = getTotalDuration();
+    if (internal.state !== "playing") {
+      // When stopped or paused, return the recorded pause position directly.
+      // Do NOT clamp against totalDuration here — that would prevent seeking
+      // when the only tracks are instrument tracks (which have duration 0
+      // until they are rendered).
+      return internal.pauseTime;
+    }
 
-    return Math.min(baseTime + currentTime, maxTime);
+    const elapsed = (internal.audioContext?.currentTime ?? 0) - internal.resumeTime;
+    const maxTime = getTotalDuration();
+    return Math.min(internal.pauseTime + elapsed, maxTime);
   }
   function getTotalDuration() {
     let totalDuration = 0;
@@ -150,6 +177,9 @@ const createPlayer = (): AudioPlayer => {
         totalDuration = Math.max(track.duration, totalDuration);
       }
     }
+
+    // Include any externally-registered duration (e.g. instrument tracks).
+    totalDuration = Math.max(totalDuration, internal.extraDuration?.() ?? 0);
 
     return totalDuration;
   }
@@ -180,7 +210,7 @@ const createPlayer = (): AudioPlayer => {
   }
   function updatePlaybackTime() {
     if (internal.state === "playing") {
-      if (!internal.tracks.some((track) => track.isPlaying)) {
+      if (getCurrentTime() >= getTotalDuration()) {
         stopPlayback(false);
         dispatchEvent({ type: "stop" });
         return;
@@ -389,7 +419,7 @@ const createPlayer = (): AudioPlayer => {
     },
 
     async play() {
-      if (internal.state === "playing" || !internal.tracks.length) {
+      if (internal.state === "playing") {
         return;
       }
 
@@ -433,6 +463,15 @@ const createPlayer = (): AudioPlayer => {
           }
         ).setSinkId(deviceId);
       }
+    },
+    setExtraDuration(fn) {
+      internal.extraDuration = fn;
+    },
+    getAudioContext() {
+      return internal.audioContext ?? null;
+    },
+    getOutputNode() {
+      return internal.nodes?.gain ?? null;
     },
 
     ...emitter,

@@ -1,17 +1,25 @@
 <script setup lang="ts">
 import { inject, ref, onMounted, onBeforeUnmount } from "vue";
-import { toolsKey } from "../lib/provider-keys";
+import { toolsKey, instrumentTracksKey } from "../lib/provider-keys";
 import AudioTest from "./AudioTest.vue";
 import { selectToolKey } from "../lib/audio/tool/select";
 import { sequenceSplitToolKey } from "../lib/audio/tool/sequence-split";
 import { sequenceMoveToolKey } from "../lib/audio/tool/sequence-move";
 import { sequenceCutToolKey } from "../lib/audio/tool/sequence-cut";
 import type { Tools } from "../lib/audio/tools";
+import type { InstrumentTrack } from "../lib/music/instrument-track";
+import { createInstrumentTrack } from "../lib/music/instrument-track";
+import type { MusicInstrumentId } from "../lib/music/instruments";
+import AddInstrumentTrackModal from "./modals/AddInstrumentTrack.vue";
 
 const tools = inject<Tools>(toolsKey);
 if (!tools) throw new Error("missing tools");
 
+const instrumentTracks = inject<InstrumentTrack[]>(instrumentTracksKey);
+if (!instrumentTracks) throw new Error("missing instrumentTracks");
+
 const selectedTool = ref<string>(tools.getSelected().key);
+const showAddTrackModal = ref(false);
 
 const handleSelectTool = (key: string) => {
   tools.selectTool(key);
@@ -22,13 +30,25 @@ const handleToolChange = () => {
   selectedTool.value = tools.getSelected().key;
 };
 
+const handleAddTrack = () => {
+  showAddTrackModal.value = true;
+};
+
+const handleModalClose = () => {
+  showAddTrackModal.value = false;
+};
+
+const handleTrackConfirm = (name: string, instrumentId: MusicInstrumentId) => {
+  instrumentTracks.push(createInstrumentTrack(name, instrumentId));
+};
+
 onMounted(() => tools.addEventListener("change", handleToolChange));
 onBeforeUnmount(() => tools.removeEventListener("change", handleToolChange));
 </script>
 
 <template>
   <div class="flex items-center gap-1 bg-base-200 border-t border-base-300/60 py-1.5 px-2">
-    <AudioTest />
+    <AudioTest v-on:add-track="handleAddTrack" />
     <div class="w-px self-stretch bg-base-300/60 mx-0.5"></div>
     <button
       :class="{
@@ -74,5 +94,11 @@ onBeforeUnmount(() => tools.removeEventListener("change", handleToolChange));
     >
       <i class="iconify mdi--clip size-4" />
     </button>
-  </div>
+    </div>
+
+  <AddInstrumentTrackModal
+    :open="showAddTrackModal"
+    v-on:close="handleModalClose"
+    v-on:confirm="handleTrackConfirm"
+  />
 </template>

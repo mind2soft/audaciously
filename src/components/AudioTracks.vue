@@ -1,12 +1,23 @@
 <script setup lang="ts">
 import { inject, onMounted, onUnmounted, ref } from "vue";
 import type { Ref } from "vue";
-import { playerKey, timelineKey, selectedTrackKey } from "../lib/provider-keys";
+import {
+  playerKey,
+  timelineKey,
+  selectedTrackKey,
+  instrumentTracksKey,
+  selectedInstrumentTrackKey,
+} from "../lib/provider-keys";
 import TimelineView from "./Timeline.vue";
 import AudioTrackView from "./AudioTrack.vue";
+import InstrumentTrackHeader, {
+  type DeleteInstrumentTrackEvent,
+} from "./InstrumentTrackHeader.vue";
+import InstrumentTrackView from "./InstrumentTrackView.vue";
 
 import type { AudioPlayer } from "../lib/audio/player";
 import type { AudioTrack } from "../lib/audio/track";
+import type { InstrumentTrack } from "../lib/music/instrument-track";
 import { ScaleDirection, scaleRatio, type Timeline } from "../lib/timeline";
 import TrackHeader, { type DeleteTrackEvent } from "./TrackHeader.vue";
 import { formatTimeToPixel, formatPixelToTime } from "../lib/util/formatTime";
@@ -25,6 +36,10 @@ const scrollSpeed = 64; // px
 const player = inject<AudioPlayer>(playerKey);
 const timeline = inject<Timeline>(timelineKey);
 const selectedTrackRef = inject<Ref<AudioTrack | null>>(selectedTrackKey);
+const instrumentTracks = inject<InstrumentTrack[]>(instrumentTracksKey) ?? [];
+const selectedInstrumentTrackRef = inject<Ref<InstrumentTrack | null>>(
+  selectedInstrumentTrackKey
+);
 
 if (!player) {
   throw new Error("missing player");
@@ -106,6 +121,28 @@ const handleTrackSelect = (track: AudioTrack | null) => {
   if (selectedTrackRef) {
     selectedTrackRef.value = track;
   }
+  // Only one track can be selected at a time — clear the instrument selection.
+  if (track !== null && selectedInstrumentTrackRef) {
+    selectedInstrumentTrackRef.value = null;
+  }
+};
+
+const handleInstrumentTrackDelete = (evt: DeleteInstrumentTrackEvent) => {
+  if (selectedInstrumentTrackRef?.value?.id === evt.track.id) {
+    selectedInstrumentTrackRef.value = null;
+  }
+  const idx = instrumentTracks.findIndex((t) => t.id === evt.track.id);
+  if (idx !== -1) instrumentTracks.splice(idx, 1);
+};
+
+const handleInstrumentTrackSelect = (track: InstrumentTrack | null) => {
+  if (selectedInstrumentTrackRef) {
+    selectedInstrumentTrackRef.value = track;
+  }
+  // Only one track can be selected at a time — clear the audio track selection.
+  if (track !== null && selectedTrackRef) {
+    selectedTrackRef.value = null;
+  }
 };
 
 const handleUpdateCursor = () => {
@@ -165,8 +202,10 @@ onUnmounted(() => {
         class="overflow-y-auto absolute top-0 right-0 bottom-0 left-0 overflow-x-clip bg-base-100"
       >
         <div class="flex min-h-full">
+          <!-- Left column: track headers -->
           <div class="flex z-10 flex-col w-10 sm:w-40 min-h-full bg-base-200">
             <div class="relative">
+              <!-- Audio track headers -->
               <TrackHeader
                 v-for="track in tracks"
                 :key="track.id"
@@ -175,8 +214,19 @@ onUnmounted(() => {
                 v-on:track-delete="handleTrackDelete"
                 v-on:select="handleTrackSelect"
               />
+              <!-- Instrument track headers -->
+              <InstrumentTrackHeader
+                v-for="track in instrumentTracks"
+                :key="track.id"
+                :track="track"
+                :is-selected="selectedInstrumentTrackRef?.id === track.id"
+                v-on:track-delete="handleInstrumentTrackDelete"
+                v-on:select="handleInstrumentTrackSelect"
+              />
             </div>
           </div>
+
+          <!-- Right column: track content -->
           <div class="flex z-0 flex-col flex-1">
             <div
               class="relative min-h-full"
@@ -185,7 +235,20 @@ onUnmounted(() => {
               }"
             >
               <div class="relative">
-                <AudioTrackView v-for="track in tracks" :key="track.id" :track="track" />
+                <!-- Audio track views -->
+                <AudioTrackView
+                  v-for="track in tracks"
+                  :key="track.id"
+                  :track="track"
+                  :is-selected="selectedTrackRef?.id === track.id"
+                />
+                <!-- Instrument track views -->
+                <InstrumentTrackView
+                  v-for="track in instrumentTracks"
+                  :key="track.id"
+                  :track="track"
+                  :is-selected="selectedInstrumentTrackRef?.id === track.id"
+                />
               </div>
               <div
                 class="absolute top-0 w-[2px] bottom-0 bg-white/50 z-10"

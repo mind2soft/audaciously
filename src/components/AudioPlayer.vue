@@ -116,18 +116,15 @@ const handleAnalyserUpdate = () => {
   }
 };
 
-const handlePlayToggle = () => {
+const handlePlayToggle = async () => {
   if (player.state === "playing") {
     player.pause();
   } else {
-    player.play().then(
-      () => {
-        //console.log("playing...");
-      },
-      (err: any) => {
-        console.error(err);
-      }
-    );
+    try {
+      await player.play();
+    } catch (err: any) {
+      console.error(err);
+    }
   }
 };
 const handleStopClick = () => {

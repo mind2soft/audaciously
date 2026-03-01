@@ -10,7 +10,11 @@ import { formatTimeToPixel } from "../lib/util/formatTime";
 
 const props = defineProps<{
   track: AudioTrack;
+  isSelected: boolean;
 }>();
+
+const EXPANDED_HEIGHT = 192; // px  (h-48)
+const COLLAPSED_HEIGHT = 32;  // px  (h-8)
 
 const player = inject<AudioPlayer>(playerKey);
 const timeline = inject<Timeline>(timelineKey);
@@ -65,7 +69,10 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="h-48">
+  <div
+    class="overflow-hidden border-b border-base-300/60 transition-[height] duration-200 ease-in-out"
+    :style="{ height: `${isSelected ? EXPANDED_HEIGHT : COLLAPSED_HEIGHT}px` }"
+  >
     <div class="flex relative flex-nowrap h-full">
       <AudioSequenceVue
         v-for="sequence in sequences"
