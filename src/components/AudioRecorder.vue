@@ -2,16 +2,17 @@
 import { inject, onBeforeUnmount, ref } from "vue";
 import { playerKey, recorderKey } from "../lib/provider-keys";
 
-import { createAudioTrack } from "../lib/audio/track";
-import { createAudioBufferSequence } from "../lib/audio/sequence/AudioBufferSequence";
+import { createRecordedTrack } from "../lib/audio/track/recorded/recorded-track";
+import { createRecordedSequence } from "../lib/audio/sequence/recorded/recorded-sequence";
 
-import {
-  createRecordingSequence,
-  type RecordingSequence,
-} from "../lib/audio/sequence/RecordingSequence";
-import type { Recorder, RecorderBufferUpdateEvent } from "../lib/audio/recorder";
+import { createRecordingSequence } from "../lib/audio/sequence/recorded/recording-sequence";
+import type { RecordingSequence } from "../lib/audio/sequence/recorded/index";
+import type {
+  Recorder,
+  RecorderBufferUpdateEvent,
+} from "../lib/audio/recorder";
 import type { AudioPlayer } from "../lib/audio/player";
-import type { AudioTrack } from "../lib/audio/track";
+import type { RecordedAudioTrack } from "../lib/audio/track/recorded/recorded-track";
 
 const props = defineProps<{
   isPlayerPlaying?: boolean;
@@ -27,7 +28,7 @@ if (!recorder) {
 }
 
 const recorderState = ref(recorder.state);
-const recordingTrack = ref<AudioTrack>();
+const recordingTrack = ref<RecordedAudioTrack>();
 const recordingSequence = ref<RecordingSequence>();
 const recordingStart = ref<number>(0);
 
@@ -40,7 +41,7 @@ const handleRecord = async () => {
 
   recordingSequence.value = createRecordingSequence(recordingStart.value);
 
-  recordingTrack.value = createAudioTrack("test");
+  recordingTrack.value = createRecordedTrack("test");
   recordingTrack.value.addSequence(recordingSequence.value);
 
   player.addTrack(recordingTrack.value);
@@ -68,7 +69,7 @@ const handleRecorderData = () => {
     (buffer) => {
       if (recordingTrack.value) {
         recordingTrack.value.addSequence(
-          createAudioBufferSequence(buffer, recordingStart.value)
+          createRecordedSequence(buffer, recordingStart.value),
         );
 
         recordingTrack.value = undefined;
@@ -76,7 +77,7 @@ const handleRecorderData = () => {
     },
     (err) => {
       console.error(err);
-    }
+    },
   );
 };
 

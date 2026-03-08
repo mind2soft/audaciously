@@ -3,10 +3,13 @@ import {
   formatTime,
   formatTimeToPixel,
 } from "../../util/formatTime";
-import { getSequenceGaps } from "../../util/sequences";
-import type { AudioSequence } from "../sequence";
+import type {
+  AudioSequence,
+  BufferedAudioSequenceType,
+} from "../sequence/index";
 import type { AudioTool } from "../tools";
 import type { Timeline } from "../../timeline"; // Import Timeline type
+import { getSequenceGaps } from "../sequence/utils";
 
 type DraggableSequence = {
   sequenceId: string;
@@ -17,13 +20,13 @@ type DraggableSequence = {
   maxDeltaX: number;
 };
 
-export const sequenceMoveToolKey = "sequence-move@tool";
+export const sequenceMoveToolKey = "sequence-move@tool" as const;
 
-function getDraggable(
-  sequence: AudioSequence<any>,
+function getDraggable<Kind>(
+  sequence: AudioSequence<Kind, BufferedAudioSequenceType>,
   timeline: Timeline,
   target: HTMLElement,
-  event: MouseEvent
+  event: MouseEvent,
 ): DraggableSequence {
   const gaps = getSequenceGaps(sequence, sequence.track?.getSequences());
 
@@ -63,13 +66,16 @@ function cleanDraggable(draggable: DraggableSequence, target?: HTMLElement) {
 
 function clampedDetlaX(
   event: MouseEvent,
-  draggable: DraggableSequence
+  draggable: DraggableSequence,
 ): number {
   const deltaX = event.clientX - draggable.initialClientX;
   return Math.min(draggable.maxDeltaX, Math.max(draggable.minDeltaX, deltaX));
 }
 
-export function createSequenceMoveTool(timeline: Timeline, options?: { onInteract?: () => void }): AudioTool {
+export function createSequenceMoveTool(
+  timeline: Timeline,
+  options?: { onInteract?: () => void },
+): AudioTool {
   let abortController: AbortController | null = null;
   let draggable: DraggableSequence | null = null;
 
@@ -79,9 +85,7 @@ export function createSequenceMoveTool(timeline: Timeline, options?: { onInterac
     },
 
     registerHandlers(sequence, target) {
-      if (!abortController) {
-        abortController = new AbortController();
-      }
+      abortController ??= new AbortController();
 
       const signal = abortController.signal;
 
@@ -97,12 +101,14 @@ export function createSequenceMoveTool(timeline: Timeline, options?: { onInterac
           event.preventDefault();
           draggable = getDraggable(sequence, timeline, target, event);
         },
-        { signal }
+        { signal },
       );
       document.addEventListener(
         "mousemove",
         (event) => {
-          if (draggable?.sequenceId === sequence.id) {
+          if (!draggable) return;
+
+          if (draggable.sequenceId === sequence.id) {
             event.stopImmediatePropagation();
             event.preventDefault();
 
@@ -110,16 +116,18 @@ export function createSequenceMoveTool(timeline: Timeline, options?: { onInterac
 
             draggable.ghost.style.transform = `translateX(${deltaX}px)`;
             draggable.label.innerHTML = formatTime(
-              sequence.time + formatPixelToTime(timeline.ratio, deltaX)
+              sequence.time + formatPixelToTime(timeline.ratio, deltaX),
             );
           }
         },
-        { signal }
+        { signal },
       );
       document.addEventListener(
         "mouseup",
         (event) => {
-          if (draggable?.sequenceId === sequence.id) {
+          if (!draggable) return;
+
+          if (draggable.sequenceId === sequence.id) {
             event.stopImmediatePropagation();
             event.preventDefault();
 
@@ -132,7 +140,7 @@ export function createSequenceMoveTool(timeline: Timeline, options?: { onInterac
             draggable = cleanDraggable(draggable, target);
           }
         },
-        { signal }
+        { signal },
       );
     },
     unregisterHandlers() {

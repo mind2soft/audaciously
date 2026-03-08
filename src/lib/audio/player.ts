@@ -32,19 +32,32 @@ export interface AudioPlayer extends Emitter<AudioPlayerEventMap> {
   currentTime: number;
   volume: number;
 
-  addTrack(track: AudioTrack, insertIndex?: number): void;
+  addTrack(track: AudioTrack<any>, insertIndex?: number): void;
   countTracks(): number;
-  setTrack(track: AudioTrack, index: number): void;
-  removeTrack(track: AudioTrack): boolean;
-  getTracks(): Iterable<AudioTrack>;
-  setTracks(tracks: AudioTrack[]): void;
+  setTrack(track: AudioTrack<any>, index: number): void;
+  removeTrack(track: AudioTrack<any>): boolean;
+  getTracks(): Iterable<AudioTrack<any>>;
+  setTracks(tracks: AudioTrack<any>[]): void;
+
+  /**
+   * Moves the track at `fromIndex` to `toIndex` without stopping or resetting
+   * playback.  Both indices are clamped to valid range.  Dispatches a `change`
+   * event so reactive consumers (e.g. AudioTracks.vue) update automatically.
+   */
+  reorderTracks(fromIndex: number, toIndex: number): void;
 
   /**
    * Registers an external callback that contributes additional duration to
    * `totalDuration` (e.g. instrument track duration when there are no audio
-   * tracks).  Pass `null` to unregister.
+   * tracks).  Each registered callback is kept in a Set; call
+   * `removeExtraDuration` with the same function reference to unregister.
    */
-  setExtraDuration(fn: (() => number) | null): void;
+  setExtraDuration(fn: () => number): void;
+
+  /**
+   * Unregisters a previously-registered extra-duration callback.
+   */
+  removeExtraDuration(fn: () => number): void;
 
   /**
    * Returns the active AudioContext, or null when the player is stopped.
@@ -128,14 +141,14 @@ interface AudioPlayerNodes {
 
 interface AudioPlayerInternal {
   state: AudioPlayerState;
-  tracks: AudioTrack[];
+  tracks: AudioTrack<any>[];
   volume: number;
   audioContext?: AudioContext;
   nodes?: AudioPlayerNodes;
   pauseTime: number;
   resumeTime: number;
   outputDeviceId?: string;
-  extraDuration: (() => number) | null;
+  extraDurationCallbacks: Set<() => number>;
 }
 
 const createPlayer = (): AudioPlayer => {
@@ -145,14 +158,14 @@ const createPlayer = (): AudioPlayer => {
     tracks: [],
     pauseTime: 0,
     resumeTime: 0,
-    extraDuration: null,
+    extraDurationCallbacks: new Set(),
   };
 
   const { dispatchEvent, ...emitter } = createEmitter<AudioPlayerEventMap>(
     (event) => {
       event.player = player;
       return event;
-    }
+    },
   );
 
   function getCurrentTime() {
@@ -164,7 +177,8 @@ const createPlayer = (): AudioPlayer => {
       return internal.pauseTime;
     }
 
-    const elapsed = (internal.audioContext?.currentTime ?? 0) - internal.resumeTime;
+    const elapsed =
+      (internal.audioContext?.currentTime ?? 0) - internal.resumeTime;
     const maxTime = getTotalDuration();
     return Math.min(internal.pauseTime + elapsed, maxTime);
   }
@@ -178,8 +192,10 @@ const createPlayer = (): AudioPlayer => {
       }
     }
 
-    // Include any externally-registered duration (e.g. instrument tracks).
-    totalDuration = Math.max(totalDuration, internal.extraDuration?.() ?? 0);
+    // Include any externally-registered duration callbacks (e.g. instrument tracks).
+    for (const fn of internal.extraDurationCallbacks) {
+      totalDuration = Math.max(totalDuration, fn());
+    }
 
     return totalDuration;
   }
@@ -202,7 +218,7 @@ const createPlayer = (): AudioPlayer => {
     const audioContext = new AudioContext(
       internal.outputDeviceId
         ? ({ sinkId: internal.outputDeviceId } as AudioContextOptions)
-        : undefined
+        : undefined,
     );
 
     internal.audioContext = audioContext;
@@ -260,16 +276,19 @@ const createPlayer = (): AudioPlayer => {
         analyser: {
           invalidated: true,
           node: analyserNode,
-          data: new Float32Array(analyserNode.frequencyBinCount) as Float32Array<ArrayBuffer>,
+          data: new Float32Array(
+            analyserNode.frequencyBinCount,
+          ) as Float32Array<ArrayBuffer>,
           audioFrame: internal.audioContext.createBuffer(
             1,
             analyserNode.frequencyBinCount,
-            internal.audioContext.sampleRate
+            internal.audioContext.sampleRate,
           ),
         },
         gain: gainNode,
       };
       internal.resumeTime = internal.audioContext.currentTime;
+      internal.state = "playing";
 
       for (const track of internal.tracks) {
         promises.push(
@@ -277,13 +296,12 @@ const createPlayer = (): AudioPlayer => {
             currentTime: internal.resumeTime,
             output: gainNode,
             startTime: internal.pauseTime,
-          })
+          }),
         );
       }
 
       await Promise.all(promises);
 
-      internal.state = "playing";
       requestAnimationFrame(updatePlaybackTime);
     }
   }
@@ -417,6 +435,18 @@ const createPlayer = (): AudioPlayer => {
 
       dispatchEvent({ type: "change" });
     },
+    reorderTracks(fromIndex, toIndex) {
+      const len = internal.tracks.length;
+      fromIndex = Math.max(0, Math.min(fromIndex, len - 1));
+      toIndex = Math.max(0, Math.min(toIndex, len - 1));
+
+      if (fromIndex === toIndex) return;
+
+      const [removed] = internal.tracks.splice(fromIndex, 1);
+      internal.tracks.splice(toIndex, 0, removed);
+
+      dispatchEvent({ type: "change" });
+    },
 
     async play() {
       if (internal.state === "playing") {
@@ -465,7 +495,10 @@ const createPlayer = (): AudioPlayer => {
       }
     },
     setExtraDuration(fn) {
-      internal.extraDuration = fn;
+      internal.extraDurationCallbacks.add(fn);
+    },
+    removeExtraDuration(fn) {
+      internal.extraDurationCallbacks.delete(fn);
     },
     getAudioContext() {
       return internal.audioContext ?? null;

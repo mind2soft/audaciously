@@ -1,25 +1,18 @@
 <script setup lang="ts">
-import { inject, onMounted, onUnmounted, ref } from "vue";
+import { inject, onMounted, onUnmounted, ref, computed } from "vue";
 import type { Ref } from "vue";
-import {
-  playerKey,
-  timelineKey,
-  selectedTrackKey,
-  instrumentTracksKey,
-  selectedInstrumentTrackKey,
-} from "../lib/provider-keys";
+import { playerKey, timelineKey, selectedTrackKey } from "../lib/provider-keys";
 import TimelineView from "./Timeline.vue";
 import AudioTrackView from "./AudioTrack.vue";
-import InstrumentTrackHeader, {
-  type DeleteInstrumentTrackEvent,
-} from "./InstrumentTrackHeader.vue";
+import InstrumentTrackHeader from "./InstrumentTrackHeader.vue";
 import InstrumentTrackView from "./InstrumentTrackView.vue";
 
 import type { AudioPlayer } from "../lib/audio/player";
 import type { AudioTrack } from "../lib/audio/track";
-import type { InstrumentTrack } from "../lib/music/instrument-track";
+import type { RecordedAudioTrack } from "../lib/audio/track/recorded/recorded-track";
+import type { InstrumentAudioTrack } from "../lib/audio/track/instrument";
 import { ScaleDirection, scaleRatio, type Timeline } from "../lib/timeline";
-import TrackHeader, { type DeleteTrackEvent } from "./TrackHeader.vue";
+import TrackHeader from "./TrackHeader.vue";
 import { formatTimeToPixel, formatPixelToTime } from "../lib/util/formatTime";
 
 type TrackDrag =
@@ -35,11 +28,8 @@ type TrackDrag =
 const scrollSpeed = 64; // px
 const player = inject<AudioPlayer>(playerKey);
 const timeline = inject<Timeline>(timelineKey);
-const selectedTrackRef = inject<Ref<AudioTrack | null>>(selectedTrackKey);
-const instrumentTracks = inject<InstrumentTrack[]>(instrumentTracksKey) ?? [];
-const selectedInstrumentTrackRef = inject<Ref<InstrumentTrack | null>>(
-  selectedInstrumentTrackKey
-);
+const selectedTrackRef = inject<Ref<AudioTrack<any> | null>>(selectedTrackKey);
+const selectedTrackId = computed(() => selectedTrackRef?.value?.id ?? null);
 
 if (!player) {
   throw new Error("missing player");
@@ -47,16 +37,22 @@ if (!player) {
   throw new Error("missing timeline");
 }
 
-const tracks = ref<AudioTrack[]>([...player.getTracks()]);
+const tracks = ref<AudioTrack<any>[]>([...player.getTracks()]);
 const trackDrag = ref<TrackDrag>({
   isDragging: false,
 });
 const tracksPosition = ref<number>(
-  -formatTimeToPixel(timeline.ratio, timeline.offsetTime)
+  -formatTimeToPixel(timeline.ratio, timeline.offsetTime),
 );
 const cursorPosition = ref<number>(
-  formatTimeToPixel(timeline.ratio, player.currentTime)
+  formatTimeToPixel(timeline.ratio, player.currentTime),
 );
+
+// --- Sort drag state ---
+const draggingId = ref<string | null>(null);
+const insertionIndex = ref<number | null>(null);
+/** Set to true only when the mousedown started on a drag handle element. */
+let dragHandleActive = false;
 
 const handleMouseDown = (evt: MouseEvent) => {
   if (
@@ -102,7 +98,7 @@ const handleMouseWheel = (evt: WheelEvent) => {
 
     timeline.ratio = scaleRatio(
       timeline.ratio,
-      delta > 0 ? ScaleDirection.UP : ScaleDirection.DOWN
+      delta > 0 ? ScaleDirection.UP : ScaleDirection.DOWN,
     );
   }
 };
@@ -110,38 +106,64 @@ const handleContextMenu = (evt: MouseEvent) => {
   evt.preventDefault();
 };
 
-const handleTrackDelete = (evt: DeleteTrackEvent) => {
-  if (selectedTrackRef?.value?.id === evt.track.id) {
-    selectedTrackRef.value = null;
-  }
-  player.removeTrack(evt.track);
+/** Intercept mousedown on header column — only allow HTML5 drag when the
+ *  pointer starts on a [data-drag-handle] element. */
+const handleHeaderMouseDown = (evt: MouseEvent) => {
+  const handle = (evt.target as HTMLElement).closest("[data-drag-handle]");
+  dragHandleActive = !!handle;
 };
 
-const handleTrackSelect = (track: AudioTrack | null) => {
+const handleDragStart = (evt: DragEvent, track: AudioTrack<any>) => {
+  if (!dragHandleActive) {
+    evt.preventDefault();
+    return;
+  }
+  draggingId.value = track.id;
+  if (evt.dataTransfer) {
+    evt.dataTransfer.effectAllowed = "move";
+    evt.dataTransfer.setData("text/plain", track.id);
+  }
+};
+
+const handleDragOver = (evt: DragEvent, trackIndex: number) => {
+  if (draggingId.value === null) return;
+  evt.preventDefault();
+  if (evt.dataTransfer) evt.dataTransfer.dropEffect = "move";
+
+  // Determine insertion position from pointer Y relative to the row mid-point
+  const target = evt.currentTarget as HTMLElement;
+  const rect = target.getBoundingClientRect();
+  const midY = rect.top + rect.height / 2;
+  insertionIndex.value = evt.clientY < midY ? trackIndex : trackIndex + 1;
+};
+
+const handleDrop = (evt: DragEvent) => {
+  evt.preventDefault();
+  if (draggingId.value === null || insertionIndex.value === null) return;
+
+  const fromIndex = tracks.value.findIndex((t) => t.id === draggingId.value);
+  if (fromIndex < 0) return;
+
+  // Compute the actual destination index after the removal of the dragged item
+  let toIndex = insertionIndex.value;
+  if (toIndex > fromIndex) toIndex -= 1;
+
+  player.reorderTracks(fromIndex, toIndex);
+
+  draggingId.value = null;
+  insertionIndex.value = null;
+  dragHandleActive = false;
+};
+
+const handleDragEnd = () => {
+  draggingId.value = null;
+  insertionIndex.value = null;
+  dragHandleActive = false;
+};
+
+const handleTrackSelect = (track: AudioTrack<any> | null) => {
   if (selectedTrackRef) {
     selectedTrackRef.value = track;
-  }
-  // Only one track can be selected at a time — clear the instrument selection.
-  if (track !== null && selectedInstrumentTrackRef) {
-    selectedInstrumentTrackRef.value = null;
-  }
-};
-
-const handleInstrumentTrackDelete = (evt: DeleteInstrumentTrackEvent) => {
-  if (selectedInstrumentTrackRef?.value?.id === evt.track.id) {
-    selectedInstrumentTrackRef.value = null;
-  }
-  const idx = instrumentTracks.findIndex((t) => t.id === evt.track.id);
-  if (idx !== -1) instrumentTracks.splice(idx, 1);
-};
-
-const handleInstrumentTrackSelect = (track: InstrumentTrack | null) => {
-  if (selectedInstrumentTrackRef) {
-    selectedInstrumentTrackRef.value = track;
-  }
-  // Only one track can be selected at a time — clear the audio track selection.
-  if (track !== null && selectedTrackRef) {
-    selectedTrackRef.value = null;
   }
 };
 
@@ -157,7 +179,7 @@ const handlePlayerChange = () => {
 const handleTimelineChange = () => {
   tracksPosition.value = -formatTimeToPixel(
     timeline.ratio,
-    timeline.offsetTime
+    timeline.offsetTime,
   );
   handleUpdateCursor();
 };
@@ -204,25 +226,43 @@ onUnmounted(() => {
         <div class="flex min-h-full">
           <!-- Left column: track headers -->
           <div class="flex z-10 flex-col w-10 sm:w-40 min-h-full bg-base-200">
-            <div class="relative">
-              <!-- Audio track headers -->
-              <TrackHeader
-                v-for="track in tracks"
-                :key="track.id"
-                :track="track"
-                :is-selected="selectedTrackRef?.id === track.id"
-                v-on:track-delete="handleTrackDelete"
-                v-on:select="handleTrackSelect"
+            <div
+              class="relative"
+              v-on:mousedown="handleHeaderMouseDown"
+            >
+              <!-- Drop indicator: before first track -->
+              <div
+                v-if="insertionIndex === 0"
+                class="h-0.5 bg-primary w-full"
               />
-              <!-- Instrument track headers -->
-              <InstrumentTrackHeader
-                v-for="track in instrumentTracks"
-                :key="track.id"
-                :track="track"
-                :is-selected="selectedInstrumentTrackRef?.id === track.id"
-                v-on:track-delete="handleInstrumentTrackDelete"
-                v-on:select="handleInstrumentTrackSelect"
-              />
+              <template v-for="(track, trackIndex) in tracks" :key="track.id">
+                <div
+                  draggable="true"
+                  :class="{ 'opacity-40': draggingId === track.id }"
+                  v-on:dragstart="(e) => handleDragStart(e, track)"
+                  v-on:dragover="(e) => handleDragOver(e, trackIndex)"
+                  v-on:drop="handleDrop"
+                  v-on:dragend="handleDragEnd"
+                >
+                  <TrackHeader
+                    v-if="track.kind === 'recorded'"
+                    :track="track as RecordedAudioTrack"
+                    :is-selected="selectedTrackId === track.id"
+                    v-on:select="handleTrackSelect"
+                  />
+                  <InstrumentTrackHeader
+                    v-else-if="track.kind === 'instrument'"
+                    :track="track as InstrumentAudioTrack"
+                    :is-selected="selectedTrackId === track.id"
+                    v-on:select="handleTrackSelect"
+                  />
+                </div>
+                <!-- Drop indicator: after this track -->
+                <div
+                  v-if="insertionIndex === trackIndex + 1"
+                  class="h-0.5 bg-primary w-full"
+                />
+              </template>
             </div>
           </div>
 
@@ -235,20 +275,18 @@ onUnmounted(() => {
               }"
             >
               <div class="relative">
-                <!-- Audio track views -->
-                <AudioTrackView
-                  v-for="track in tracks"
-                  :key="track.id"
-                  :track="track"
-                  :is-selected="selectedTrackRef?.id === track.id"
-                />
-                <!-- Instrument track views -->
-                <InstrumentTrackView
-                  v-for="track in instrumentTracks"
-                  :key="track.id"
-                  :track="track"
-                  :is-selected="selectedInstrumentTrackRef?.id === track.id"
-                />
+                <template v-for="track in tracks" :key="track.id">
+                  <AudioTrackView
+                    v-if="track.kind === 'recorded'"
+                    :track="track as RecordedAudioTrack"
+                    :is-selected="selectedTrackId === track.id"
+                  />
+                  <InstrumentTrackView
+                    v-else-if="track.kind === 'instrument'"
+                    :track="track as InstrumentAudioTrack"
+                    :is-selected="selectedTrackId === track.id"
+                  />
+                </template>
               </div>
               <div
                 class="absolute top-0 w-[2px] bottom-0 bg-white/50 z-10"

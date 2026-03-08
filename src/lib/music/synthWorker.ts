@@ -21,7 +21,26 @@ import type {
   SynthError,
   SynthNote,
 } from "../../workers/synth-processor";
-import type { InstrumentTrack } from "./instrument-track";
+import type { MusicInstrumentId } from "./instruments";
+
+// ─── Minimal render options ───────────────────────────────────────────────────
+
+/**
+ * The subset of an InstrumentAudioTrack that the synth worker actually needs.
+ * Keeping this minimal avoids coupling synthWorker to the full track type.
+ */
+export interface SynthRenderOptions {
+  id: string;
+  instrumentId: MusicInstrumentId;
+  bpm: number;
+  notes: ReadonlyArray<{
+    id: string;
+    pitchId: string;
+    startBeat: number;
+    durationBeats: number;
+  }>;
+  sampleRate?: number;
+}
 
 // ─── Shared worker instance ───────────────────────────────────────────────────
 
@@ -49,18 +68,16 @@ worker.addEventListener(
     const entry = pending.get(data.trackId);
 
     // Ignore stale responses (superseded by a newer seqNum).
-    if (!entry || entry.seqNum !== data.seqNum) return;
+    if (entry?.seqNum !== data.seqNum) return;
 
     pending.delete(data.trackId);
 
     if ("error" in data) {
-      entry.reject(new Error((data as SynthError).error));
+      entry.reject(new Error(data.error));
       return;
     }
 
-    const response = data as SynthResponse;
-
-    if (response.empty) {
+    if (data.empty) {
       // Signal "nothing to play" via a rejected promise so the caller can
       // remove the AudioTrack from the player cleanly.
       entry.reject(new SynthEmptyTrackSignal());
@@ -70,13 +87,20 @@ worker.addEventListener(
     // Assemble the AudioBuffer from the transferred Float32Arrays.
     // Use a detached OfflineAudioContext just to create the AudioBuffer with
     // the correct sample rate.  This is instantaneous (no rendering).
-    const tmpCtx = new OfflineAudioContext(2, response.left.length, DEFAULT_SAMPLE_RATE);
-    const audioBuffer = tmpCtx.createBuffer(2, response.left.length, DEFAULT_SAMPLE_RATE);
-    audioBuffer.copyToChannel(response.left as Float32Array<ArrayBuffer>, 0);
-    audioBuffer.copyToChannel(response.right as Float32Array<ArrayBuffer>, 1);
-
+    const tmpCtx = new OfflineAudioContext(
+      2,
+      data.left.length,
+      DEFAULT_SAMPLE_RATE,
+    );
+    const audioBuffer = tmpCtx.createBuffer(
+      2,
+      data.left.length,
+      DEFAULT_SAMPLE_RATE,
+    );
+    audioBuffer.copyToChannel(data.left as Float32Array<ArrayBuffer>, 0);
+    audioBuffer.copyToChannel(data.right as Float32Array<ArrayBuffer>, 1);
     entry.resolve(audioBuffer);
-  }
+  },
 );
 
 // ─── Sentinel error class ─────────────────────────────────────────────────────
@@ -98,15 +122,15 @@ const DEFAULT_SAMPLE_RATE = 44100;
 
 export interface SynthWorkerClient {
   /**
-   * Render all notes in `track` into an AudioBuffer.
+   * Render all notes in `options` into an AudioBuffer.
    *
    * If the track is empty, the promise rejects with `SynthEmptyTrackSignal`.
    * Any in-flight render for the same track is cancelled automatically.
    *
-   * @param track       The instrument track to render.
+   * @param options     Minimal track data needed for synthesis.
    * @param sampleRate  Target sample rate (default 44100).
    */
-  render(track: InstrumentTrack, sampleRate?: number): Promise<AudioBuffer>;
+  render(options: SynthRenderOptions): Promise<AudioBuffer>;
 }
 
 /** Per-client seqNum counters, keyed by trackId. */
@@ -126,8 +150,8 @@ function nextSeqNum(trackId: string): number {
  */
 export function createSynthWorkerClient(): SynthWorkerClient {
   return {
-    render(track: InstrumentTrack, sampleRate = DEFAULT_SAMPLE_RATE): Promise<AudioBuffer> {
-      const trackId = track.id;
+    render(options: SynthRenderOptions): Promise<AudioBuffer> {
+      const trackId = options.id;
       const seqNum = nextSeqNum(trackId);
 
       // Cancel (reject) any in-flight render for this track.
@@ -140,7 +164,7 @@ export function createSynthWorkerClient(): SynthWorkerClient {
       return new Promise<AudioBuffer>((resolve, reject) => {
         pending.set(trackId, { seqNum, resolve, reject });
 
-        const notes: SynthNote[] = track.notes.map((n) => ({
+        const notes: SynthNote[] = options.notes.map((n) => ({
           id: n.id,
           pitchId: n.pitchId,
           startBeat: n.startBeat,
@@ -150,9 +174,9 @@ export function createSynthWorkerClient(): SynthWorkerClient {
         const request: SynthRequest = {
           trackId,
           seqNum,
-          instrumentId: track.instrumentId as import("../../workers/synth-processor").SynthInstrumentId,
-          bpm: track.bpm,
-          sampleRate,
+          instrumentId: options.instrumentId,
+          bpm: options.bpm,
+          sampleRate: options.sampleRate ?? DEFAULT_SAMPLE_RATE,
           notes,
         };
 

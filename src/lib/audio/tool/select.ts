@@ -1,12 +1,15 @@
 import type { Timeline } from "../../timeline";
-import type { AudioSequence } from "../sequence";
+import type { AudioSequence } from "../sequence/index";
 import type { AudioTool } from "../tools";
 
 export const selectToolKey = "select@tool";
 
-export function createSelectTool(_timeline: Timeline, options?: { onInteract?: () => void }): AudioTool {
+export function createSelectTool(
+  _timeline: Timeline,
+  options?: { onInteract?: () => void },
+): AudioTool {
   let abortController: AbortController | null = null;
-  let selectedSequence: AudioSequence<any> | null = null;
+  let selectedSequence: AudioSequence<any, any> | null = null;
 
   return {
     get key() {
@@ -14,9 +17,7 @@ export function createSelectTool(_timeline: Timeline, options?: { onInteract?: (
     },
 
     registerHandlers(sequence, target) {
-      if (!abortController) {
-        abortController = new AbortController();
-      }
+      abortController ??= new AbortController();
       const signal = abortController.signal;
 
       target.addEventListener(
@@ -33,7 +34,7 @@ export function createSelectTool(_timeline: Timeline, options?: { onInteract?: (
 
           sequence.selected = true;
         },
-        { signal }
+        { signal },
       );
     },
 

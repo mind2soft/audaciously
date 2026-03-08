@@ -1,11 +1,16 @@
 import type { Timeline } from "../../timeline";
 import { formatPixelToTime } from "../../util/formatTime";
-import { splitSequence } from "../../util/sequences";
+import { splitSequence } from "../sequence/recorded/utils";
+import type { BufferedAudioSequence } from "../sequence/index";
+import type { AudioTrack } from "../track";
 import type { AudioTool } from "../tools";
 
-export const sequenceSplitToolKey = "sequence-split@tool";
+export const sequenceSplitToolKey = "sequence-split@tool" as const;
 
-export function createSequenceSplitTool(timeline: Timeline, options?: { onInteract?: () => void }): AudioTool {
+export function createSequenceSplitTool(
+  timeline: Timeline,
+  options?: { onInteract?: () => void },
+): AudioTool {
   let abortController: AbortController | null = null;
 
   return {
@@ -14,9 +19,7 @@ export function createSequenceSplitTool(timeline: Timeline, options?: { onIntera
     },
 
     registerHandlers(sequence, target) {
-      if (!abortController) {
-        abortController = new AbortController();
-      }
+      abortController ??= new AbortController();
 
       const signal = abortController.signal;
 
@@ -35,13 +38,14 @@ export function createSequenceSplitTool(timeline: Timeline, options?: { onIntera
 
           const splitPosition = event.offsetX;
           const splitTime = formatPixelToTime(timeline.ratio, splitPosition);
-          const split = splitSequence(sequence, splitTime);
+          // The split tool is only registered on recorded sequences in practice.
+          const split = splitSequence(sequence as BufferedAudioSequence<any>, splitTime);
 
           track.removeSequence(sequence.id);
-          track.addSequence(split.left);
-          track.addSequence(split.right);
+          (track as AudioTrack<any>).addSequence(split.left);
+          (track as AudioTrack<any>).addSequence(split.right);
         },
-        { signal }
+        { signal },
       );
     },
 

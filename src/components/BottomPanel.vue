@@ -1,22 +1,29 @@
 <script setup lang="ts">
 import { inject, ref, onMounted, onBeforeUnmount } from "vue";
-import { toolsKey, instrumentTracksKey } from "../lib/provider-keys";
+import { toolsKey, playerKey } from "../lib/provider-keys";
 import AudioTest from "./AudioTest.vue";
 import { selectToolKey } from "../lib/audio/tool/select";
 import { sequenceSplitToolKey } from "../lib/audio/tool/sequence-split";
 import { sequenceMoveToolKey } from "../lib/audio/tool/sequence-move";
 import { sequenceCutToolKey } from "../lib/audio/tool/sequence-cut";
 import type { Tools } from "../lib/audio/tools";
-import type { InstrumentTrack } from "../lib/music/instrument-track";
-import { createInstrumentTrack } from "../lib/music/instrument-track";
+import type { AudioPlayer } from "../lib/audio/player";
+import { createInstrumentTrack } from "../lib/audio/track/instrument/instrument-track";
 import type { MusicInstrumentId } from "../lib/music/instruments";
 import AddInstrumentTrackModal from "./modals/AddInstrumentTrack.vue";
+import SaveIndicator from "./SaveIndicator.vue";
 
 const tools = inject<Tools>(toolsKey);
 if (!tools) throw new Error("missing tools");
 
-const instrumentTracks = inject<InstrumentTrack[]>(instrumentTracksKey);
-if (!instrumentTracks) throw new Error("missing instrumentTracks");
+const player = inject<AudioPlayer>(playerKey);
+if (!player) throw new Error("missing player");
+
+defineProps<{
+  saving: boolean;
+  dirty: boolean;
+  error?: string | null;
+}>();
 
 const selectedTool = ref<string>(tools.getSelected().key);
 const showAddTrackModal = ref(false);
@@ -39,7 +46,8 @@ const handleModalClose = () => {
 };
 
 const handleTrackConfirm = (name: string, instrumentId: MusicInstrumentId) => {
-  instrumentTracks.push(createInstrumentTrack(name, instrumentId));
+  const track = createInstrumentTrack(name, instrumentId);
+  player.addTrack(track);
 };
 
 onMounted(() => tools.addEventListener("change", handleToolChange));
@@ -94,7 +102,11 @@ onBeforeUnmount(() => tools.removeEventListener("change", handleToolChange));
     >
       <i class="iconify mdi--clip size-4" />
     </button>
+
+    <div class="ml-auto">
+      <SaveIndicator :saving="saving" :dirty="dirty" :error="error" />
     </div>
+  </div>
 
   <AddInstrumentTrackModal
     :open="showAddTrackModal"

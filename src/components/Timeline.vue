@@ -27,7 +27,7 @@ const handleTimelineUpdate = () => {
 const handlePointerUpdate = (evt: MouseEvent) => {
   const left = (evt.currentTarget as HTMLDivElement).getBoundingClientRect()
     .left;
-  pointerPosition.value = evt.clientX - left; // formatPixelToTime(timeline.ratio, x);
+  pointerPosition.value = evt.clientX - left;
 };
 const handlePointerVisible = (evt: MouseEvent) => {
   handlePointerUpdate(evt);
@@ -95,7 +95,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div
-    class="relative w-full h-full"
+    class="relative w-full h-full bg-[color-mix(in_oklch,var(--color-base-100)_30%,var(--color-base-200))]"
     v-on:mousemove="handlePointerUpdate"
     v-on:mouseenter="handlePointerVisible"
     v-on:mouseleave="handlePointerHide"

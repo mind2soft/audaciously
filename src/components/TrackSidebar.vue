@@ -1,402 +1,291 @@
 <script setup lang="ts">
-import { inject, ref, computed, watch, onBeforeUnmount } from "vue";
+import { inject, ref, computed, watch, onBeforeUnmount, onUpdated } from "vue";
 import type { Ref } from "vue";
-import { selectedTrackKey, playerKey, selectedInstrumentTrackKey, instrumentTracksKey } from "../lib/provider-keys";
+import { selectedTrackKey, playerKey } from "../lib/provider-keys";
 import type { AudioTrack } from "../lib/audio/track";
+import type { InstrumentAudioTrack } from "../lib/audio/track/instrument";
+import type { RecordedAudioTrack } from "../lib/audio/track/recorded/recorded-track";
 import type { AudioPlayer } from "../lib/audio/player";
-import type { InstrumentTrack } from "../lib/music/instrument-track";
 import { MUSIC_INSTRUMENTS } from "../lib/music/instruments";
+import RecordedTrackProperties from "./tracks/properties/RecordedTrackProperties.vue";
+import InstrumentTrackProperties from "./tracks/properties/InstrumentTrackProperties.vue";
 
-const selectedTrackRef = inject<Ref<AudioTrack | null>>(selectedTrackKey);
-const selectedInstrumentTrackRef = inject<Ref<InstrumentTrack | null>>(selectedInstrumentTrackKey);
-const instrumentTracks = inject<InstrumentTrack[]>(instrumentTracksKey) ?? [];
+const selectedTrackRef = inject<Ref<AudioTrack<any> | null>>(selectedTrackKey);
 const player = inject<AudioPlayer>(playerKey);
 if (!player) throw new Error("missing player");
 
 const isOpen = ref(true);
 
-// ─── Audio track state ────────────────────────────────────────────────────────
+// ─── Current track ────────────────────────────────────────────────────────────
 
-const currentAudioTrack = computed(() => selectedTrackRef?.value ?? null);
+const currentTrack = computed(() => selectedTrackRef?.value ?? null);
 
-const trackName = ref("");
-const trackVolume = ref(100);   // 0–100
-const trackBalance = ref(0);    // -100–100
-const trackMuted = ref(false);
+const currentInstrumentTrack = computed(() =>
+  currentTrack.value?.kind === "instrument"
+    ? (currentTrack.value as InstrumentAudioTrack)
+    : null,
+);
 
-const syncFromAudioTrack = (t: AudioTrack) => {
-  trackName.value = t.name;
-  trackVolume.value = Math.round(t.volume * 100);
-  trackBalance.value = Math.round(t.balance * 100);
-  trackMuted.value = t.muted;
+const currentRecordedTrack = computed(() =>
+  currentTrack.value?.kind === "recorded"
+    ? (currentTrack.value as RecordedAudioTrack)
+    : null,
+);
+
+// ─── Shared reactive state ────────────────────────────────────────────────────
+
+const name = ref("");
+const muted = ref(false);
+const locked = ref(false);
+const confirmingDelete = ref(false);
+
+const syncFromTrack = (t: AudioTrack<any>) => {
+  name.value = t.name;
+  muted.value = t.muted;
+  locked.value = t.locked;
 };
 
-let unsubscribeAudioTrack: (() => void) | null = null;
+let unsubscribeTrack: (() => void) | null = null;
 
-watch(currentAudioTrack, (track) => {
-  unsubscribeAudioTrack?.();
-  unsubscribeAudioTrack = null;
-  if (track) {
-    syncFromAudioTrack(track);
-    const h = () => syncFromAudioTrack(track);
-    track.addEventListener("change", h);
-    unsubscribeAudioTrack = () => track.removeEventListener("change", h);
-  }
-}, { immediate: true });
+watch(
+  currentTrack,
+  (track) => {
+    confirmingDelete.value = false;
+    unsubscribeTrack?.();
+    unsubscribeTrack = null;
+    if (track) {
+      if (!isOpen.value) isOpen.value = true;
+      syncFromTrack(track);
+      const h = () => syncFromTrack(track);
+      track.addEventListener("change", h);
+      unsubscribeTrack = () => track.removeEventListener("change", h);
+    }
+  },
+  { immediate: true },
+);
 
 onBeforeUnmount(() => {
-  unsubscribeAudioTrack?.();
+  unsubscribeTrack?.();
 });
 
-// ─── Instrument track state ───────────────────────────────────────────────────
-
-const currentInstrumentTrack = computed(() => selectedInstrumentTrackRef?.value ?? null);
-
-// ─── Which panel to show ──────────────────────────────────────────────────────
-
-/** Show instrument panel when an instrument track is selected (audio deselected). */
-const showInstrumentPanel = computed(() =>
-  currentInstrumentTrack.value !== null && currentAudioTrack.value === null
-);
-const showAudioPanel = computed(() =>
-  currentAudioTrack.value !== null
-);
-const showEmpty = computed(() =>
-  !showAudioPanel.value && !showInstrumentPanel.value
-);
-
-// ─── Audio track handlers ─────────────────────────────────────────────────────
-
-const handleToggleMute = () => {
-  if (!currentAudioTrack.value) return;
-  currentAudioTrack.value.muted = !currentAudioTrack.value.muted;
-};
-
-const handleVolumeInput = (e: Event) => {
-  const val = Number((e.target as HTMLInputElement).value);
-  trackVolume.value = val;
-  if (currentAudioTrack.value) currentAudioTrack.value.volume = val / 100;
-};
-
-const handleBalanceInput = (e: Event) => {
-  const val = Number((e.target as HTMLInputElement).value);
-  trackBalance.value = val;
-  if (currentAudioTrack.value) currentAudioTrack.value.balance = val / 100;
-};
-
-const handleDeleteAudioTrack = () => {
-  if (!currentAudioTrack.value || !selectedTrackRef) return;
-  player.removeTrack(currentAudioTrack.value);
-  selectedTrackRef.value = null;
-};
-
-const balanceLabel = computed(() => {
-  if (trackBalance.value < -10) return "L";
-  if (trackBalance.value > 10) return "R";
-  return "C";
-});
-
-// ─── Instrument track handlers ────────────────────────────────────────────────
+// ─── Track header (icon · badge) ─────────────────────────────────────────────
 
 const instrInstrument = computed(() =>
   currentInstrumentTrack.value
     ? MUSIC_INSTRUMENTS[currentInstrumentTrack.value.instrumentId]
-    : null
+    : null,
 );
 
-const handleInstrToggleMute = () => {
-  if (!currentInstrumentTrack.value) return;
-  currentInstrumentTrack.value.muted = !currentInstrumentTrack.value.muted;
+const trackIcon = computed(() =>
+  instrInstrument.value ? instrInstrument.value.icon : "mdi--microphone",
+);
+
+const trackBadge = computed(() =>
+  instrInstrument.value ? instrInstrument.value.label : "Recorded Audio",
+);
+
+// ─── Name editing ─────────────────────────────────────────────────────────────
+
+const editingName = ref(false);
+const nameInputRef = ref<HTMLInputElement>();
+
+const startEditName = () => {
+  editingName.value = true;
 };
 
-const handleInstrToggleLock = () => {
-  if (!currentInstrumentTrack.value) return;
-  currentInstrumentTrack.value.locked = !currentInstrumentTrack.value.locked;
+const commitName = () => {
+  editingName.value = false;
+  if (!currentTrack.value) return;
+  const trimmed = name.value.trim();
+  if (trimmed) {
+    currentTrack.value.name = trimmed;
+  } else {
+    name.value = currentTrack.value.name;
+  }
 };
 
-const handleTimeSigNumeratorChange = (e: Event) => {
-  if (!currentInstrumentTrack.value) return;
-  const val = Number((e.target as HTMLSelectElement).value);
-  currentInstrumentTrack.value.timeSignature = {
-    ...currentInstrumentTrack.value.timeSignature,
-    beatsPerMeasure: val,
-  };
+onUpdated(() => {
+  if (editingName.value && nameInputRef.value) {
+    nameInputRef.value.focus();
+    nameInputRef.value.select();
+  }
+});
+
+// ─── Common handlers ──────────────────────────────────────────────────────────
+
+const handleToggleMute = () => {
+  if (!currentTrack.value) return;
+  currentTrack.value.muted = !currentTrack.value.muted;
 };
 
-const handleTimeSigDenominatorChange = (e: Event) => {
-  if (!currentInstrumentTrack.value) return;
-  const val = Number((e.target as HTMLSelectElement).value);
-  currentInstrumentTrack.value.timeSignature = {
-    ...currentInstrumentTrack.value.timeSignature,
-    beatUnit: val,
-  };
+const handleToggleLock = () => {
+  if (!currentTrack.value) return;
+  currentTrack.value.locked = !currentTrack.value.locked;
 };
 
-const handleBpmInput = (e: Event) => {
-  if (!currentInstrumentTrack.value) return;
-  const val = Number((e.target as HTMLInputElement).value);
-  if (val >= 20 && val <= 300) currentInstrumentTrack.value.bpm = val;
-};
-
-const handleInstrVolumeInput = (e: Event) => {
-  if (!currentInstrumentTrack.value) return;
-  const val = Number((e.target as HTMLInputElement).value);
-  currentInstrumentTrack.value.volume = val / 100;
-};
-
-const handleDeleteInstrumentTrack = () => {
-  if (!currentInstrumentTrack.value || !selectedInstrumentTrackRef) return;
-  const idx = instrumentTracks.findIndex((t) => t.id === currentInstrumentTrack.value!.id);
-  if (idx !== -1) instrumentTracks.splice(idx, 1);
-  selectedInstrumentTrackRef.value = null;
+const handleDeleteTrack = () => {
+  if (!currentTrack.value || !selectedTrackRef) return;
+  currentInstrumentTrack.value?.destroy();
+  player.removeTrack(currentTrack.value);
+  selectedTrackRef.value = null;
 };
 </script>
 
 <template>
   <aside
-    class="flex flex-col shrink-0 overflow-hidden bg-base-200 border-l border-base-300/60 transition-[width] duration-200 ease-in-out"
-    :style="{ width: isOpen ? '12rem' : '2rem' }"
+    class="relative flex flex-col shrink-0 bg-base-200 transition-[width] duration-200 ease-in-out overflow-visible"
+    :class="{ 'border-l border-base-300/60': isOpen }"
+    :style="{ width: isOpen ? '18rem' : '0rem' }"
   >
-    <!-- Toggle button -->
+    <!-- Floating handle — always visible, vertically centered -->
     <button
-      class="btn btn-ghost btn-xs h-8 w-full rounded-none border-b border-base-300/60 flex items-center justify-center shrink-0"
+      class="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-full z-20 flex items-center justify-center w-5 h-12 bg-base-200 border border-base-300/60 border-r-0 rounded-l-lg shadow-md hover:bg-base-300 transition-colors"
       :title="isOpen ? 'Collapse track properties' : 'Expand track properties'"
       v-on:click="isOpen = !isOpen"
     >
-      <i :class="isOpen ? 'iconify mdi--chevron-right size-4' : 'iconify mdi--chevron-left size-4'" />
+      <i
+        :class="
+          isOpen
+            ? 'iconify mdi--chevron-right size-4'
+            : 'iconify mdi--chevron-left size-4'
+        "
+      />
     </button>
 
     <!-- Content (only meaningful when open) -->
-    <div class="flex flex-col flex-1 overflow-y-auto overflow-x-hidden min-w-0 p-2 gap-3">
-
+    <div
+      class="flex flex-col flex-1 overflow-y-auto overflow-x-hidden min-w-0 p-2 gap-3 w-72"
+      :style="{
+        opacity: isOpen ? '1' : '0',
+        pointerEvents: isOpen ? 'auto' : 'none',
+      }"
+    >
       <!-- ── Nothing selected ────────────────────────────────────── -->
-      <template v-if="showEmpty">
+      <template v-if="!currentTrack">
         <p class="text-xs text-base-content/30 italic leading-snug">
           Click a track to select it
         </p>
       </template>
 
-      <!-- ── Audio track selected ───────────────────────────────── -->
-      <template v-else-if="showAudioPanel">
-        <!-- Track name -->
-        <div class="flex items-center gap-1 min-w-0">
-          <i class="iconify mdi--microphone size-3.5 text-accent shrink-0" />
-          <span class="text-xs font-semibold truncate min-w-0" :title="trackName">
-            {{ trackName }}
-          </span>
+      <!-- ── Track selected ─────────────────────────────────────── -->
+      <template v-else>
+        <!-- Name row + badge -->
+        <div class="flex flex-col gap-1">
+          <div class="flex items-center gap-1">
+            <span class="text-[10px] text-base-content/35">{{
+              trackBadge
+            }}</span>
+          </div>
+
+          <div class="flex items-center gap-1 min-w-0">
+            <i :class="`iconify ${trackIcon} size-3.5 text-accent shrink-0`" />
+            <template v-if="editingName">
+              <input
+                ref="nameInputRef"
+                type="text"
+                class="input input-xs input-ghost text-xs font-semibold flex-1 min-w-0 px-1"
+                maxlength="40"
+                v-model="name"
+                v-on:blur="commitName"
+                v-on:keydown.enter="commitName"
+                v-on:keydown.escape="commitName"
+              />
+            </template>
+            <button
+              v-else
+              class="btn btn-ghost btn-xs text-xs font-semibold truncate min-w-0 flex-1 justify-start px-1"
+              :title="`${name} — click to rename`"
+              v-on:click="startEditName"
+            >
+              {{ name }}
+            </button>
+          </div>
         </div>
 
-        <!-- Mute toggle -->
+        <!-- Mute + Lock row -->
         <div class="flex items-center gap-2">
           <button
             :class="{
               'btn btn-xs btn-square': true,
-              'btn-accent': !trackMuted,
-              'btn-ghost text-base-content/30': trackMuted,
+              'btn-accent': !muted,
+              'btn-ghost text-base-content/30': muted,
             }"
-            :title="trackMuted ? 'Unmute' : 'Mute'"
+            :title="muted ? 'Unmute' : 'Mute'"
             v-on:click="handleToggleMute"
           >
-            <i :class="trackMuted ? 'iconify mdi--volume-off size-3.5' : 'iconify mdi--volume size-3.5'" />
+            <i
+              :class="
+                muted
+                  ? 'iconify mdi--volume-off size-3.5'
+                  : 'iconify mdi--volume size-3.5'
+              "
+            />
           </button>
-          <span class="text-xs text-base-content/50">{{ trackMuted ? 'Muted' : 'Active' }}</span>
-        </div>
-
-        <!-- Volume -->
-        <div class="flex flex-col gap-1">
-          <div class="flex items-center justify-between">
-            <span class="text-xs text-base-content/50">Volume</span>
-            <span class="text-xs tabular-nums text-base-content/70">{{ trackVolume }}%</span>
-          </div>
-          <input
-            type="range"
-            class="range range-xs range-primary w-full"
-            min="0" max="100" step="1"
-            :value="trackVolume"
-            v-on:input="handleVolumeInput"
-          />
-        </div>
-
-        <!-- Balance -->
-        <div class="flex flex-col gap-1">
-          <div class="flex items-center justify-between">
-            <span class="text-xs text-base-content/50">Balance</span>
-            <span class="text-xs tabular-nums text-base-content/70">{{ balanceLabel }}</span>
-          </div>
-          <input
-            type="range"
-            class="range range-xs w-full"
-            min="-100" max="100" step="1"
-            :value="trackBalance"
-            v-on:input="handleBalanceInput"
-          />
-        </div>
-
-        <!-- Delete -->
-        <div class="mt-auto pt-2 border-t border-base-300/40">
-          <button
-            class="btn btn-xs btn-ghost text-error w-full gap-1"
-            title="Delete track"
-            v-on:click="handleDeleteAudioTrack"
-          >
-            <i class="iconify mdi--trash size-3.5" />
-            Delete
-          </button>
-        </div>
-      </template>
-
-      <!-- ── Instrument track selected ──────────────────────────── -->
-      <template v-else-if="showInstrumentPanel && currentInstrumentTrack && instrInstrument">
-        <!-- Track name + instrument -->
-        <div class="flex items-center gap-1 min-w-0">
-          <i :class="`iconify ${instrInstrument.icon} size-3.5 text-accent shrink-0`" />
-          <span class="text-xs font-semibold truncate min-w-0" :title="currentInstrumentTrack.name">
-            {{ currentInstrumentTrack.name }}
-          </span>
-        </div>
-
-        <!-- Instrument label -->
-        <div class="flex items-center gap-1">
-          <span class="text-xs text-base-content/40">Instrument</span>
-          <span class="text-xs text-base-content/70 ml-auto">{{ instrInstrument.label }}</span>
-        </div>
-
-        <!-- Mute toggle -->
-        <div class="flex items-center gap-2">
           <button
             :class="{
               'btn btn-xs btn-square': true,
-              'btn-accent': !currentInstrumentTrack.muted,
-              'btn-ghost text-base-content/30': currentInstrumentTrack.muted,
+              'btn-warning': locked,
+              'btn-ghost text-base-content/30': !locked,
             }"
-            :title="currentInstrumentTrack.muted ? 'Unmute' : 'Mute'"
-            v-on:click="handleInstrToggleMute"
+            :title="locked ? 'Unlock track' : 'Lock track'"
+            v-on:click="handleToggleLock"
           >
-            <i :class="currentInstrumentTrack.muted
-              ? 'iconify mdi--volume-off size-3.5'
-              : 'iconify mdi--volume size-3.5'" />
+            <i
+              :class="
+                locked
+                  ? 'iconify mdi--lock size-3.5'
+                  : 'iconify mdi--lock-off size-3.5'
+              "
+            />
           </button>
           <span class="text-xs text-base-content/50">
-            {{ currentInstrumentTrack.muted ? 'Muted' : 'Active' }}
+            <template v-if="muted">Muted</template>
+            <template v-else-if="locked">Locked</template>
+            <template v-else>Active</template>
           </span>
         </div>
 
-        <!-- Volume -->
-        <div class="flex flex-col gap-1">
-          <div class="flex items-center justify-between">
-            <span class="text-xs text-base-content/50">Volume</span>
-            <span class="text-xs tabular-nums text-base-content/70">{{ Math.round(currentInstrumentTrack.volume * 100) }}%</span>
-          </div>
-          <input
-            type="range"
-            class="range range-xs range-primary w-full"
-            min="0" max="100" step="1"
-            :value="Math.round(currentInstrumentTrack.volume * 100)"
-            v-on:input="handleInstrVolumeInput"
-          />
-        </div>
-
-        <!-- View toggle: piano roll / waveform -->
-        <div class="flex flex-col gap-1">
-          <span class="text-xs text-base-content/50">View</span>
-          <div class="flex rounded-lg overflow-hidden border border-base-300/60">
-            <button
-              :class="{
-                'flex-1 flex items-center justify-center gap-1 py-1 text-xs transition-colors': true,
-                'bg-primary text-primary-content': !currentInstrumentTrack.showWaveform,
-                'bg-base-100 text-base-content/50 hover:bg-base-200': currentInstrumentTrack.showWaveform,
-              }"
-              title="Piano roll"
-              v-on:click="() => { if (currentInstrumentTrack) currentInstrumentTrack.showWaveform = false }"
-            >
-              <i class="iconify mdi--piano size-3" />
-              <span>Roll</span>
-            </button>
-            <button
-              :class="{
-                'flex-1 flex items-center justify-center gap-1 py-1 text-xs transition-colors': true,
-                'bg-primary text-primary-content': currentInstrumentTrack.showWaveform,
-                'bg-base-100 text-base-content/50 hover:bg-base-200': !currentInstrumentTrack.showWaveform,
-              }"
-              title="Waveform"
-              v-on:click="() => { if (currentInstrumentTrack) currentInstrumentTrack.showWaveform = true }"
-            >
-              <i class="iconify mdi--waveform size-3" />
-              <span>Wave</span>
-            </button>
-          </div>
-        </div>
-
-        <!-- BPM -->
-        <div class="flex flex-col gap-1">
-          <div class="flex items-center justify-between">
-            <span class="text-xs text-base-content/50">Tempo</span>
-            <span class="text-xs tabular-nums text-base-content/70">{{ currentInstrumentTrack.bpm }} BPM</span>
-          </div>
-          <input
-            type="range"
-            class="range range-xs range-primary w-full"
-            min="20" max="300" step="1"
-            :value="currentInstrumentTrack.bpm"
-            v-on:input="handleBpmInput"
-          />
-        </div>
-
-        <!-- Time signature (editable) -->
-        <div class="flex flex-col gap-1">
-          <span class="text-xs text-base-content/50">Time sig.</span>
-          <div class="flex items-center gap-1">
-            <select
-              class="select select-xs flex-1 bg-base-100 text-xs tabular-nums"
-              :value="currentInstrumentTrack.timeSignature.beatsPerMeasure"
-              v-on:change="handleTimeSigNumeratorChange"
-            >
-              <option v-for="n in [2,3,4,5,6,7,8,9,12]" :key="n" :value="n">{{ n }}</option>
-            </select>
-            <span class="text-xs text-base-content/40">/</span>
-            <select
-              class="select select-xs flex-1 bg-base-100 text-xs tabular-nums"
-              :value="currentInstrumentTrack.timeSignature.beatUnit"
-              v-on:change="handleTimeSigDenominatorChange"
-            >
-              <option v-for="d in [2,4,8,16]" :key="d" :value="d">{{ d }}</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- Lock -->
-        <div class="flex items-center gap-2">
-          <button
-            :class="{
-              'btn btn-xs btn-square': true,
-              'btn-warning': currentInstrumentTrack.locked,
-              'btn-ghost text-base-content/30': !currentInstrumentTrack.locked,
-            }"
-            :title="currentInstrumentTrack.locked ? 'Unlock track' : 'Lock track'"
-            v-on:click="handleInstrToggleLock"
-          >
-            <i :class="currentInstrumentTrack.locked
-              ? 'iconify mdi--lock size-3.5'
-              : 'iconify mdi--lock-off size-3.5'" />
-          </button>
-          <span class="text-xs text-base-content/50">
-            {{ currentInstrumentTrack.locked ? 'Locked' : 'Unlocked' }}
-          </span>
-        </div>
+        <!-- Type-specific properties -->
+        <RecordedTrackProperties
+          v-if="currentRecordedTrack"
+          :track="currentRecordedTrack"
+        />
+        <InstrumentTrackProperties
+          v-else-if="currentInstrumentTrack"
+          :track="currentInstrumentTrack"
+        />
 
         <!-- Delete -->
         <div class="mt-auto pt-2 border-t border-base-300/40">
-          <button
-            class="btn btn-xs btn-ghost text-error w-full gap-1"
-            title="Delete track"
-            v-on:click="handleDeleteInstrumentTrack"
-          >
-            <i class="iconify mdi--trash size-3.5" />
-            Delete
-          </button>
+          <template v-if="confirmingDelete">
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-error/80 flex-1">Delete track?</span>
+              <button
+                class="btn btn-xs btn-ghost"
+                v-on:click="confirmingDelete = false"
+              >
+                Cancel
+              </button>
+              <button
+                class="btn btn-xs btn-error"
+                v-on:click="handleDeleteTrack"
+              >
+                Delete
+              </button>
+            </div>
+          </template>
+          <template v-else>
+            <button
+              class="btn btn-xs btn-ghost text-error w-full gap-1"
+              title="Delete track"
+              v-on:click="confirmingDelete = true"
+            >
+              <i class="iconify mdi--trash size-3.5" />
+              Delete
+            </button>
+          </template>
         </div>
       </template>
-
     </div>
   </aside>
 </template>

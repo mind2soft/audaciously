@@ -32,9 +32,9 @@
  * Worker → Main:  SynthResponse  |  SynthError
  */
 
-// ─── Protocol types (also exported for the main-thread wrapper) ───────────────
+import type { MusicInstrumentId } from "../lib/music/instruments";
 
-export type SynthInstrumentId = "piano" | "drums";
+// ─── Protocol types (also exported for the main-thread wrapper) ───────────────
 
 /** A single placed note sent from the main thread. */
 export interface SynthNote {
@@ -53,7 +53,7 @@ export interface SynthRequest {
   trackId: string;
   /** Monotonically increasing per-track; supersedes any lower seqNum. */
   seqNum: number;
-  instrumentId: SynthInstrumentId;
+  instrumentId: MusicInstrumentId;
   bpm: number;
   /** Target sample rate (e.g. 44100 or 48000). */
   sampleRate: number;
@@ -104,7 +104,7 @@ interface InstrumentEngine {
   renderNote(
     pitchId: string,
     durationSec: number,
-    sampleRate: number
+    sampleRate: number,
   ): [Float32Array, Float32Array];
 }
 
@@ -132,7 +132,7 @@ function applyEnvelope(
     releaseStartSec: number;
     releaseEndSec: number;
     peakLevel: number;
-  }
+  },
 ): void {
   const sr = sampleRate;
   const attackEnd = Math.round(opts.attackSec * sr);
@@ -167,7 +167,7 @@ function applyExpDecay(
   buf: Float32Array,
   sampleRate: number,
   peakLevel: number,
-  decaySec: number
+  decaySec: number,
 ): void {
   const tau = decaySec / 6; // ~6 time constants ≈ silent
   for (let i = 0; i < buf.length; i++) {
@@ -176,7 +176,11 @@ function applyExpDecay(
 }
 
 /** Apply a one-pole high-pass filter in-place (removes DC / very low freqs). */
-function highPassInPlace(buf: Float32Array, cutoffHz: number, sampleRate: number): void {
+function highPassInPlace(
+  buf: Float32Array,
+  cutoffHz: number,
+  sampleRate: number,
+): void {
   const rc = 1 / (2 * Math.PI * cutoffHz);
   const dt = 1 / sampleRate;
   const alpha = rc / (rc + dt);
@@ -191,7 +195,11 @@ function highPassInPlace(buf: Float32Array, cutoffHz: number, sampleRate: number
 }
 
 /** Apply a one-pole low-pass filter in-place. */
-function lowPassInPlace(buf: Float32Array, cutoffHz: number, sampleRate: number): void {
+function lowPassInPlace(
+  buf: Float32Array,
+  cutoffHz: number,
+  sampleRate: number,
+): void {
   const rc = 1 / (2 * Math.PI * cutoffHz);
   const dt = 1 / sampleRate;
   const alpha = dt / (rc + dt);
@@ -203,7 +211,11 @@ function lowPassInPlace(buf: Float32Array, cutoffHz: number, sampleRate: number)
 }
 
 /** Apply a one-pole band-pass filter in-place (HP then LP). */
-function bandPassInPlace(buf: Float32Array, centerHz: number, sampleRate: number): void {
+function bandPassInPlace(
+  buf: Float32Array,
+  centerHz: number,
+  sampleRate: number,
+): void {
   highPassInPlace(buf, centerHz * 0.7, sampleRate);
   lowPassInPlace(buf, centerHz * 1.3, sampleRate);
 }
@@ -224,7 +236,7 @@ function sineOsc(
   startHz: number,
   endHz: number,
   sweepSec: number,
-  amplitude = 1
+  amplitude = 1,
 ): Float32Array {
   const out = new Float32Array(frames);
   const sweepFrames = Math.round(sweepSec * sampleRate);
@@ -247,7 +259,20 @@ function midiToHz(midi: number): number {
 
 /** Build the PITCH_ID → MIDI map once. */
 const PITCH_ID_TO_MIDI: Record<string, number> = (() => {
-  const names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+  const names = [
+    "C",
+    "C#",
+    "D",
+    "D#",
+    "E",
+    "F",
+    "F#",
+    "G",
+    "G#",
+    "A",
+    "A#",
+    "B",
+  ];
   const map: Record<string, number> = {};
   for (let octave = 2; octave <= 6; octave++) {
     for (let n = 0; n < 12; n++) {
@@ -260,7 +285,11 @@ const PITCH_ID_TO_MIDI: Record<string, number> = (() => {
 // ─── Piano DSP engine ─────────────────────────────────────────────────────────
 
 class PianoSynthEngine implements InstrumentEngine {
-  renderNote(pitchId: string, durationSec: number, sampleRate: number): [Float32Array, Float32Array] {
+  renderNote(
+    pitchId: string,
+    durationSec: number,
+    sampleRate: number,
+  ): [Float32Array, Float32Array] {
     const midi = PITCH_ID_TO_MIDI[pitchId];
     if (midi === undefined) {
       const empty = new Float32Array(1);
@@ -279,9 +308,7 @@ class PianoSynthEngine implements InstrumentEngine {
     for (let i = 0; i < frames; i++) {
       // Triangle approximation: sin - sin(3x)/9 + sin(5x)/25 ...
       fundamental[i] =
-        Math.sin(phase1) -
-        Math.sin(3 * phase1) / 9 +
-        Math.sin(5 * phase1) / 25;
+        Math.sin(phase1) - Math.sin(3 * phase1) / 9 + Math.sin(5 * phase1) / 25;
       phase1 += (2 * Math.PI * freq) / sampleRate;
       if (phase1 > 2 * Math.PI) phase1 -= 2 * Math.PI;
     }
@@ -326,20 +353,44 @@ class PianoSynthEngine implements InstrumentEngine {
 // ─── Drum DSP engine ──────────────────────────────────────────────────────────
 
 class DrumSynthEngine implements InstrumentEngine {
-  renderNote(pitchId: string, _durationSec: number, sampleRate: number): [Float32Array, Float32Array] {
+  renderNote(
+    pitchId: string,
+    _durationSec: number,
+    sampleRate: number,
+  ): [Float32Array, Float32Array] {
     let mono: Float32Array;
 
     switch (pitchId) {
-      case "kick":         mono = this.renderKick(sampleRate);              break;
-      case "snare":        mono = this.renderSnare(sampleRate);             break;
-      case "hihat-open":   mono = this.renderHiHat(sampleRate, true);       break;
-      case "hihat-closed": mono = this.renderHiHat(sampleRate, false);      break;
-      case "crash":        mono = this.renderCymbal(sampleRate, true);      break;
-      case "ride":         mono = this.renderCymbal(sampleRate, false);     break;
-      case "tom-hi":       mono = this.renderTom(sampleRate, "hi");         break;
-      case "tom-mid":      mono = this.renderTom(sampleRate, "mid");        break;
-      case "tom-lo":       mono = this.renderTom(sampleRate, "lo");         break;
-      default:             mono = new Float32Array(1);                      break;
+      case "kick":
+        mono = this.renderKick(sampleRate);
+        break;
+      case "snare":
+        mono = this.renderSnare(sampleRate);
+        break;
+      case "hihat-open":
+        mono = this.renderHiHat(sampleRate, true);
+        break;
+      case "hihat-closed":
+        mono = this.renderHiHat(sampleRate, false);
+        break;
+      case "crash":
+        mono = this.renderCymbal(sampleRate, true);
+        break;
+      case "ride":
+        mono = this.renderCymbal(sampleRate, false);
+        break;
+      case "tom-hi":
+        mono = this.renderTom(sampleRate, "hi");
+        break;
+      case "tom-mid":
+        mono = this.renderTom(sampleRate, "mid");
+        break;
+      case "tom-lo":
+        mono = this.renderTom(sampleRate, "lo");
+        break;
+      default:
+        mono = new Float32Array(1);
+        break;
     }
 
     return [mono, mono.slice()];
@@ -365,7 +416,7 @@ class DrumSynthEngine implements InstrumentEngine {
 
     // Body: pitch sweep 200 → 80 Hz over 80 ms
     const body = sineOsc(frames, sampleRate, 200, 80, 0.08, 0.4);
-    applyExpDecay(body, sampleRate, 1.0, 0.1);
+    applyExpDecay(body, sampleRate, 1, 0.1);
 
     // Mix
     for (let i = 0; i < frames; i++) noise[i] += body[i];
@@ -383,7 +434,7 @@ class DrumSynthEngine implements InstrumentEngine {
   }
 
   private renderCymbal(sampleRate: number, isCrash: boolean): Float32Array {
-    const dur = isCrash ? 1.5 : 1.0;
+    const dur = isCrash ? 1.5 : 1;
     const frames = Math.ceil((dur + 0.05) * sampleRate);
     const noise = new Float32Array(frames);
     fillNoise(noise);
@@ -394,7 +445,10 @@ class DrumSynthEngine implements InstrumentEngine {
     return noise;
   }
 
-  private renderTom(sampleRate: number, variant: "hi" | "mid" | "lo"): Float32Array {
+  private renderTom(
+    sampleRate: number,
+    variant: "hi" | "mid" | "lo",
+  ): Float32Array {
     const freqMap = { hi: 180, mid: 130, lo: 90 } as const;
     const endFreq = freqMap[variant];
     const startFreq = endFreq * 1.5;
@@ -413,7 +467,7 @@ class DrumSynthEngine implements InstrumentEngine {
  * available.  The registry is keyed by SynthInstrumentId so the worker loop
  * never needs to change.
  */
-const ENGINES: Record<SynthInstrumentId, InstrumentEngine> = {
+const ENGINES: Record<MusicInstrumentId, InstrumentEngine> = {
   piano: new PianoSynthEngine(),
   drums: new DrumSynthEngine(),
 };
@@ -425,11 +479,11 @@ const ENGINES: Record<SynthInstrumentId, InstrumentEngine> = {
  * When samples are introduced the key will include a sample-set version/hash.
  */
 function noteFingerprint(
-  instrumentId: SynthInstrumentId,
+  instrumentId: MusicInstrumentId,
   pitchId: string,
   durationBeats: number,
   bpm: number,
-  sampleRate: number
+  sampleRate: number,
 ): string {
   return `${instrumentId}:${pitchId}:${durationBeats}:${bpm}:${sampleRate}`;
 }
@@ -456,7 +510,13 @@ function renderTrack(req: SynthRequest): SynthResponse {
   // Empty track — return a silent 1-sample buffer.
   if (notes.length === 0) {
     const silent = new Float32Array(1);
-    return { trackId, seqNum, left: silent, right: silent.slice(), empty: true };
+    return {
+      trackId,
+      seqNum,
+      left: silent,
+      right: silent.slice(),
+      empty: true,
+    };
   }
 
   const engine = ENGINES[instrumentId];
@@ -466,7 +526,13 @@ function renderTrack(req: SynthRequest): SynthResponse {
   for (const note of notes) {
     if (isCancelled(trackId, seqNum)) break;
 
-    const fp = noteFingerprint(instrumentId, note.pitchId, note.durationBeats, bpm, sampleRate);
+    const fp = noteFingerprint(
+      instrumentId,
+      note.pitchId,
+      note.durationBeats,
+      bpm,
+      sampleRate,
+    );
     if (!noteCache.has(fp)) {
       const durationSec = note.durationBeats * secPerBeat;
       const [l, r] = engine.renderNote(note.pitchId, durationSec, sampleRate);
@@ -477,13 +543,25 @@ function renderTrack(req: SynthRequest): SynthResponse {
   if (isCancelled(trackId, seqNum)) {
     // Return empty — the main thread will discard this response.
     const silent = new Float32Array(1);
-    return { trackId, seqNum, left: silent, right: silent.slice(), empty: true };
+    return {
+      trackId,
+      seqNum,
+      left: silent,
+      right: silent.slice(),
+      empty: true,
+    };
   }
 
   // Step 2 — determine the total output length.
   let totalFrames = 0;
   for (const note of notes) {
-    const fp = noteFingerprint(instrumentId, note.pitchId, note.durationBeats, bpm, sampleRate);
+    const fp = noteFingerprint(
+      instrumentId,
+      note.pitchId,
+      note.durationBeats,
+      bpm,
+      sampleRate,
+    );
     const cached = noteCache.get(fp);
     if (!cached) continue;
     const startFrame = Math.round(note.startBeat * secPerBeat * sampleRate);
@@ -500,7 +578,13 @@ function renderTrack(req: SynthRequest): SynthResponse {
   const masterR = new Float64Array(totalFrames);
 
   for (const note of notes) {
-    const fp = noteFingerprint(instrumentId, note.pitchId, note.durationBeats, bpm, sampleRate);
+    const fp = noteFingerprint(
+      instrumentId,
+      note.pitchId,
+      note.durationBeats,
+      bpm,
+      sampleRate,
+    );
     const cached = noteCache.get(fp);
     if (!cached) continue;
 
@@ -530,6 +614,11 @@ function renderTrack(req: SynthRequest): SynthResponse {
 // ─── Worker message handler ───────────────────────────────────────────────────
 
 self.addEventListener("message", (e: MessageEvent<SynthRequest>) => {
+  // Verify the message origin - only accept messages from the same origin
+  if (e.origin !== "" && e.origin !== self.location.origin) {
+    return;
+  }
+
   const req = e.data;
 
   // Register this as the latest seqNum for the track — any in-progress render

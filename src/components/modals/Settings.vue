@@ -206,13 +206,17 @@ const handleClose = () => {
           </select>
         </label>
 
+        <div class="divider my-0"></div>
+
         <!-- Audio processing -->
         <div class="flex flex-col gap-2">
-          <span class="text-sm font-medium">Audio processing</span>
-          <p class="text-xs opacity-60">
-            Disable these when overdubbing (recording while tracks play back).
-            Using headphones is recommended when they are off.
-          </p>
+          <div class="flex flex-col gap-0.5">
+            <span class="text-sm font-medium">Audio processing</span>
+            <p class="text-xs text-base-content/50">
+              Disable when overdubbing (recording while tracks play back).
+              Headphones recommended when these are off.
+            </p>
+          </div>
           <label class="flex items-center gap-3 cursor-pointer">
             <input
               type="checkbox"
@@ -250,6 +254,7 @@ const handleClose = () => {
           v-on:click="handleApply"
           :disabled="isLoading"
         >
+          <i v-if="isLoading" class="iconify mdi--loading animate-spin size-4" />
           Apply
         </button>
       </div>

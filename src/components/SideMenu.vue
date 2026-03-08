@@ -54,7 +54,8 @@ const handleSettingsClose = () => {
         </div>
         <!-- Menu items -->
         <ul class="w-full menu flex-1 py-2">
-          <li>
+          <slot name="menu-items" />
+          <li class="border-t border-base-300/40 mt-1 pt-1">
             <a class="flex gap-3 items-center py-2.5 text-base" v-on:click="handleSettingsOpen">
               <i class="iconify mdi--cog-outline size-5"></i>
               Settings

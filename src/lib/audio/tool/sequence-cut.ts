@@ -1,8 +1,10 @@
 import type { AudioTool } from "../tools";
 
-export const sequenceCutToolKey = "sequence-cut@tool";
+export const sequenceCutToolKey = "sequence-cut@tool" as const;
 
-export function createSequenceCutTool(options?: { onInteract?: () => void }): AudioTool {
+export function createSequenceCutTool(options?: {
+  onInteract?: () => void;
+}): AudioTool {
   let abortController: AbortController | null = null;
 
   return {
@@ -11,9 +13,7 @@ export function createSequenceCutTool(options?: { onInteract?: () => void }): Au
     },
 
     registerHandlers(sequence, target) {
-      if (!abortController) {
-        abortController = new AbortController();
-      }
+      abortController ??= new AbortController();
 
       const signal = abortController.signal;
 
@@ -32,7 +32,7 @@ export function createSequenceCutTool(options?: { onInteract?: () => void }): Au
 
           track.removeSequence(sequence.id);
         },
-        { signal }
+        { signal },
       );
     },
 

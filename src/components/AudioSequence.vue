@@ -3,13 +3,13 @@ import { inject, onMounted, onBeforeUnmount, ref } from "vue";
 
 import Waveform from "./Waveform.vue";
 import { toolsKey } from "../lib/provider-keys";
-import type { AudioSequence } from "../lib/audio/sequence";
+import type { BufferedAudioSequence } from "../lib/audio/sequence";
 import type { Tools } from "../lib/audio/tools";
 
 const props = defineProps<{
   baseWidth: number;
   cursorPosition: number;
-  sequence: AudioSequence<any>;
+  sequence: BufferedAudioSequence<any>;
   muted: boolean;
 }>();
 
@@ -52,8 +52,7 @@ onBeforeUnmount(() => {
     class="absolute top-0 h-full"
     :style="{
       left: `${sequence.time * baseWidth}px`,
-      minWidth: `${sequence.playbackDuration * baseWidth}px`,
-      maxWidth: `${sequence.playbackDuration * baseWidth}px`,
+      width: `${sequence.playbackDuration * baseWidth}px`,
     }"
   >
     <!--
@@ -68,6 +67,7 @@ onBeforeUnmount(() => {
       color="var(--color-base-content)"
       :current-time="cursorPosition - sequence.time * baseWidth"
       :audio-buffer="sequenceBuffer"
+      :pixel-width="sequence.playbackDuration * baseWidth"
       :disabled="muted"
     />
   </div>

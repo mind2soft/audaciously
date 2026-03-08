@@ -15,7 +15,20 @@
 
 /** Map from pitch id (e.g. "C4", "A#3") to MIDI note number. */
 const PITCH_ID_TO_MIDI: Record<string, number> = (() => {
-  const noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+  const noteNames = [
+    "C",
+    "C#",
+    "D",
+    "D#",
+    "E",
+    "F",
+    "F#",
+    "G",
+    "G#",
+    "A",
+    "A#",
+    "B",
+  ];
   const map: Record<string, number> = {};
   // MIDI 0 = C-1 in this convention (C4 = MIDI 60)
   for (let octave = 2; octave <= 6; octave++) {
@@ -46,7 +59,7 @@ export function playPianoNote(
   output: AudioNode,
   pitchId: string,
   startTime: number,
-  durationSec: number
+  durationSec: number,
 ): void {
   const midi = PITCH_ID_TO_MIDI[pitchId];
   if (midi === undefined) return;
@@ -93,7 +106,10 @@ export function playPianoNote(
 
 // ─── Drums ────────────────────────────────────────────────────────────────────
 
-function createNoiseBuffer(ctx: BaseAudioContext, durationSec: number): AudioBuffer {
+function createNoiseBuffer(
+  ctx: BaseAudioContext,
+  durationSec: number,
+): AudioBuffer {
   const sampleRate = ctx.sampleRate;
   const length = Math.ceil(sampleRate * durationSec);
   const buf = ctx.createBuffer(1, length, sampleRate);
@@ -104,7 +120,11 @@ function createNoiseBuffer(ctx: BaseAudioContext, durationSec: number): AudioBuf
   return buf;
 }
 
-function playKick(ctx: BaseAudioContext, output: AudioNode, startTime: number): void {
+function playKick(
+  ctx: BaseAudioContext,
+  output: AudioNode,
+  startTime: number,
+): void {
   // Kick: sine wave pitched from ~160 Hz down to ~40 Hz
   const osc = ctx.createOscillator();
   osc.type = "sine";
@@ -121,7 +141,11 @@ function playKick(ctx: BaseAudioContext, output: AudioNode, startTime: number): 
   osc.stop(startTime + 0.36);
 }
 
-function playSnare(ctx: BaseAudioContext, output: AudioNode, startTime: number): void {
+function playSnare(
+  ctx: BaseAudioContext,
+  output: AudioNode,
+  startTime: number,
+): void {
   // Snare: noise burst + tuned oscillator
   const noiseBuf = createNoiseBuffer(ctx, 0.3);
   const noiseSource = ctx.createBufferSource();
@@ -162,7 +186,7 @@ function playHiHat(
   ctx: BaseAudioContext,
   output: AudioNode,
   startTime: number,
-  isOpen: boolean
+  isOpen: boolean,
 ): void {
   const dur = isOpen ? 0.5 : 0.08;
   const noiseBuf = createNoiseBuffer(ctx, dur + 0.05);
@@ -184,8 +208,13 @@ function playHiHat(
   noiseSource.stop(startTime + dur + 0.01);
 }
 
-function playCymbal(ctx: BaseAudioContext, output: AudioNode, startTime: number, isCrash: boolean): void {
-  const dur = isCrash ? 1.5 : 1.0;
+function playCymbal(
+  ctx: BaseAudioContext,
+  output: AudioNode,
+  startTime: number,
+  isCrash: boolean,
+): void {
+  const dur = isCrash ? 1.5 : 1;
   const noiseBuf = createNoiseBuffer(ctx, dur + 0.05);
   const noiseSource = ctx.createBufferSource();
   noiseSource.buffer = noiseBuf;
@@ -215,7 +244,7 @@ function playTom(
   ctx: BaseAudioContext,
   output: AudioNode,
   startTime: number,
-  variant: "hi" | "mid" | "lo"
+  variant: "hi" | "mid" | "lo",
 ): void {
   const freqMap = { hi: 180, mid: 130, lo: 90 } as const;
   const startFreq = freqMap[variant] * 1.5;
@@ -248,18 +277,28 @@ export function playDrumHit(
   ctx: BaseAudioContext,
   output: AudioNode,
   pitchId: string,
-  startTime: number
+  startTime: number,
 ): void {
   switch (pitchId) {
-    case "kick":       return playKick(ctx, output, startTime);
-    case "snare":      return playSnare(ctx, output, startTime);
-    case "hihat-open": return playHiHat(ctx, output, startTime, true);
-    case "hihat-closed": return playHiHat(ctx, output, startTime, false);
-    case "crash":      return playCymbal(ctx, output, startTime, true);
-    case "ride":       return playCymbal(ctx, output, startTime, false);
-    case "tom-hi":     return playTom(ctx, output, startTime, "hi");
-    case "tom-mid":    return playTom(ctx, output, startTime, "mid");
-    case "tom-lo":     return playTom(ctx, output, startTime, "lo");
-    default:           break; // unknown pad — silently ignore
+    case "kick":
+      return playKick(ctx, output, startTime);
+    case "snare":
+      return playSnare(ctx, output, startTime);
+    case "hihat-open":
+      return playHiHat(ctx, output, startTime, true);
+    case "hihat-closed":
+      return playHiHat(ctx, output, startTime, false);
+    case "crash":
+      return playCymbal(ctx, output, startTime, true);
+    case "ride":
+      return playCymbal(ctx, output, startTime, false);
+    case "tom-hi":
+      return playTom(ctx, output, startTime, "hi");
+    case "tom-mid":
+      return playTom(ctx, output, startTime, "mid");
+    case "tom-lo":
+      return playTom(ctx, output, startTime, "lo");
+    default:
+      break; // unknown pad — silently ignore
   }
 }

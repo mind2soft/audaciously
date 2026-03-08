@@ -27,6 +27,11 @@ Under the hood everything runs on the raw [Web Audio API](https://developer.mozi
 - Master volume with up to **3× boost** (300%)
 - Real-time output waveform display
 
+### Instrument tracks
+- Add note-based instrument tracks alongside recorded audio tracks
+- Built-in instruments: piano, drums, and more
+- **Piano roll editor** for placing and editing notes with precision
+
 ### Editing tools
 | Tool | What it does |
 |------|--------------|
@@ -34,6 +39,17 @@ Under the hood everything runs on the raw [Web Audio API](https://developer.mozi
 | **Split** | Cut a sequence at any point into two independent clips |
 | **Move** | Drag a sequence to reposition it on the timeline |
 | **Cut** | Remove a sequence from its track |
+
+### Projects
+- **Auto-save** keeps your work safe as you go — no manual save required
+- Projects persist across browser sessions via **IndexedDB** (no server, no account)
+- **Project browser** — open, rename, and delete saved projects from one place
+- **AWP import/export** — share projects as `.awp` (Audaciously Web Project) files
+- **Save indicator** shows auto-save status at a glance
+- **Storage dashboard** displays IndexedDB usage and available quota
+
+### Export
+- Export your mix to **WAV** or **MP3** via a dedicated export dialog
 
 ### Settings
 - Choose your **input device** (microphone) and **output device** (speakers / headphones)
@@ -44,6 +60,7 @@ Under the hood everything runs on the raw [Web Audio API](https://developer.mozi
 - Waveforms computed as SVG paths in a **Web Worker** — no main-thread blocking
 - Custom **stereo balance node** built on top of the Web Audio graph (the API doesn't ship one)
 - Zero audio libraries — pure `AudioContext`, `GainNode`, `AnalyserNode`, `AudioBufferSourceNode`, `MediaRecorder`
+- Project data stored entirely client-side via **Dexie** (IndexedDB wrapper) — nothing leaves your browser
 
 ---
 
@@ -55,6 +72,7 @@ Under the hood everything runs on the raw [Web Audio API](https://developer.mozi
 | Language | [TypeScript 5](https://www.typescriptlang.org/) |
 | Styling | [Tailwind CSS 4](https://tailwindcss.com/) + [DaisyUI 5](https://v5.daisyui.com/) |
 | Build | [Vite 6](https://vite.dev/) |
+| Persistence | [Dexie](https://dexie.org/) (IndexedDB wrapper) |
 | Icons | [Iconify / Material Design Icons](https://icon-sets.iconify.design/mdi/) |
 | CI / CD | GitHub Actions → GitHub Pages |
 | License | GPL-3.0 |
@@ -110,9 +128,6 @@ Audaciously requires a modern browser with full Web Audio API support.
 Things that are not yet implemented but are planned:
 
 - **Audio filters** — fade in/out, equaliser, normalise, pitch shift, noise reduction
-- **Per-sequence playback speed** control
-- **Save and load projects** (JSON or binary format)
-- **Export** to WAV, MP3, OGG, and other formats
 - **Paste operations** — splice, fill, overwrite
 - **Scrolling and zooming** improvements on the timeline
 

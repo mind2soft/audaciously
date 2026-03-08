@@ -1,12 +1,12 @@
 import { nanoid } from "nanoid";
-import { createEmitter, type Emitter } from "../emitter";
-import { trackPropertySymbol, type AudioSequence } from "./sequence";
-
-export type AudioTrackPlayOptions = {
-  output?: AudioNode;
-  currentTime?: number;
-  startTime?: number;
-};
+import { createEmitter } from "../../emitter";
+import { checkSequenceOverlap } from "../sequence/utils";
+import type {
+  AudioTrack,
+  AudioTrackDispatch,
+  AudioTrackEventMap,
+} from "./index";
+import { trackPropertySymbol, type AudioSequence } from "../sequence/index";
 
 interface AudioTrackInternal {
   id: string;
@@ -14,80 +14,22 @@ interface AudioTrackInternal {
   muted: boolean;
   volume: number;
   balance: number;
-  sequences: AudioSequence<any>[];
+  sequences: AudioSequence<any, any>[];
   activeGain?: GainNode;
   activePanner?: StereoPannerNode;
 }
 
-interface AudioTrackEvent<EventType extends string> {
-  type: EventType;
-  track: AudioTrack;
-}
+type AudioTrackSupplemental<Kind, Track extends AudioTrack<Kind>> = (
+  base: AudioTrack<Kind>,
+  dispatchEvent: AudioTrackDispatch<Kind>,
+) => Omit<Track, keyof AudioTrack<Kind>>;
 
-type AudioTrackEventMap = {
-  play: (event: AudioTrackEvent<"play">) => void;
-  stop: (event: AudioTrackEvent<"stop">) => void;
-  change: (event: AudioTrackEvent<"change">) => void;
-};
-
-export interface AudioTrack extends Emitter<AudioTrackEventMap> {
-  readonly id: string;
-  readonly isPlaying: boolean;
-
-  readonly name: string;
-  readonly duration: number;
-
-  locked: boolean;
-  muted: boolean;
-  volume: number;
-  balance: number;
-
-  addSequence<Type extends string>(sequence: AudioSequence<Type>): void;
-  countSequences(): number;
-  getSequence<Type extends string>(id: string): AudioSequence<Type> | void;
-  getSequences<Type extends string>(): Iterable<AudioSequence<Type>>;
-  removeSequence<Type extends string>(
-    sequence: AudioSequence<Type> | string
-  ): boolean;
-
-  /**
-   * Start track playback, resolve when ended
-   */
-  play(context: AudioContext, options?: AudioTrackPlayOptions): Promise<void>;
-  seek(time: number): void;
-  stop(): void;
-}
-
-function checkOverlap(
-  a: AudioSequence<any>,
-  b: AudioSequence<any>,
-  tolerance = 0.001
-) {
-  const a1 = a.time;
-  const a2 = a1 + a.playbackDuration;
-  const b1 = b.time;
-  const b2 = b1 + b.playbackDuration;
-  const overlap =
-    (a1 > b1 + tolerance && a1 < b2 - tolerance) ||
-    (b1 > a1 + tolerance && b1 < a2 - tolerance);
-
-  if (overlap)
-    console.warn(
-      "Overlap detected",
-      a1,
-      a2,
-      b1,
-      b2,
-      a1 > b1 + tolerance,
-      a1 < b2 - tolerance,
-      b1 > a1 + tolerance,
-      b1 < a2 - tolerance
-    );
-
-  return overlap;
-}
-
-export const createAudioTrack = (name: string): AudioTrack => {
+export const createAudioTrack = <Kind, Track extends AudioTrack<Kind>>(
+  kind: Kind,
+  initialName: string,
+  supplmental?: AudioTrackSupplemental<Kind, Track>,
+): Track => {
+  let name = initialName;
   const internal: AudioTrackInternal = {
     id: nanoid(),
     locked: false,
@@ -97,11 +39,11 @@ export const createAudioTrack = (name: string): AudioTrack => {
     sequences: [],
   };
 
-  const { dispatchEvent, ...emitter } = createEmitter<AudioTrackEventMap>(
+  const { dispatchEvent, ...emitter } = createEmitter<AudioTrackEventMap<Kind>>(
     (event) => {
       event.track = track;
       return event;
-    }
+    },
   );
 
   const handleSequenceStop = () => {
@@ -122,9 +64,13 @@ export const createAudioTrack = (name: string): AudioTrack => {
     dispatchEvent({ type: "change" });
   };
 
-  const track: AudioTrack = {
+  const track: AudioTrack<Kind> = {
     get id() {
       return internal.id;
+    },
+
+    get kind(): Kind {
+      return kind;
     },
 
     get isPlaying() {
@@ -133,6 +79,10 @@ export const createAudioTrack = (name: string): AudioTrack => {
 
     get name() {
       return name;
+    },
+    set name(value) {
+      name = value;
+      dispatchEvent({ type: "change" });
     },
 
     get duration() {
@@ -198,7 +148,7 @@ export const createAudioTrack = (name: string): AudioTrack => {
       }
 
       for (const seq of internal.sequences) {
-        if (checkOverlap(seq, sequence)) {
+        if (checkSequenceOverlap(seq, sequence)) {
           throw new Error("audio sequence overlap");
         }
       }
@@ -225,9 +175,7 @@ export const createAudioTrack = (name: string): AudioTrack => {
       }
     },
     removeSequence(sequence) {
-      const seqId = (sequence =
-        typeof sequence === "string" ? sequence : sequence.id);
-
+      const seqId = typeof sequence === "string" ? sequence : sequence.id;
       const seqIndex = internal.sequences.findIndex((s) => s.id === seqId);
       const foundSeq = seqIndex >= 0;
 
@@ -252,6 +200,14 @@ export const createAudioTrack = (name: string): AudioTrack => {
         throw new Error("already playing audio track");
       }
 
+      // Nothing to play yet (e.g. instrument track before its first render
+      // completes).  Return early so that syncTrack() can call base.play()
+      // again once the AudioBuffer is ready without hitting the activeGain
+      // guard above.
+      if (internal.sequences.length === 0) {
+        return;
+      }
+
       const promises: Promise<void>[] = [];
       const currentTime = options.currentTime ?? context.currentTime;
       const startTime = options.startTime ?? 0;
@@ -274,7 +230,7 @@ export const createAudioTrack = (name: string): AudioTrack => {
             output: gainNode,
             currentTime,
             startTime,
-          })
+          }),
         );
       }
 
@@ -293,10 +249,39 @@ export const createAudioTrack = (name: string): AudioTrack => {
       for (const sequence of internal.sequences) {
         sequence.stop();
       }
+
+      // Always tear down the gain/panner nodes on an explicit stop so that
+      // internal.activeGain is never left set after playback ends.  Without
+      // this, a subsequent call to play() would throw "already playing audio
+      // track" because the guard at the top of play() checks activeGain.
+      if (internal.activeGain) {
+        internal.activeGain.disconnect();
+        internal.activeGain = undefined;
+
+        internal.activePanner?.disconnect();
+        internal.activePanner = undefined;
+      }
     },
 
     ...emitter,
   };
 
-  return track;
+  const supplementalProps = supplmental?.(
+    track,
+    dispatchEvent as unknown as AudioTrackDispatch<Kind>,
+  );
+
+  // Use Object.defineProperties so that getter/setter pairs from the
+  // supplemental (e.g. `showWaveform`, `bpm`, `notes`, `isPlaying`) are
+  // preserved as live accessors rather than being snapshotted as plain
+  // values by an object spread.
+  const result = Object.create(null) as Track;
+  Object.defineProperties(result, {
+    ...Object.getOwnPropertyDescriptors(track),
+    ...(supplementalProps
+      ? Object.getOwnPropertyDescriptors(supplementalProps)
+      : {}),
+  });
+
+  return result;
 };

@@ -1,5 +1,9 @@
 import { createEmitter, type Emitter } from "../emitter";
-import type { AudioSequence } from "./sequence";
+import type {
+  AudioSequence,
+  BufferedAudioSequence,
+  BufferedAudioSequenceType,
+} from "./sequence";
 
 export type ToolsOptions = {
   tools: AudioTool[];
@@ -15,8 +19,11 @@ type ToolsEventMap = {
 };
 
 export interface Tools extends Emitter<ToolsEventMap> {
-  registerSequence(sequence: AudioSequence<any>, target: HTMLElement): void;
-  unregisterSequence(sequence: AudioSequence<any>): void;
+  registerSequence<Kind>(
+    sequence: BufferedAudioSequence<Kind>,
+    target: HTMLElement,
+  ): void;
+  unregisterSequence<Kind>(sequence: BufferedAudioSequence<Kind>): void;
   selectTool(toolKey: string): void;
   getSelected(): AudioTool;
 }
@@ -24,7 +31,10 @@ export interface Tools extends Emitter<ToolsEventMap> {
 export interface AudioTool {
   readonly key: string;
 
-  registerHandlers(sequence: AudioSequence<any>, target: HTMLElement): void;
+  registerHandlers<Kind>(
+    sequence: AudioSequence<Kind, BufferedAudioSequenceType>,
+    target: HTMLElement,
+  ): void;
   unregisterHandlers(): void;
 }
 
@@ -33,9 +43,9 @@ export function createTools(options: ToolsOptions) {
     throw new Error("no tools provided");
   }
 
-  const sequences = new Map<AudioSequence<any>, HTMLElement>();
+  const sequences = new Map<BufferedAudioSequence<any>, HTMLElement>();
   const toolmap = new Map<string, AudioTool>(
-    options.tools.map((tool) => [tool.key, tool])
+    options.tools.map((tool) => [tool.key, tool]),
   );
   let selectedKey: string = options.defaultToolKey ?? options.tools[0].key;
 
@@ -43,15 +53,15 @@ export function createTools(options: ToolsOptions) {
     throw new Error(`invalid default tool : ${selectedKey}`);
   }
 
-  function bindSequenceHandlers(
-    sequence: AudioSequence<any>,
-    target: HTMLElement
+  function bindSequenceHandlers<Kind>(
+    sequence: BufferedAudioSequence<Kind>,
+    target: HTMLElement,
   ) {
     toolmap.get(selectedKey)?.registerHandlers(sequence, target);
   }
 
   const { dispatchEvent, ...emitter } = createEmitter<ToolsEventMap>(
-    (event) => event
+    (event) => event,
   );
 
   const tools: Tools = {

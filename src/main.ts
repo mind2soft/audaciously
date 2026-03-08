@@ -5,6 +5,7 @@ import { createRecorder } from "./lib/audio/recorder";
 import {
   playerKey,
   recorderKey,
+  storageKey,
   timelineKey,
   toolsKey,
 } from "./lib/provider-keys";
@@ -19,6 +20,7 @@ import {
   loadSettings,
   settingsToMediaStreamConstraints,
 } from "./lib/settings";
+import { createStorageService } from "./lib/storage/storage-service";
 
 // Restore persisted settings before the app mounts so every component sees
 // the correct initial state without any timing gymnastics.
@@ -35,6 +37,7 @@ player.volume = settings.volume;
 void player.setOutputDeviceId(settings.outputDeviceId);
 
 const timeline = createTimeline();
+const storage = createStorageService();
 
 const interruptPlayback = () => {
   if (player.state === "playing") {
@@ -45,6 +48,7 @@ const interruptPlayback = () => {
 createApp(App)
   .provide(recorderKey, recorder)
   .provide(playerKey, player)
+  .provide(storageKey, storage)
   .provide(timelineKey, timeline) // provide timeline instance
   .provide(
     toolsKey,

@@ -73,7 +73,7 @@ export const createTimeline = (options?: TimelineOptions): Timeline => {
     (event) => {
       event.timeline = timeline;
       return event;
-    }
+    },
   );
 
   const timeline: Timeline = {
@@ -133,7 +133,7 @@ export const createTimeline = (options?: TimelineOptions): Timeline => {
       const currentOffset =
         (offsetWidth / timeStep) * currentTime - scrollOffset;
       let offset = -(scrollOffset % offsetWidth) - offsetWidth;
-      let time = ((scrollOffset / offsetWidth) | 0) * timeStep - timeStep;
+      let time = Math.trunc(scrollOffset / offsetWidth) * timeStep - timeStep;
       let lblText: string;
       let lblMetrics: TextMetrics;
       let lblPrevLimit: number = -offsetWidth;

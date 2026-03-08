@@ -276,9 +276,33 @@ const createRecorder = (options?: RecorderOptions): Recorder => {
         throw new Error("recorder: permission denied");
       }
 
-      const mediaStream = await navigator.mediaDevices.getUserMedia(
-        internal.mediaStreamConstraints
-      );
+      let mediaStream: MediaStream | null = null;
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia(
+          internal.mediaStreamConstraints
+        );
+      } catch (err) {
+        if (err instanceof OverconstrainedError) {
+          // One or more custom constraints (e.g. echoCancellation: false) are
+          // not supported by this device/browser.  Retry with the bare minimum
+          // so recording can still proceed.
+          console.warn(
+            "recorder: OverconstrainedError – retrying with plain { audio: true }",
+            err
+          );
+          try {
+            mediaStream = await navigator.mediaDevices.getUserMedia({
+              audio: true,
+            });
+          } catch (retryErr) {
+            updatePermissionState("denied");
+            throw retryErr;
+          }
+        } else {
+          updatePermissionState("denied");
+          throw err;
+        }
+      }
 
       if (mediaStream) {
         const audioContext = initAudioContext();

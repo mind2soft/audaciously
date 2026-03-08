@@ -1,0 +1,11 @@
+import { recordedTrackKind, type RecordedTrackKind } from "./index";
+import { createAudioTrack } from "../track";
+import type { AudioTrack } from "../index";
+
+export interface RecordedAudioTrack extends AudioTrack<RecordedTrackKind> {
+  readonly kind: RecordedTrackKind;
+}
+
+export function createRecordedTrack(name: string): RecordedAudioTrack {
+  return createAudioTrack(recordedTrackKind, name);
+}

@@ -1,40 +1,49 @@
 <script setup lang="ts">
-import { onUpdated, ref } from "vue";
+import { nextTick, ref } from "vue";
 
-const selectedRef = ref<boolean>(false);
-const projectNameRef = ref<string>("Untitled project"); // TODO: bind this to a real model
+const model = defineModel<string>({ default: "Untitled Project" });
+
+const editing = ref(false);
 const inputRef = ref<HTMLInputElement>();
 
-const handleSelectInput = () => {
-  selectedRef.value = true;
-};
-const handleUnselectInput = () => {
-  selectedRef.value = false;
+const startEditing = async () => {
+  editing.value = true;
+  await nextTick();
+  inputRef.value?.select();
 };
 
-onUpdated(() => {
-  if (selectedRef.value && inputRef.value) {
-    inputRef.value.focus();
+const stopEditing = () => {
+  // Commit empty → revert to previous or default
+  if (!model.value.trim()) {
+    model.value = "Untitled Project";
   }
-});
+  editing.value = false;
+};
+
+const handleKeydown = (e: KeyboardEvent) => {
+  if (e.key === "Enter") stopEditing();
+  if (e.key === "Escape") {
+    editing.value = false;
+  }
+};
 </script>
 
 <template>
-  <label class="ml-1 input input-ghost" v-if="selectedRef">
-    <input
-      ref="inputRef"
-      type="text"
-      required
-      placeholder="Project name"
-      pattern="[A-Za-z][A-Za-z0-9\-]*"
-      minlength="3"
-      maxlength="30"
-      class="text-xl"
-      v-model="projectNameRef"
-      v-on:blur="handleUnselectInput"
-    />
-  </label>
-  <button v-else class="text-xl btn btn-ghost" v-on:click="handleSelectInput">
-    {{ projectNameRef }}
+  <input
+    v-if="editing"
+    ref="inputRef"
+    type="text"
+    class="input input-ghost text-xl font-semibold w-full max-w-xs"
+    v-model="model"
+    @blur="stopEditing"
+    @keydown="handleKeydown"
+  />
+  <button
+    v-else
+    class="btn btn-ghost text-xl font-semibold normal-case max-w-xs truncate"
+    :title="model"
+    @click="startEditing"
+  >
+    {{ model }}
   </button>
 </template>
