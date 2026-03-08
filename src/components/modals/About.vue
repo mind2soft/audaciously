@@ -29,55 +29,83 @@ onUpdated(() => {
 
 <template>
   <dialog ref="dialogRef" class="modal" @cancel.prevent="handleClose">
-    <div class="bg-base-300 modal-box">
-      <h3 class="mb-6 text-lg font-bold flex items-baseline gap-3">
-        {{ appName }}
-        <span class="text-sm font-normal text-base-content/50">v{{ appVersion }}</span>
-      </h3>
+      <div class="bg-base-300 modal-box max-w-md xl:max-w-2xl">
 
-      <div class="flex flex-col gap-4 overflow-y-auto max-h-80 text-sm">
-        <p>
-          This project was built using
-          <a class="link" href="https://vuejs.org/" target="_blank">Vue 3</a>
-          (Composition API) and
-          <a class="link" href="https://tailwindcss.com/" target="_blank">Tailwind CSS 4</a>
-          with
-          <a class="link" href="https://v5.daisyui.com/" target="_blank">DaisyUI v5</a>.
+      <!-- Identity header -->
+      <div class="flex flex-col items-center text-center gap-3 pb-5 border-b border-base-content/10">
+        <div class="w-14 h-14 rounded-2xl bg-primary/15 flex items-center justify-center">
+          <i class="iconify mdi--music-note text-primary text-3xl" />
+        </div>
+        <div>
+          <h2 class="text-xl font-bold tracking-tight">{{ appName }}</h2>
+          <p class="text-base-content/40 text-xs mt-0.5">v{{ appVersion }} · early preview</p>
+        </div>
+        <p class="text-sm text-base-content/60 leading-relaxed max-w-xs">
+          A free music studio that lives in your browser.
+          Record, compose, and mix — no install, no account, just music.
         </p>
-        <p>
-          The goal is to reproduce
-          <a class="link" href="https://www.audacityteam.org/" target="_blank">Audacity</a>,
-          or a similar audio recording app, in the browser.
-        </p>
+      </div>
 
-        <div class="flex flex-col gap-1.5">
-          <h5 class="font-semibold text-base-content/80">What's implemented</h5>
-          <ul class="list-disc list-outside pl-5 flex flex-col gap-1 text-base-content/70">
-            <li>Master volume with 2× volume boost</li>
-            <li>Recording from default microphone</li>
-            <li>Playback (seeking, pause, resume, stop, etc.)</li>
-            <li>Audio tools (split, move, cut)</li>
-            <li>Web Workers for background processing</li>
-          </ul>
+      <!-- Feature highlights -->
+      <div class="grid grid-cols-2 gap-4 py-5">
+        <div class="flex gap-3 items-start">
+          <div class="flex-shrink-0 w-8 h-8 rounded-lg bg-error/15 flex items-center justify-center">
+            <i class="iconify mdi--microphone text-error text-base" />
+          </div>
+          <div>
+            <p class="text-sm font-semibold leading-tight">Record anything</p>
+            <p class="text-xs text-base-content/50 mt-0.5 leading-snug">
+              Vocals, guitar, narration — captured straight from your mic.
+            </p>
+          </div>
         </div>
 
-        <div class="flex flex-col gap-1.5">
-          <h5 class="font-semibold text-base-content/80">Not yet completed</h5>
-          <ul class="list-disc list-outside pl-5 flex flex-col gap-1 text-base-content/70">
-            <li>Audio filters (fading, EQ, normalise, pitch, noise cancelling, etc.)</li>
-            <li>Per-sequence playback speed</li>
-            <li>Scrolling and zooming improvements</li>
-          </ul>
+        <div class="flex gap-3 items-start">
+          <div class="flex-shrink-0 w-8 h-8 rounded-lg bg-secondary/15 flex items-center justify-center">
+            <i class="iconify mdi--piano text-secondary text-base" />
+          </div>
+          <div>
+            <p class="text-sm font-semibold leading-tight">Compose with a piano roll</p>
+            <p class="text-xs text-base-content/50 mt-0.5 leading-snug">
+              Sketch melodies and chord progressions using built-in instruments.
+            </p>
+          </div>
         </div>
 
-        <div class="flex flex-col gap-1.5">
-          <h5 class="font-semibold text-base-content/80">Known issues</h5>
-          <ul class="list-disc list-outside pl-5 flex flex-col gap-1 text-base-content/70">
-            <li>Recording quality degrades when tracks are playing simultaneously</li>
-            <li>Splitting a sequence may not update the track display correctly</li>
-          </ul>
+        <div class="flex gap-3 items-start">
+          <div class="flex-shrink-0 w-8 h-8 rounded-lg bg-warning/15 flex items-center justify-center">
+            <i class="iconify mdi--tune-variant text-warning text-base" />
+          </div>
+          <div>
+            <p class="text-sm font-semibold leading-tight">Mix your tracks</p>
+            <p class="text-xs text-base-content/50 mt-0.5 leading-snug">
+              Layer sounds, tweak volumes and pan, shape the final mix.
+            </p>
+          </div>
+        </div>
+
+        <div class="flex gap-3 items-start">
+          <div class="flex-shrink-0 w-8 h-8 rounded-lg bg-success/15 flex items-center justify-center">
+            <i class="iconify mdi--content-save text-success text-base" />
+          </div>
+          <div>
+            <p class="text-sm font-semibold leading-tight">Your work is always saved</p>
+            <p class="text-xs text-base-content/50 mt-0.5 leading-snug">
+              Projects live in your browser — pick up right where you left off.
+            </p>
+          </div>
         </div>
       </div>
+
+      <!-- Footer -->
+      <p class="text-xs text-base-content/30 text-center pt-3 border-t border-base-content/10">
+        Free &amp; open source ·
+        <a
+          class="link link-hover"
+          href="https://www.gnu.org/licenses/gpl-3.0.html"
+          target="_blank"
+        >GPL-3.0</a>
+      </p>
 
       <div class="modal-action">
         <button class="btn" @click="handleClose">Close</button>
