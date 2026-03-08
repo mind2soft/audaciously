@@ -12,7 +12,7 @@
  * context (or an explicit effectScope) because it uses Vue watchEffect internally.
  */
 
-import { watchEffect, shallowReactive, effectScope, ref } from "vue";
+import { watchEffect, shallowReactive, effectScope, ref, watch } from "vue";
 import {
   type NoteDuration,
   type MusicInstrumentId,
@@ -31,6 +31,7 @@ import {
   type PlacedNote,
   type InstrumentTrackKind,
   type InstrumentAudioTrack,
+  type InstrumentTrackJSON,
   instrumentTrackKind,
 } from "./index";
 
@@ -53,6 +54,7 @@ const synthClient = createSynthWorkerClient();
 export function createInstrumentTrack(
   name: string,
   instrumentId: MusicInstrumentId,
+  id?: string,
 ): InstrumentAudioTrack {
   return createAudioTrack<InstrumentTrackKind, InstrumentAudioTrack>(
     instrumentTrackKind,
@@ -117,6 +119,13 @@ export function createInstrumentTrack(
 
           syncTrack();
         });
+
+        // Watch the notes array for in-place mutations (push/splice from the
+        // piano roll) that bypass the setter.  flush: "sync" ensures dirty
+        // tracking fires immediately, not after the next tick.
+        watch(notes, () => dispatchEvent({ type: "change" }), {
+          flush: "sync",
+        });
       });
 
       // ── Track object ─────────────────────────────────────────────────────────
@@ -131,30 +140,35 @@ export function createInstrumentTrack(
         },
         set timeSignature(value) {
           timeSignature = value;
+          dispatchEvent({ type: "change" });
         },
         get bpm() {
           return bpmRef.value;
         },
         set bpm(value) {
           bpmRef.value = value;
+          dispatchEvent({ type: "change" });
         },
         get notes() {
           return notes;
         },
         set notes(value) {
           notes.splice(0, notes.length, ...value);
+          // The watch(notes, …) above will fire, so no extra dispatchEvent here.
         },
         get selectedNoteType() {
           return selectedNoteType;
         },
         set selectedNoteType(value) {
           selectedNoteType = value;
+          dispatchEvent({ type: "change" });
         },
         get pitchScrollTop() {
           return pitchScrollTop;
         },
         set pitchScrollTop(value) {
           pitchScrollTop = value;
+          dispatchEvent({ type: "change" });
         },
         get showWaveform() {
           return showWaveform;
@@ -171,10 +185,26 @@ export function createInstrumentTrack(
           dispatchEvent({ type: "change" });
         },
 
+        toJSON(): InstrumentTrackJSON {
+          return {
+            ...base.toJSON(),
+            kind: instrumentTrackKind,
+            instrumentId,
+            bpm: bpmRef.value,
+            timeSignature: { ...timeSignature },
+            notes: notes.map((n) => ({ ...n })),
+            selectedNoteType,
+            pitchScrollTop,
+            showWaveform,
+            octaveRange: { ...octaveRange },
+          };
+        },
+
         destroy() {
           scope.stop();
         },
       };
     },
+    id,
   );
 }

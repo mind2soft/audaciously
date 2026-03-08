@@ -6,6 +6,11 @@ import {
   duplicateProject,
   getProjectSize,
   updateProjectMetadata,
+  upsertTrackRecord,
+  deleteTrackRecord,
+  upsertSequenceRecord,
+  deleteSequenceRecord,
+  upsertAudioBlob,
 } from "./project-repository";
 import {
   estimateStorage,
@@ -29,6 +34,13 @@ export interface StorageService {
   getProjectSize: typeof getProjectSize;
   updateProjectMetadata: typeof updateProjectMetadata;
 
+  // Granular ops (used by auto-save dirty state processing)
+  upsertTrackRecord: typeof upsertTrackRecord;
+  deleteTrackRecord: typeof deleteTrackRecord;
+  upsertSequenceRecord: typeof upsertSequenceRecord;
+  deleteSequenceRecord: typeof deleteSequenceRecord;
+  upsertAudioBlob: typeof upsertAudioBlob;
+
   // Storage quota
   estimateStorage: typeof estimateStorage;
   requestPersistence: typeof requestPersistence;
@@ -47,6 +59,11 @@ export function createStorageService(): StorageService {
     duplicateProject,
     getProjectSize,
     updateProjectMetadata,
+    upsertTrackRecord,
+    deleteTrackRecord,
+    upsertSequenceRecord,
+    deleteSequenceRecord,
+    upsertAudioBlob,
     estimateStorage,
     requestPersistence,
     checkAvailableSpace,

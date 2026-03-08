@@ -3,11 +3,29 @@ import type {
   MusicInstrumentId,
   OctaveRange,
 } from "../../../music/instruments";
-import type { AudioTrack } from "../index";
+import type { AudioTrack, AudioTrackJSON } from "../index";
 
 export type InstrumentTrackKind = typeof instrumentTrackKind;
 
 export const instrumentTrackKind = "instrument" as const;
+
+// ─── Serialization ─────────────────────────────────────────────────────────
+
+/**
+ * Plain JSON representation of an instrument track, extending the base
+ * AudioTrackJSON with all instrument-specific fields.
+ */
+export interface InstrumentTrackJSON extends AudioTrackJSON {
+  kind: "instrument";
+  instrumentId: MusicInstrumentId;
+  bpm: number;
+  timeSignature: TimeSignature;
+  notes: PlacedNote[];
+  selectedNoteType: NoteDuration;
+  pitchScrollTop: number;
+  showWaveform: boolean;
+  octaveRange: OctaveRange;
+}
 
 // ─── Time signature ───────────────────────────────────────────────────────────
 
@@ -47,6 +65,8 @@ export interface InstrumentAudioTrack extends AudioTrack<InstrumentTrackKind> {
   pitchScrollTop: number;
   showWaveform: boolean;
   octaveRange: OctaveRange;
+
+  toJSON(): InstrumentTrackJSON;
 
   /**
    * Tear down this track's internal render loop and reactive scope.

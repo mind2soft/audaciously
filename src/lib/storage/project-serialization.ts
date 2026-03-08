@@ -1,6 +1,5 @@
 import { nanoid } from "nanoid";
 import type { AudioTrack } from "../audio/track";
-import type { InstrumentAudioTrack } from "../audio/track/instrument";
 import type { BufferedAudioSequence } from "../audio/sequence";
 import { createRecordedTrack } from "../audio/track/recorded/recorded-track";
 import { createRecordedSequence } from "../audio/sequence/recorded/recorded-sequence";
@@ -48,29 +47,14 @@ export function serializeProject(
   let sortOrder = 0;
 
   for (const track of tracks) {
+    const trackJSON = track.toJSON();
     const trackRecord: TrackRecord = {
-      id: track.id,
+      ...(trackJSON as unknown as TrackRecord),
       projectId,
-      kind: track.kind as "recorded" | "instrument",
-      name: track.name,
-      volume: track.volume,
-      balance: track.balance,
-      muted: track.muted,
-      locked: track.locked,
       sortOrder: sortOrder++,
     };
 
-    if (track.kind === "instrument") {
-      const instr = track as InstrumentAudioTrack;
-      trackRecord.instrumentId = instr.instrumentId;
-      trackRecord.bpm = instr.bpm;
-      trackRecord.timeSignature = { ...instr.timeSignature };
-      trackRecord.notes = instr.notes.map((n) => ({ ...n }));
-      trackRecord.selectedNoteType = instr.selectedNoteType;
-      trackRecord.pitchScrollTop = instr.pitchScrollTop;
-      trackRecord.showWaveform = instr.showWaveform;
-      trackRecord.octaveRange = { ...instr.octaveRange };
-    } else if (track.kind === "recorded") {
+    if (track.kind === "recorded") {
       for (const seq of track.getSequences()) {
         const buffered = seq as BufferedAudioSequence<any>;
         const audioBlobId = nanoid();
@@ -159,7 +143,7 @@ function deserializeRecordedTrack(
   seqByTrack: Map<string, SequenceRecord[]>,
   audioBuffers: Map<string, AudioBuffer>,
 ): AudioTrack<any> {
-  const track = createRecordedTrack(record.name);
+  const track = createRecordedTrack(record.name, record.id);
   applyCommonTrackProps(track, record);
 
   const seqs = seqByTrack.get(record.id) ?? [];
@@ -169,7 +153,7 @@ function deserializeRecordedTrack(
     const buffer = audioBuffers.get(seqRecord.audioBlobId);
     if (!buffer) continue;
 
-    const seq = createRecordedSequence(buffer, seqRecord.time);
+    const seq = createRecordedSequence(buffer, seqRecord.time, seqRecord.id);
     seq.playbackRate = seqRecord.playbackRate ?? 1;
     track.addSequence(seq);
   }
@@ -182,7 +166,7 @@ function deserializeInstrumentTrack(
 ): AudioTrack<any> | null {
   if (!record.instrumentId) return null;
 
-  const track = createInstrumentTrack(record.name, record.instrumentId);
+  const track = createInstrumentTrack(record.name, record.instrumentId, record.id);
   applyCommonTrackProps(track, record);
 
   // Apply instrument-specific state. Setting these synchronously ensures
@@ -193,6 +177,7 @@ function deserializeInstrumentTrack(
   if (record.selectedNoteType) track.selectedNoteType = record.selectedNoteType;
   if (record.pitchScrollTop !== undefined) track.pitchScrollTop = record.pitchScrollTop;
   if (record.showWaveform !== undefined) track.showWaveform = record.showWaveform;
+  if (record.octaveRange) track.octaveRange = record.octaveRange;
 
   return track;
 }

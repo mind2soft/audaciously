@@ -1,6 +1,24 @@
 import type { Emitter } from "../../emitter";
 import type { AudioSequence } from "../sequence/index";
 
+// ─── Serialization ────────────────────────────────────────────────────────────
+
+/**
+ * Plain JSON representation of the base track properties.
+ * Specialised track types extend this with their own extra fields.
+ */
+export interface AudioTrackJSON {
+  id: string;
+  kind: string;
+  name: string;
+  volume: number;
+  balance: number;
+  muted: boolean;
+  locked: boolean;
+}
+
+// ─── Events ───────────────────────────────────────────────────────────────────
+
 export interface AudioTrackEvent<Kind, EventType extends string> {
   type: EventType;
   track: AudioTrack<Kind>;
@@ -51,4 +69,12 @@ export interface AudioTrack<Kind> extends Emitter<AudioTrackEventMap<Kind>> {
   play(context: AudioContext, options?: AudioTrackPlayOptions): Promise<void>;
   seek(time: number): void;
   stop(): void;
+
+  /**
+   * Return a plain JSON-serialisable snapshot of this track.
+   *
+   * Called automatically by `JSON.stringify`.  Specialised track types
+   * (instrument, recorded) override this to include their own extra fields.
+   */
+  toJSON(): AudioTrackJSON;
 }

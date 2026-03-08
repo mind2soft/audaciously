@@ -1,10 +1,14 @@
 import { nanoid } from "nanoid";
 import type { AudioPlayer } from "../audio/player";
 import type { ProjectMetadata } from "./project-metadata";
+import type { AudioTrackJSON } from "../audio/track";
+import type { AudioSequenceJSON } from "../audio/sequence";
 import {
   db,
   type ProjectRecord,
   type AudioBlobRecord,
+  type TrackRecord,
+  type SequenceRecord,
 } from "./db";
 import {
   serializeProject,
@@ -363,4 +367,176 @@ export async function updateProjectMetadata(
     ...metadata,
     updatedAt: new Date(),
   });
+}
+
+// ─── Granular track / sequence ops ───────────────────────────────────────────
+//
+// These are used by the auto-save path when only part of a project has changed,
+// avoiding the expensive full-replace (and re-compression) of saveProject().
+
+/**
+ * Insert or replace a single track record.
+ * Also bumps `projects.updatedAt` in the same transaction.
+ */
+export async function upsertTrackRecord(
+  projectId: string,
+  trackJSON: AudioTrackJSON,
+  sortOrder: number,
+): Promise<void> {
+  const record: TrackRecord = {
+    ...(trackJSON as unknown as TrackRecord),
+    projectId,
+    sortOrder,
+  };
+
+  await db.transaction("rw", db.projects, db.tracks, async () => {
+    await db.tracks.put(record);
+    await db.projects.update(projectId, { updatedAt: new Date() });
+  });
+}
+
+/**
+ * Delete a single track record (and its sequences) for a project.
+ * Also bumps `projects.updatedAt`.
+ */
+export async function deleteTrackRecord(
+  projectId: string,
+  trackId: string,
+): Promise<void> {
+  await db.transaction(
+    "rw",
+    db.projects,
+    db.tracks,
+    db.sequences,
+    db.audioBlobs,
+    async () => {
+      // Collect sequence IDs so we can delete their audio blobs too.
+      const seqs = await db.sequences.where("trackId").equals(trackId).toArray();
+      const blobIds = seqs
+        .map((s) => s.audioBlobId)
+        .filter((id): id is string => !!id);
+
+      await Promise.all([
+        db.tracks.delete(trackId),
+        db.sequences.where("trackId").equals(trackId).delete(),
+        ...(blobIds.length > 0
+          ? [db.audioBlobs.bulkDelete(blobIds)]
+          : []),
+      ]);
+
+      await db.projects.update(projectId, { updatedAt: new Date() });
+    },
+  );
+}
+
+/**
+ * Insert or replace a single sequence record (properties only, no audio blob).
+ * Use `upsertAudioBlob` when the buffer itself has changed.
+ * Also bumps `projects.updatedAt`.
+ */
+export async function upsertSequenceRecord(
+  projectId: string,
+  trackId: string,
+  seqJSON: AudioSequenceJSON,
+): Promise<void> {
+  const record: SequenceRecord = {
+    id: seqJSON.id,
+    trackId,
+    projectId,
+    time: seqJSON.time,
+    playbackRate: seqJSON.playbackRate,
+  };
+
+  await db.transaction("rw", db.projects, db.sequences, async () => {
+    await db.sequences.put(record);
+    await db.projects.update(projectId, { updatedAt: new Date() });
+  });
+}
+
+/**
+ * Delete a single sequence record (and its audio blob if any).
+ * Also bumps `projects.updatedAt`.
+ */
+export async function deleteSequenceRecord(
+  projectId: string,
+  sequenceId: string,
+): Promise<void> {
+  await db.transaction(
+    "rw",
+    db.projects,
+    db.sequences,
+    db.audioBlobs,
+    async () => {
+      const seq = await db.sequences.get(sequenceId);
+
+      await db.sequences.delete(sequenceId);
+
+      if (seq?.audioBlobId) {
+        await db.audioBlobs.delete(seq.audioBlobId);
+      }
+
+      await db.projects.update(projectId, { updatedAt: new Date() });
+    },
+  );
+}
+
+/**
+ * Compress and store the AudioBuffer for a recorded sequence.
+ *
+ * If a blob already exists for this sequence it is replaced in-place (same
+ * `audioBlobId`).  Otherwise a new blob ID is minted and the sequence record
+ * is updated to reference it.
+ *
+ * This is the slow path — called only when `DirtySequence.buffer === true`.
+ */
+export async function upsertAudioBlob(
+  projectId: string,
+  trackId: string,
+  seqJSON: AudioSequenceJSON,
+  buffer: AudioBuffer,
+): Promise<void> {
+  // Compress all channels in parallel.
+  const { sampleRate, numberOfChannels, length } = buffer;
+  const channelData: Blob[] = await Promise.all(
+    Array.from({ length: numberOfChannels }, (_, ch) =>
+      compressFloat32Array(buffer.getChannelData(ch)),
+    ),
+  );
+
+  await db.transaction(
+    "rw",
+    db.projects,
+    db.sequences,
+    db.audioBlobs,
+    async () => {
+      // Re-use existing audioBlobId or mint a new one.
+      const existing = await db.sequences.get(seqJSON.id);
+      const audioBlobId = existing?.audioBlobId ?? nanoid();
+
+      const blobRecord: AudioBlobRecord = {
+        id: audioBlobId,
+        projectId,
+        sampleRate,
+        numberOfChannels,
+        lengthInFrames: length,
+        channelData,
+      };
+
+      const seqRecord: SequenceRecord = {
+        id: seqJSON.id,
+        trackId,
+        projectId,
+        time: seqJSON.time,
+        playbackRate: seqJSON.playbackRate,
+        audioBlobId,
+      };
+
+      await Promise.all([
+        db.audioBlobs.put(blobRecord),
+        db.sequences.put(seqRecord),
+      ]);
+
+      await db.projects.update(projectId, { updatedAt: new Date() });
+    },
+  );
 }

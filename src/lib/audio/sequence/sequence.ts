@@ -5,6 +5,7 @@ import {
   type AudioSequence,
   type AudioSequenceEventMap,
   type AudioSequenceInternal,
+  type AudioSequenceJSON,
 } from "./index";
 
 // ─── Supplemental ─────────────────────────────────────────────────────────────
@@ -38,9 +39,10 @@ export const createAudioSequence = <
   type: Type,
   time: number,
   supplemental?: AudioSequenceSupplemental<Kind, Type, Sequence>,
+  id?: string,
 ): Sequence => {
   const internal: AudioSequenceInternal<Kind> = {
-    id: nanoid(),
+    id: id ?? nanoid(),
     selected: false,
     playbackRate: 1,
     time,
@@ -120,6 +122,14 @@ export const createAudioSequence = <
     async play(_context: AudioContext) {},
     seek(_time: number) {},
     stop() {},
+
+    toJSON(): AudioSequenceJSON {
+      return {
+        id: internal.id,
+        time: internal.time,
+        playbackRate: internal.playbackRate,
+      };
+    },
 
     ...emitter,
   };

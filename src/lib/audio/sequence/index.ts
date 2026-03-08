@@ -1,6 +1,20 @@
 import type { Emitter } from "../../emitter";
 import type { AudioTrack } from "../track";
 
+// ─── Serialization ────────────────────────────────────────────────────────────
+
+/**
+ * Plain JSON representation of a sequence.  Specialised sequence types may
+ * extend this with extra fields (e.g. `audioBlobId` for recorded sequences).
+ */
+export interface AudioSequenceJSON {
+  id: string;
+  time: number;
+  playbackRate: number;
+}
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
 export type BufferedAudioSequenceType = typeof bufferedAudioSequenceType;
 
 export type AudioEffectStep =
@@ -73,6 +87,14 @@ export interface AudioSequence<Kind, Type> extends Emitter<
   ): Promise<void>;
   seek(time: number): void;
   stop(): void;
+
+  /**
+   * Return a plain JSON-serialisable snapshot of this sequence.
+   *
+   * Called automatically by `JSON.stringify`.  Specialised sequence types
+   * (recorded) override this to include their own extra fields.
+   */
+  toJSON(): AudioSequenceJSON;
 }
 
 export interface BufferedAudioSequence<Kind> extends AudioSequence<

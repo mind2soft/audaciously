@@ -5,6 +5,7 @@ import type {
   AudioTrack,
   AudioTrackDispatch,
   AudioTrackEventMap,
+  AudioTrackJSON,
 } from "./index";
 import { trackPropertySymbol, type AudioSequence } from "../sequence/index";
 
@@ -28,10 +29,11 @@ export const createAudioTrack = <Kind, Track extends AudioTrack<Kind>>(
   kind: Kind,
   initialName: string,
   supplmental?: AudioTrackSupplemental<Kind, Track>,
+  id?: string,
 ): Track => {
   let name = initialName;
   const internal: AudioTrackInternal = {
-    id: nanoid(),
+    id: id ?? nanoid(),
     locked: false,
     muted: false,
     volume: 1,
@@ -261,6 +263,18 @@ export const createAudioTrack = <Kind, Track extends AudioTrack<Kind>>(
         internal.activePanner?.disconnect();
         internal.activePanner = undefined;
       }
+    },
+
+    toJSON(): AudioTrackJSON {
+      return {
+        id: internal.id,
+        kind: kind as string,
+        name,
+        volume: internal.volume,
+        balance: internal.balance,
+        muted: internal.muted,
+        locked: internal.locked,
+      };
     },
 
     ...emitter,

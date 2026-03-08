@@ -10,13 +10,28 @@ import SideMenu from "./components/SideMenu.vue";
 import ProjectBrowser from "./components/ProjectBrowser.vue";
 import StorageDashboard from "./components/StorageDashboard.vue";
 import ProjectMetadataForm from "./components/ProjectMetadataForm.vue";
-import { selectedTrackKey, playerKey, storageKey } from "./lib/provider-keys";
+import { selectedTrackKey, playerKey, storageKey, timelineKey } from "./lib/provider-keys";
 import type { AudioTrack } from "./lib/audio/track";
 import type { AudioPlayer as AudioPlayerType } from "./lib/audio/player";
 import type { StorageService } from "./lib/storage/storage-service";
+import type { Timeline } from "./lib/timeline";
 import { createDefaultMetadata, type ProjectMetadata } from "./lib/storage/project-metadata";
 import { createAutoSave } from "./lib/storage/auto-save";
 import ExportAudioDialog from "./components/ExportAudioDialog.vue";
+import {
+  createDirtyState,
+  isDirtyStateEmpty,
+  markProjectDirty,
+  markTrackDirty,
+  markSequenceDirty,
+  clearDirtyState,
+  type DirtyState,
+} from "./lib/storage/dirty-state";
+import {
+  loadTimelineState,
+  saveTimelineState,
+} from "./lib/storage/timeline-persistence";
+import type { BufferedAudioSequence } from "./lib/audio/sequence";
 
 const selectedTrack = ref<AudioTrack<any> | null>(null);
 provide(selectedTrackKey, selectedTrack);
@@ -26,6 +41,9 @@ if (!player) throw new Error("missing player");
 
 const storage = inject<StorageService>(storageKey);
 if (!storage) throw new Error("missing storage service");
+
+const timeline = inject<Timeline>(timelineKey);
+if (!timeline) throw new Error("missing timeline");
 
 // ─── Project state ──────────────────────────────────────────────────────────
 
@@ -80,7 +98,8 @@ const confirmMetadataDialog = async () => {
   metadataOpen.value = false;
   if (metadataMode.value === "edit") {
     metadata.value = { ...stagedMetadata.value };
-    markDirty();
+    dirtyState = markProjectDirty(dirtyState);
+    notifyDirty();
   } else if (metadataMode.value === "new") {
     doNew();
     metadata.value = { ...stagedMetadata.value };
@@ -101,17 +120,176 @@ watch(browserOpen, (open) => {
   if (open) projectBrowserRef.value?.refresh();
 });
 
+// ─── Granular dirty state ───────────────────────────────────────────────────
+//
+// `dirtyState` is a plain (non-reactive) object because its mutations happen
+// at a very high frequency (every note push, every property change) and we
+// don't need Vue to re-render on each individual flag flip.  Only the coarser
+// `dirty: ref<boolean>` (used for the "unsaved changes" UI indicator) needs
+// to be reactive.
+
+let dirtyState: DirtyState = createDirtyState();
+
+// Whether to suppress dirty marking — true during player.setTracks() in doLoad.
+let loadingProject = false;
+
+// Whether the project has ever been written to IndexedDB.
+// false → first save must be a full saveProject() call.
+// true → subsequent saves can use granular ops.
+let projectSavedOnce = false;
+
+const notifyDirty = () => {
+  dirty.value = true;
+  dirtyGeneration++;
+  autoSave.notifyChange();
+};
+
+// ─── Track & sequence subscriptions ────────────────────────────────────────
+
+// Map of trackId → unsubscribe function
+const trackSubscriptions = new Map<string, () => void>();
+// Map of sequenceId → unsubscribe function
+const sequenceSubscriptions = new Map<string, () => void>();
+// Ordered list of track IDs — used to detect reordering.
+let knownTrackIds: string[] = [];
+
+const subscribeToSequence = (
+  seq: AudioSequence<any, any>,
+  _trackId: string,
+) => {
+  if (sequenceSubscriptions.has(seq.id)) return;
+
+  const handler = () => {
+    if (loadingProject) return;
+    dirtyState = markSequenceDirty(dirtyState, seq.id, { properties: true });
+    notifyDirty();
+  };
+
+  seq.addEventListener("change", handler);
+  sequenceSubscriptions.set(seq.id, () => {
+    seq.removeEventListener("change", handler);
+  });
+};
+
+const syncSequenceSubscriptions = (track: AudioTrack<any>) => {
+  // Only recorded tracks have persisted sequences.
+  if (track.kind !== "recorded") return;
+
+  const currentSeqIds = new Set<string>();
+
+  for (const seq of track.getSequences()) {
+    currentSeqIds.add(seq.id);
+
+    if (!sequenceSubscriptions.has(seq.id)) {
+      // Brand-new sequence — mark buffer dirty so it gets compressed.
+      if (!loadingProject) {
+        dirtyState = markSequenceDirty(dirtyState, seq.id, {
+          properties: true,
+          buffer: true,
+        });
+        notifyDirty();
+      }
+      subscribeToSequence(seq, track.id);
+    }
+  }
+
+  // Unsubscribe sequences that were removed.
+  for (const [seqId, unsub] of sequenceSubscriptions) {
+    if (!currentSeqIds.has(seqId)) {
+      unsub();
+      sequenceSubscriptions.delete(seqId);
+    }
+  }
+};
+
+const subscribeToTrack = (track: AudioTrack<any>) => {
+  if (trackSubscriptions.has(track.id)) return;
+
+  const handler = () => {
+    if (loadingProject) return;
+    dirtyState = markTrackDirty(dirtyState, track.id);
+    notifyDirty();
+    syncSequenceSubscriptions(track);
+  };
+
+  track.addEventListener("change", handler);
+  trackSubscriptions.set(track.id, () => {
+    track.removeEventListener("change", handler);
+  });
+
+  // Subscribe to existing sequences on this track immediately.
+  syncSequenceSubscriptions(track);
+};
+
+const syncTrackSubscriptions = () => {
+  const currentTracks = [...player.getTracks()];
+  const currentIds = currentTracks.map((t) => t.id);
+
+  // Detect reorder: if the ordered IDs changed, mark all tracks dirty.
+  const reordered =
+    currentIds.length === knownTrackIds.length &&
+    currentIds.some((id, i) => id !== knownTrackIds[i]);
+
+  if (reordered && !loadingProject) {
+    for (const id of currentIds) {
+      dirtyState = markTrackDirty(dirtyState, id);
+    }
+    notifyDirty();
+  }
+
+  const currentIdSet = new Set(currentIds);
+
+  // Unsubscribe removed tracks.
+  for (const [trackId, unsub] of trackSubscriptions) {
+    if (!currentIdSet.has(trackId)) {
+      unsub();
+      trackSubscriptions.delete(trackId);
+    }
+  }
+
+  // Subscribe new tracks.
+  for (const track of currentTracks) {
+    subscribeToTrack(track);
+  }
+
+  knownTrackIds = currentIds;
+};
+
+const tearDownAllSubscriptions = () => {
+  for (const unsub of trackSubscriptions.values()) unsub();
+  for (const unsub of sequenceSubscriptions.values()) unsub();
+  trackSubscriptions.clear();
+  sequenceSubscriptions.clear();
+  knownTrackIds = [];
+};
+
+// ─── Timeline persistence ───────────────────────────────────────────────────
+
+const handleTimelineChange = () => {
+  const id = currentProjectId.value;
+  if (!id) return;
+  saveTimelineState(id, { ratio: timeline.ratio, offsetTime: timeline.offsetTime });
+};
+
 // ─── Core save logic ───────────────────────────────────────────────────────
 
 let dirtyGeneration = 0;
 
-const performSave = async (projectId: string): Promise<boolean> => {
+/**
+ * Full save — serializes everything and does a complete replace in IndexedDB.
+ * Used for brand-new projects (no DB record yet) and for the "Save As" path.
+ */
+const fullSave = async (projectId: string): Promise<boolean> => {
   const gen = dirtyGeneration;
   saving.value = true;
   saveError.value = null;
   try {
     await storage.saveProject(projectId, player, metadata.value);
-    if (dirtyGeneration === gen) dirty.value = false;
+    projectSavedOnce = true;
+    if (dirtyGeneration === gen) {
+      dirty.value = false;
+      dirtyState = clearDirtyState(dirtyState);
+    }
     persistLastProjectId(projectId);
     return true;
   } catch (e) {
@@ -122,6 +300,112 @@ const performSave = async (projectId: string): Promise<boolean> => {
   }
 };
 
+/**
+ * Granular save — runs only the cheapest DB ops needed for what changed.
+ */
+const performGranularSave = async (projectId: string): Promise<boolean> => {
+  // Snapshot the current dirty state and clear it immediately so that any
+  // changes arriving during the async save are captured in the next cycle.
+  const snapshot = dirtyState;
+  dirtyState = createDirtyState();
+
+  const gen = dirtyGeneration;
+  saving.value = true;
+  saveError.value = null;
+
+  try {
+    const ops: Promise<void>[] = [];
+
+    // Project metadata
+    if (snapshot.project.properties) {
+      ops.push(storage.updateProjectMetadata(projectId, metadata.value));
+    }
+
+    // Tracks
+    const currentTracks = [...player.getTracks()];
+    const currentTrackMap = new Map(currentTracks.map((t, i) => [t.id, { track: t, sortOrder: i }]));
+
+    for (const [trackId, flags] of Object.entries(snapshot.tracks)) {
+      if (!flags.properties) continue;
+
+      const entry = currentTrackMap.get(trackId);
+      if (entry) {
+        // Track still exists — upsert.
+        ops.push(
+          storage.upsertTrackRecord(projectId, entry.track.toJSON(), entry.sortOrder),
+        );
+      } else {
+        // Track was deleted.
+        ops.push(storage.deleteTrackRecord(projectId, trackId));
+      }
+    }
+
+    // Sequences
+    for (const [seqId, flags] of Object.entries(snapshot.sequences)) {
+      if (!flags.properties && !flags.buffer) continue;
+
+      // Find the owning track.
+      let ownerTrack: AudioTrack<any> | undefined;
+      let ownerSeq: AudioSequence<any, any> | undefined;
+
+      for (const track of currentTracks) {
+        const seq = track.getSequence(seqId);
+        if (seq) {
+          ownerTrack = track;
+          ownerSeq = seq as AudioSequence<any, any>;
+          break;
+        }
+      }
+
+      if (!ownerTrack || !ownerSeq) {
+        // Sequence was deleted.
+        ops.push(storage.deleteSequenceRecord(projectId, seqId));
+        continue;
+      }
+
+      if (flags.buffer) {
+        // Buffer changed — compress and store (slow path).
+        const buffered = ownerSeq as BufferedAudioSequence<any>;
+        ops.push(
+          storage.upsertAudioBlob(
+            projectId,
+            ownerTrack.id,
+            ownerSeq.toJSON(),
+            buffered.buffer,
+          ),
+        );
+      } else if (flags.properties) {
+        // Only metadata changed (time, playbackRate).
+        ops.push(
+          storage.upsertSequenceRecord(projectId, ownerTrack.id, ownerSeq.toJSON()),
+        );
+      }
+    }
+
+    await Promise.all(ops);
+
+    if (dirtyGeneration === gen && isDirtyStateEmpty(dirtyState)) {
+      dirty.value = false;
+    }
+    persistLastProjectId(projectId);
+    return true;
+  } catch (e) {
+    saveError.value = e instanceof Error ? e.message : "Save failed.";
+    // Restore the snapshot so the next save retry covers what we couldn't save.
+    dirtyState = snapshot;
+    return false;
+  } finally {
+    saving.value = false;
+  }
+};
+
+const performSave = async (projectId: string): Promise<boolean> => {
+  if (!projectSavedOnce) {
+    return fullSave(projectId);
+  }
+  return performGranularSave(projectId);
+};
+
 // ─── Auto-save ─────────────────────────────────────────────────────────────
 
 const autoSave = createAutoSave({
@@ -130,20 +414,17 @@ const autoSave = createAutoSave({
   debounceMs: 5_000,
 });
 
-// ─── Dirty tracking ────────────────────────────────────────────────────────
-
-const markDirty = () => {
-  dirty.value = true;
-  dirtyGeneration++;
-  autoSave.notifyChange();
-};
+// ─── Player change → sync subscriptions ────────────────────────────────────
 
 onMounted(() => {
-  player.addEventListener("change", markDirty);
+  player.addEventListener("change", syncTrackSubscriptions);
+  timeline.addEventListener("change", handleTimelineChange);
 });
 
 onUnmounted(() => {
-  player.removeEventListener("change", markDirty);
+  player.removeEventListener("change", syncTrackSubscriptions);
+  timeline.removeEventListener("change", handleTimelineChange);
+  tearDownAllSubscriptions();
   autoSave.dispose();
 });
 
@@ -162,6 +443,7 @@ const doSaveAs = async (newMetadata: ProjectMetadata) => {
   const newId = nanoid();
   metadata.value = { ...newMetadata };
   currentProjectId.value = newId;
+  projectSavedOnce = false; // Force a full save for the new ID.
   const saved = await performSave(newId);
   if (saved && !dirty.value) autoSave.notifySaved();
 };
@@ -186,9 +468,20 @@ const doLoad = async (projectId: string) => {
       return;
     }
 
+    // Tear down all existing subscriptions before replacing tracks.
+    tearDownAllSubscriptions();
+
+    // Suppress dirty tracking while setTracks() triggers reactive updates.
+    loadingProject = true;
+
     // Stop playback and replace tracks.
     player.stop();
     player.setTracks(loaded.data.tracks);
+
+    loadingProject = false;
+
+    // Wire up subscriptions for the newly loaded tracks.
+    syncTrackSubscriptions();
 
     // Restore metadata from the project record.
     metadata.value = {
@@ -199,12 +492,23 @@ const doLoad = async (projectId: string) => {
       description: loaded.record.description,
     };
 
+    // Restore timeline state if previously persisted.
+    const timelineState = loadTimelineState(projectId);
+    if (timelineState) {
+      timeline.setValues(timelineState.ratio, timelineState.offsetTime);
+    } else {
+      timeline.setValues(1, 0);
+    }
+
     currentProjectId.value = projectId;
+    projectSavedOnce = true;
+    dirtyState = createDirtyState();
     dirty.value = false;
     autoSave.notifySaved();
     persistLastProjectId(projectId);
     browserOpen.value = false;
   } catch (e) {
+    loadingProject = false;
     saveError.value = e instanceof Error ? e.message : "Failed to load project.";
   }
 };
@@ -212,11 +516,19 @@ const doLoad = async (projectId: string) => {
 // ─── New project ────────────────────────────────────────────────────────────
 
 const doNew = () => {
+  tearDownAllSubscriptions();
+
+  loadingProject = true;
   player.stop();
   player.setTracks([]);
+  loadingProject = false;
+
+  timeline.setValues(1, 0);
 
   metadata.value = createDefaultMetadata();
   currentProjectId.value = null;
+  projectSavedOnce = false;
+  dirtyState = createDirtyState();
   dirty.value = false;
   autoSave.notifySaved();
   selectedTrack.value = null;
@@ -308,6 +620,10 @@ const clearLastProjectId = () => {
   try { localStorage.removeItem(LAST_PROJECT_KEY); } catch { /* noop */ }
 };
 
+// ─── TypeScript type alias for convenience ──────────────────────────────────
+
+type AudioSequence<K, T> = import("./lib/audio/sequence").AudioSequence<K, T>;
+
 </script>
 
 <template>
@@ -353,7 +669,7 @@ const clearLastProjectId = () => {
     </template>
 
     <header class="flex flex-col">
-      <ProjectHeader v-model="metadata.name" @update:modelValue="markDirty" />
+      <ProjectHeader v-model="metadata.name" @update:modelValue="() => { dirtyState = markProjectDirty(dirtyState); notifyDirty(); }" />
       <AudioPlayer />
     </header>
 

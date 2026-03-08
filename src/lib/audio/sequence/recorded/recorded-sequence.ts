@@ -24,6 +24,7 @@ interface RecordedSequencePlaybackInternal {
 export function createRecordedSequence(
   buffer: AudioBuffer,
   time: number,
+  id?: string,
 ): RecordedSequence {
   return createAudioSequence<
     RecordedTrackKind,
@@ -163,5 +164,5 @@ export function createRecordedSequence(
         dispatchEvent({ type: "stop" });
       },
     };
-  });
+  }, id);
 }
