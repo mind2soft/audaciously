@@ -1,9 +1,13 @@
 {
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.worker.tsbuildinfo",
+    "incremental": true,
     "module": "commonjs",
-    "target": "ES2020",
+    "target": "ES2022",
     "sourceMap": true,
+    // ES2024 is intentionally higher than the app's ES2022 lib: workers are
+    // bundled separately by Vite's worker pipeline and do not share the DOM
+    // environment, so they can safely use newer built-ins (e.g. Promise.withResolvers).
     "lib": ["WebWorker", "ES2024", "ScriptHost"],
     "types": ["@types/audioworklet"]
   },

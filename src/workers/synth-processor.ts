@@ -491,6 +491,9 @@ function noteFingerprint(
 /** Cache: fingerprint → [leftChannel, rightChannel] */
 const noteCache = new Map<string, [Float32Array, Float32Array]>();
 
+/** Maximum number of cached rendered notes. Oldest entries are evicted (FIFO). */
+const NOTE_CACHE_MAX_SIZE = 500;
+
 // ─── Cancellation ─────────────────────────────────────────────────────────────
 
 /** Latest seqNum seen per trackId. */
@@ -536,6 +539,10 @@ function renderTrack(req: SynthRequest): SynthResponse {
     if (!noteCache.has(fp)) {
       const durationSec = note.durationBeats * secPerBeat;
       const [l, r] = engine.renderNote(note.pitchId, durationSec, sampleRate);
+      // Evict oldest entry if cache is full (FIFO — Map preserves insertion order).
+      if (noteCache.size >= NOTE_CACHE_MAX_SIZE) {
+        noteCache.delete(noteCache.keys().next().value!);
+      }
       noteCache.set(fp, [l, r]);
     }
   }
@@ -613,13 +620,41 @@ function renderTrack(req: SynthRequest): SynthResponse {
 
 // ─── Worker message handler ───────────────────────────────────────────────────
 
-self.addEventListener("message", (e: MessageEvent<SynthRequest>) => {
-  // Verify the message origin - only accept messages from the same origin
-  if (e.origin !== "" && e.origin !== self.location.origin) {
+function isValidSynthRequest(req: unknown): req is SynthRequest {
+  if (!req || typeof req !== "object") return false;
+  const r = req as Record<string, unknown>;
+  return (
+    typeof r.trackId === "string" &&
+    r.trackId.length > 0 &&
+    typeof r.seqNum === "number" &&
+    Number.isFinite(r.seqNum) &&
+    typeof r.instrumentId === "string" &&
+    typeof r.bpm === "number" &&
+    r.bpm > 0 &&
+    r.bpm < 1000 &&
+    typeof r.sampleRate === "number" &&
+    r.sampleRate > 0 &&
+    r.sampleRate <= 384_000 &&
+    Array.isArray(r.notes) &&
+    r.notes.length <= 10_000
+  );
+}
+
+self.addEventListener("message", (e: MessageEvent<unknown>) => {
+  // Note: e.origin is always "" for same-origin worker messages per spec.
+  // Trust is structurally enforced — only the owning InstrumentTrack holds
+  // a reference to this worker and posts messages to it.
+
+  const req = e.data as Partial<SynthRequest> | null | undefined;
+  if (!isValidSynthRequest(req)) {
+    const errResponse: SynthError = {
+      trackId: String(req?.trackId ?? "unknown"),
+      seqNum: Number(req?.seqNum ?? 0),
+      error: "Invalid SynthRequest message payload.",
+    };
+    self.postMessage(errResponse);
     return;
   }
-
-  const req = e.data;
 
   // Register this as the latest seqNum for the track — any in-progress render
   // for a lower seqNum will detect this and bail out.

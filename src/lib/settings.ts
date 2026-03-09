@@ -94,7 +94,7 @@ export function patchSettings(patch: Partial<PersistedSettings>): void {
  * for passing to `getUserMedia` or `recorder.setMediaStreamConstraints()`.
  */
 export function settingsToMediaStreamConstraints(
-  settings: PersistedSettings
+  settings: PersistedSettings,
 ): MediaStreamConstraints {
   const audio: MediaTrackConstraints = {
     echoCancellation: settings.echoCancellation,

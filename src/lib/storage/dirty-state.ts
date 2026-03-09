@@ -68,10 +68,7 @@ export function markProjectDirty(state: DirtyState): DirtyState {
 }
 
 /** Mark a track's properties as dirty (add/update). */
-export function markTrackDirty(
-  state: DirtyState,
-  trackId: string,
-): DirtyState {
+export function markTrackDirty(state: DirtyState, trackId: string): DirtyState {
   const existing = state.tracks[trackId];
   if (existing?.properties) return state; // already dirty — no-op
   return {
@@ -89,7 +86,10 @@ export function markSequenceDirty(
   sequenceId: string,
   flags: Partial<DirtySequence>,
 ): DirtyState {
-  const existing = state.sequences[sequenceId] ?? { properties: false, buffer: false };
+  const existing = state.sequences[sequenceId] ?? {
+    properties: false,
+    buffer: false,
+  };
 
   // If all requested flags are already set, nothing to do.
   const propertiesAlreadySet = !flags.properties || existing.properties;

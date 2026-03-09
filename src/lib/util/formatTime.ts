@@ -5,7 +5,7 @@ export function formatTimeScale(seconds: number): string {
 
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
-  const s = seconds % 60 | 0;
+  const s = (seconds % 60) | 0;
   const ms = Math.floor((seconds % 1) * 1000);
 
   if (h > 0) {
@@ -36,7 +36,7 @@ export function formatTime(seconds: number): string {
   seconds = Math.abs(seconds);
 
   const m = String(Math.floor((seconds % 3600) / 60)).padStart(2, "0");
-  const s = String(seconds % 60 | 0).padStart(2, "0");
+  const s = String((seconds % 60) | 0).padStart(2, "0");
   const ms = String(Math.floor((seconds % 1) * 1000)).padStart(3, "0");
 
   if (seconds >= 3600) {

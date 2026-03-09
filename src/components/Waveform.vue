@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, useId, watch, watchEffect } from "vue";
+import {
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  useId,
+  watch,
+  watchEffect,
+} from "vue";
 import { createWaveformProcessor } from "../lib/audio/waveform";
 
 const props = defineProps<{
@@ -68,7 +75,7 @@ const updatePath = () => {
       },
       () => {
         // path.value = "";
-      }
+      },
     );
 };
 
@@ -82,7 +89,7 @@ watch(
   () => props.audioBuffer,
   () => {
     updatePath();
-  }
+  },
 );
 
 // Re-draw whenever the zoom ratio changes (pixelWidth is derived from
@@ -93,7 +100,7 @@ watch(
   () => {
     updatePath();
   },
-  { flush: "post" }
+  { flush: "post" },
 );
 
 onMounted(() => {

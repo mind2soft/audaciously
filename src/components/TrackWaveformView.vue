@@ -36,7 +36,9 @@ defineProps<{
       />
     </template>
     <div v-else class="flex h-full items-center px-4">
-      <span class="text-xs text-base-content/25 italic">No audio rendered yet</span>
+      <span class="text-xs text-base-content/25 italic"
+        >No audio rendered yet</span
+      >
     </div>
   </div>
 </template>

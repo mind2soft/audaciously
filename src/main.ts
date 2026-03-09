@@ -16,10 +16,7 @@ import { createSelectTool } from "./lib/audio/tool/select";
 import { createSequenceMoveTool } from "./lib/audio/tool/sequence-move";
 import { createSequenceSplitTool } from "./lib/audio/tool/sequence-split";
 import { createSequenceCutTool } from "./lib/audio/tool/sequence-cut";
-import {
-  loadSettings,
-  settingsToMediaStreamConstraints,
-} from "./lib/settings";
+import { loadSettings, settingsToMediaStreamConstraints } from "./lib/settings";
 import { createStorageService } from "./lib/storage/storage-service";
 
 // Restore persisted settings before the app mounts so every component sees
@@ -59,6 +56,6 @@ createApp(App)
         createSequenceSplitTool(timeline, { onInteract: interruptPlayback }),
         createSequenceCutTool({ onInteract: interruptPlayback }),
       ],
-    })
+    }),
   )
   .mount("#app");

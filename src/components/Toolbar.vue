@@ -35,7 +35,9 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="flex gap-1 items-center p-1 bg-base-200 border-t border-base-300/60">
+  <div
+    class="flex gap-1 items-center p-1 bg-base-200 border-t border-base-300/60"
+  >
     <AudioTest />
     <div class="divider divider-horizontal mx-0"></div>
     <button
@@ -88,4 +90,3 @@ onBeforeUnmount(() => {
     </button>
   </div>
 </template>
-

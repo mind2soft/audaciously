@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { inject, ref, computed, onMounted, onUnmounted } from "vue";
 import { storageKey } from "../lib/provider-keys";
-import type { StorageService, ProjectSummary } from "../lib/storage/storage-service";
+import type {
+  StorageService,
+  ProjectSummary,
+} from "../lib/storage/storage-service";
 import { exportProject, type ExportProgress } from "../lib/storage/awp-export";
 import { importProject, type ImportOutcome } from "../lib/storage/awp-import";
 
@@ -39,7 +42,8 @@ const dragOver = ref(false);
 const formatBytes = (bytes: number): string => {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes < 1024 * 1024 * 1024)
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 };
 
@@ -78,7 +82,8 @@ const sortedProjects = computed(() => {
 
   list.sort((a, b) => {
     if (field === "name") return a.name.localeCompare(b.name) * dir;
-    if (field === "updatedAt") return (a.updatedAt.getTime() - b.updatedAt.getTime()) * dir;
+    if (field === "updatedAt")
+      return (a.updatedAt.getTime() - b.updatedAt.getTime()) * dir;
     return (a.sizeBytes - b.sizeBytes) * dir;
   });
 
@@ -129,7 +134,8 @@ const handleDuplicate = async (id: string) => {
     await storage.duplicateProject(id);
     await refresh();
   } catch (e) {
-    error.value = e instanceof Error ? e.message : "Failed to duplicate project.";
+    error.value =
+      e instanceof Error ? e.message : "Failed to duplicate project.";
   } finally {
     duplicating.value = null;
   }
@@ -193,6 +199,17 @@ const doImport = async (file: File) => {
   error.value = null;
 
   try {
+    // W-14: Verify ZIP magic bytes (0x50 0x4B 0x03 0x04) before attempting import.
+    const header = new Uint8Array(await file.slice(0, 4).arrayBuffer());
+    if (
+      header[0] !== 0x50 ||
+      header[1] !== 0x4b ||
+      header[2] !== 0x03 ||
+      header[3] !== 0x04
+    ) {
+      throw new Error("The selected file is not a valid .awp archive.");
+    }
+
     const outcome: ImportOutcome = await importProject(file);
 
     if (outcome.success) {
@@ -298,7 +315,10 @@ defineExpose({ refresh });
           :disabled="loading"
           @click="refresh"
         >
-          <i class="iconify mdi--refresh size-4" :class="{ 'animate-spin': loading }" />
+          <i
+            class="iconify mdi--refresh size-4"
+            :class="{ 'animate-spin': loading }"
+          />
           Refresh
         </button>
       </div>
@@ -329,7 +349,10 @@ defineExpose({ refresh });
     <div v-if="error" class="alert alert-error text-sm">
       <i class="iconify mdi--alert-circle size-4" />
       <span>{{ error }}</span>
-      <button class="btn btn-ghost btn-xs btn-square ml-auto" @click="error = null">
+      <button
+        class="btn btn-ghost btn-xs btn-square ml-auto"
+        @click="error = null"
+      >
         <i class="iconify mdi--close size-3.5" />
       </button>
     </div>
@@ -391,16 +414,23 @@ defineExpose({ refresh });
         </thead>
         <tbody>
           <tr v-for="project in sortedProjects" :key="project.id">
-            <td class="font-medium max-w-[14rem] truncate" :title="project.name">
+            <td class="font-medium max-w-56 truncate" :title="project.name">
               {{ project.name }}
             </td>
-            <td class="text-base-content/60 max-w-[8rem] truncate" :title="project.author">
+            <td
+              class="text-base-content/60 max-w-32 truncate"
+              :title="project.author"
+            >
               {{ project.author || "\u2014" }}
             </td>
             <td class="tabular-nums">{{ project.trackCount }}</td>
-            <td class="tabular-nums">{{ formatDuration(project.durationSeconds) }}</td>
+            <td class="tabular-nums">
+              {{ formatDuration(project.durationSeconds) }}
+            </td>
             <td class="tabular-nums">{{ formatBytes(project.sizeBytes) }}</td>
-            <td class="text-base-content/60 text-xs">{{ formatDate(project.updatedAt) }}</td>
+            <td class="text-base-content/60 text-xs">
+              {{ formatDate(project.updatedAt) }}
+            </td>
             <td class="text-right">
               <div class="flex items-center justify-end gap-1">
                 <button
@@ -418,7 +448,11 @@ defineExpose({ refresh });
                 >
                   <i
                     class="iconify size-3.5"
-                    :class="duplicating === project.id ? 'mdi--loading animate-spin' : 'mdi--content-copy'"
+                    :class="
+                      duplicating === project.id
+                        ? 'mdi--loading animate-spin'
+                        : 'mdi--content-copy'
+                    "
                   />
                 </button>
                 <button
@@ -429,7 +463,11 @@ defineExpose({ refresh });
                 >
                   <i
                     class="iconify size-3.5"
-                    :class="exporting === project.id ? 'mdi--loading animate-spin' : 'mdi--download'"
+                    :class="
+                      exporting === project.id
+                        ? 'mdi--loading animate-spin'
+                        : 'mdi--download'
+                    "
                   />
                 </button>
                 <button
@@ -447,15 +485,12 @@ defineExpose({ refresh });
     </div>
 
     <!-- Delete confirmation modal -->
-    <dialog
-      class="modal"
-      :class="{ 'modal-open': confirmDeleteId !== null }"
-    >
+    <dialog class="modal" :class="{ 'modal-open': confirmDeleteId !== null }">
       <div class="modal-box bg-base-300 max-w-sm">
         <h3 class="mb-2 text-lg font-bold">Delete Project?</h3>
         <p class="py-4 text-sm text-base-content/70">
-          This will permanently remove the project and all its audio data.
-          This action cannot be undone.
+          This will permanently remove the project and all its audio data. This
+          action cannot be undone.
         </p>
         <div class="modal-action">
           <button class="btn btn-ghost" @click="cancelDelete">Cancel</button>

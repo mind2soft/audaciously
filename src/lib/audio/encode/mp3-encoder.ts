@@ -45,7 +45,8 @@ export function encodeMp3(
   options: Mp3EncoderOptions = {},
 ): Promise<Blob> {
   const kbps = options.kbps ?? 128;
-  const channels = (options.channels ?? Math.min(audioBuffer.numberOfChannels, 2)) as 1 | 2;
+  const channels = (options.channels ??
+    Math.min(audioBuffer.numberOfChannels, 2)) as 1 | 2;
   const sampleRate = options.sampleRate ?? audioBuffer.sampleRate;
 
   // Convert Float32 → Int16 per channel on the main thread.

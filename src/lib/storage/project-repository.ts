@@ -1,6 +1,6 @@
 import { nanoid } from "nanoid";
 import type { AudioPlayer } from "../audio/player";
-import type { ProjectMetadata } from "./project-metadata";
+import { serializeMetadata, type ProjectMetadata } from "./project-metadata";
 import type { AudioTrackJSON } from "../audio/track";
 import type { AudioSequenceJSON } from "../audio/sequence";
 import {
@@ -94,8 +94,7 @@ export async function saveProject(
 
   // Compute total compressed size.
   const sizeBytes = audioBlobRecords.reduce(
-    (sum, rec) =>
-      sum + rec.channelData.reduce((s, blob) => s + blob.size, 0),
+    (sum, rec) => sum + rec.channelData.reduce((s, blob) => s + blob.size, 0),
     0,
   );
 
@@ -109,16 +108,13 @@ export async function saveProject(
     db.sequences,
     db.audioBlobs,
     async () => {
-      // Preserve createdAt from existing record (if updating).
+      // Preserve createdAt from existing record; null means this is a brand-new project.
       const existing = await db.projects.get(projectId);
 
+      const metadataSnapshot = serializeMetadata(metadata);
       const projectRecord: ProjectRecord = {
         id: projectId,
-        name: metadata.name,
-        author: metadata.author,
-        genre: metadata.genre,
-        tags: [...metadata.tags],
-        description: metadata.description,
+        ...metadataSnapshot,
         createdAt: existing?.createdAt ?? now,
         updatedAt: now,
         sizeBytes,
@@ -193,10 +189,7 @@ export async function loadProject(
       );
 
       for (let ch = 0; ch < rec.numberOfChannels; ch++) {
-        buffer.copyToChannel(
-          channels[ch] as Float32Array<ArrayBuffer>,
-          ch,
-        );
+        buffer.copyToChannel(channels[ch] as Float32Array<ArrayBuffer>, ch);
       }
 
       audioBuffers.set(rec.id, buffer);
@@ -230,10 +223,7 @@ export async function listProjects(): Promise<ProjectSummary[]> {
         updatedAt: p.updatedAt,
         sizeBytes: p.sizeBytes,
         durationSeconds: p.durationSeconds,
-        trackCount: await db.tracks
-          .where("projectId")
-          .equals(p.id)
-          .count(),
+        trackCount: await db.tracks.where("projectId").equals(p.id).count(),
       }),
     ),
   );
@@ -361,10 +351,10 @@ export async function getProjectSize(id: string): Promise<number> {
  */
 export async function updateProjectMetadata(
   id: string,
-  metadata: Partial<ProjectMetadata>,
+  metadata: ProjectMetadata,
 ): Promise<void> {
   await db.projects.update(id, {
-    ...metadata,
+    ...serializeMetadata(metadata),
     updatedAt: new Date(),
   });
 }
@@ -411,7 +401,10 @@ export async function deleteTrackRecord(
     db.audioBlobs,
     async () => {
       // Collect sequence IDs so we can delete their audio blobs too.
-      const seqs = await db.sequences.where("trackId").equals(trackId).toArray();
+      const seqs = await db.sequences
+        .where("trackId")
+        .equals(trackId)
+        .toArray();
       const blobIds = seqs
         .map((s) => s.audioBlobId)
         .filter((id): id is string => !!id);
@@ -419,9 +412,7 @@ export async function deleteTrackRecord(
       await Promise.all([
         db.tracks.delete(trackId),
         db.sequences.where("trackId").equals(trackId).delete(),
-        ...(blobIds.length > 0
-          ? [db.audioBlobs.bulkDelete(blobIds)]
-          : []),
+        ...(blobIds.length > 0 ? [db.audioBlobs.bulkDelete(blobIds)] : []),
       ]);
 
       await db.projects.update(projectId, { updatedAt: new Date() });
@@ -433,21 +424,30 @@ export async function deleteTrackRecord(
  * Insert or replace a single sequence record (properties only, no audio blob).
  * Use `upsertAudioBlob` when the buffer itself has changed.
  * Also bumps `projects.updatedAt`.
+ *
+ * IMPORTANT: `put()` is a full replace, so we must carry forward the existing
+ * `audioBlobId` — otherwise moving a sequence (time change) would silently
+ * orphan its audio blob and the audio would disappear on next project load.
  */
 export async function upsertSequenceRecord(
   projectId: string,
   trackId: string,
   seqJSON: AudioSequenceJSON,
 ): Promise<void> {
-  const record: SequenceRecord = {
-    id: seqJSON.id,
-    trackId,
-    projectId,
-    time: seqJSON.time,
-    playbackRate: seqJSON.playbackRate,
-  };
-
   await db.transaction("rw", db.projects, db.sequences, async () => {
+    // Preserve the existing audioBlobId — this field is owned by upsertAudioBlob
+    // and must survive metadata-only updates (e.g. sequence time/playbackRate changes).
+    const existing = await db.sequences.get(seqJSON.id);
+
+    const record: SequenceRecord = {
+      id: seqJSON.id,
+      trackId,
+      projectId,
+      time: seqJSON.time,
+      playbackRate: seqJSON.playbackRate,
+      audioBlobId: existing?.audioBlobId,
+    };
+
     await db.sequences.put(record);
     await db.projects.update(projectId, { updatedAt: new Date() });
   });

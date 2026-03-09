@@ -147,7 +147,7 @@ const signals = new Map<string, ProcessAbortSignal>();
 const linearPath = (
   framesData: Float32Array[],
   options: LinearPathOptions,
-  signal: ProcessAbortSignal
+  signal: ProcessAbortSignal,
 ): string | null => {
   const {
     samples = framesData.length,
@@ -430,7 +430,16 @@ const getFilterData = (framesData: Float32Array[], samples: number) => {
   const filteredData: number[][] = [];
   const framesDataLength = framesData.length;
   for (let f = 0; f < framesDataLength; f++) {
+    if (!framesData[f] || framesData[f].length === 0) {
+      filteredData.push([]);
+      continue;
+    }
     const blockSize = Math.floor(framesData[f].length / samples) as number; // the number of samples in each subdivision
+    if (blockSize === 0) {
+      // Not enough samples to fill a block — push zeros
+      filteredData.push(new Array(samples).fill(0));
+      continue;
+    }
     const filteredDataBlock: number[] = [];
     for (let i = 0; i < samples; i++) {
       let blockStart = blockSize * i; // the location of the first sample in the block
@@ -445,14 +454,25 @@ const getFilterData = (framesData: Float32Array[], samples: number) => {
   return filteredData;
 };
 
-const getNormalizeData = (filteredData: number[][]) => {
-  const multipliers: number[] = [];
+const getNormalizeData = (filteredData: number[][]): number[][] => {
   const filteredDataLength = filteredData.length;
+  const multipliers: number[] = [];
   for (let i = 0; i < filteredDataLength; i++) {
-    const multiplier = Math.max(...filteredData[i]);
-    multipliers.push(multiplier);
+    let max = 0;
+    for (let j = 0; j < filteredData[i].length; j++) {
+      if (filteredData[i][j] > max) max = filteredData[i][j];
+    }
+    multipliers.push(max);
   }
-  const maxMultiplier = Math.pow(Math.max(...multipliers), -1);
+
+  let globalMax = 0;
+  for (let i = 0; i < multipliers.length; i++) {
+    if (multipliers[i] > globalMax) globalMax = multipliers[i];
+  }
+  const maxMultiplier = Math.pow(globalMax, -1);
+
+  // All values were 0 — normalizing would produce Infinity; return unchanged
+  if (maxMultiplier === Infinity) return filteredData;
 
   const normalizeData: number[][] = [];
   for (let i = 0; i < filteredDataLength; i++) {
@@ -462,8 +482,12 @@ const getNormalizeData = (filteredData: number[][]) => {
   return normalizeData;
 };
 
-self.addEventListener("message", (e: any) => {
+self.addEventListener("message", (e: MessageEvent) => {
+  if (e.origin && e.origin !== self.location.origin) return;
+
   const data = e.data as WaveformMessage;
+  if (!data || typeof data.id !== "string" || !Array.isArray(data.framesData))
+    return;
 
   signals.get(data.id)?.abort();
 
@@ -475,7 +499,7 @@ self.addEventListener("message", (e: any) => {
     const path = linearPath(
       data.framesData,
       data.options || ({} as LinearPathOptions),
-      signal
+      signal,
     );
 
     if (path && !signal.isAborted) {
@@ -485,6 +509,8 @@ self.addEventListener("message", (e: any) => {
         path,
       } satisfies WaveformResponse);
     }
+
+    signals.delete(data.id);
   }
 });
 

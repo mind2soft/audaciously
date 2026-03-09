@@ -103,9 +103,10 @@ export async function mixdownProject(
     for (const seq of sequences) {
       const source = offlineCtx.createBufferSource();
       source.buffer = seq.buffer;
-      source.playbackRate.value = isFinite(seq.playbackRate) && seq.playbackRate > 0
-        ? seq.playbackRate
-        : 1;
+      source.playbackRate.value =
+        isFinite(seq.playbackRate) && seq.playbackRate > 0
+          ? seq.playbackRate
+          : 1;
       source.connect(gainNode);
       source.start(seq.time);
     }

@@ -115,7 +115,7 @@ export function createSequenceMoveTool(
             const deltaX = clampedDetlaX(event, draggable);
 
             draggable.ghost.style.transform = `translateX(${deltaX}px)`;
-            draggable.label.innerHTML = formatTime(
+            draggable.label.textContent = formatTime(
               sequence.time + formatPixelToTime(timeline.ratio, deltaX),
             );
           }

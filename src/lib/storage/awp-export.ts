@@ -124,12 +124,26 @@ export async function exportProject(
   onProgress?.({ phase: "zipping", progress: 0 });
 
   const files: Zippable = {
-    "manifest.json": new TextEncoder().encode(JSON.stringify(manifest, null, 2)),
+    "manifest.json": new TextEncoder().encode(
+      JSON.stringify(manifest, null, 2),
+    ),
   };
 
-  // Add raw PCM audio files.
+  // Add raw PCM audio files — only blobs referenced by recorded-track sequences
+  // in the manifest. Instrument track audio is never exported (it's synthesized
+  // at runtime), so any orphaned blobs in the DB are intentionally excluded.
+  const referencedBlobIds = new Set<string>();
+  for (const trackEntry of manifestTracks) {
+    for (const seq of trackEntry.sequences ?? []) {
+      const match = seq.audioFile?.match(/^audio\/(.+)\.pcm$/);
+      if (match) referencedBlobIds.add(match[1]);
+    }
+  }
+
   for (const [blobId, pcm] of rawPcmMap) {
-    files[`audio/${blobId}.pcm`] = pcm;
+    if (referencedBlobIds.has(blobId)) {
+      files[`audio/${blobId}.pcm`] = pcm;
+    }
   }
 
   const zipBlob = await zipAsync(files);
@@ -230,7 +244,12 @@ function zipAsync(files: Zippable): Promise<Blob> {
   return new Promise<Blob>((resolve, reject) => {
     zip(files, { level: 6 }, (err, data) => {
       if (err) reject(err);
-      else resolve(new Blob([data as Uint8Array<ArrayBuffer>], { type: "application/zip" }));
+      else
+        resolve(
+          new Blob([data as Uint8Array<ArrayBuffer>], {
+            type: "application/zip",
+          }),
+        );
     });
   });
 }

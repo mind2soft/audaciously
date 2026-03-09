@@ -30,7 +30,7 @@ function toBalance(left: number, right: number): number {
 // [StereoPannerNode](https://developer.mozilla.org/en-US/docs/Web/API/StereoPannerNode)
 export default function createStereoBalanceNode(
   context: AudioContext,
-  options?: StereoBalanceOptions
+  options?: StereoBalanceOptions,
 ): StereoBalanceNode {
   const defaultBalance = clampBalanace(options?.balance ?? 0);
 

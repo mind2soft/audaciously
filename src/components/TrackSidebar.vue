@@ -162,7 +162,7 @@ const handleDeleteTrack = () => {
     >
       <!-- ── Nothing selected ────────────────────────────────────── -->
       <template v-if="!currentTrack">
-        <p class="text-xs text-base-content/30 italic leading-snug">
+        <p class="text-xs text-base-content/30 italic leading-snug m-auto">
           Click a track to select it
         </p>
       </template>

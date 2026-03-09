@@ -1,5 +1,14 @@
 <script setup lang="ts">
-import { ref, provide, inject, onMounted, onUnmounted, effectScope, computed, watch } from "vue";
+import {
+  ref,
+  provide,
+  inject,
+  onMounted,
+  onUnmounted,
+  effectScope,
+  computed,
+  watch,
+} from "vue";
 import { nanoid } from "nanoid";
 import AudioPlayer from "./components/AudioPlayer.vue";
 import ProjectHeader from "./components/ProjectHeader.vue";
@@ -10,12 +19,20 @@ import SideMenu from "./components/SideMenu.vue";
 import ProjectBrowser from "./components/ProjectBrowser.vue";
 import StorageDashboard from "./components/StorageDashboard.vue";
 import ProjectMetadataForm from "./components/ProjectMetadataForm.vue";
-import { selectedTrackKey, playerKey, storageKey, timelineKey } from "./lib/provider-keys";
+import {
+  selectedTrackKey,
+  playerKey,
+  storageKey,
+  timelineKey,
+} from "./lib/provider-keys";
 import type { AudioTrack } from "./lib/audio/track";
 import type { AudioPlayer as AudioPlayerType } from "./lib/audio/player";
 import type { StorageService } from "./lib/storage/storage-service";
 import type { Timeline } from "./lib/timeline";
-import { createDefaultMetadata, type ProjectMetadata } from "./lib/storage/project-metadata";
+import {
+  createDefaultMetadata,
+  type ProjectMetadata,
+} from "./lib/storage/project-metadata";
 import { createAutoSave } from "./lib/storage/auto-save";
 import ExportAudioDialog from "./components/ExportAudioDialog.vue";
 import {
@@ -32,6 +49,7 @@ import {
   saveTimelineState,
 } from "./lib/storage/timeline-persistence";
 import type { BufferedAudioSequence } from "./lib/audio/sequence";
+import { recordingSequenceType } from "./lib/audio/sequence/recorded/index";
 
 const selectedTrack = ref<AudioTrack<any> | null>(null);
 provide(selectedTrackKey, selectedTrack);
@@ -69,13 +87,20 @@ type MetadataDialogMode = "edit" | "new" | "save-as";
 const metadataOpen = ref(false);
 const metadataMode = ref<MetadataDialogMode>("edit");
 const stagedMetadata = ref<ProjectMetadata>(createDefaultMetadata());
+// W-15: Ref to the form component so we can read its exposed `isValid` computed.
+const metadataFormRef = ref<InstanceType<typeof ProjectMetadataForm> | null>(
+  null,
+);
 
 const openMetadataDialog = (mode: MetadataDialogMode) => {
   metadataMode.value = mode;
   if (mode === "new") {
     stagedMetadata.value = createDefaultMetadata();
   } else if (mode === "save-as") {
-    stagedMetadata.value = { ...metadata.value, name: `${metadata.value.name} (Copy)` };
+    stagedMetadata.value = {
+      ...metadata.value,
+      name: `${metadata.value.name} (Copy)`,
+    };
   } else {
     stagedMetadata.value = { ...metadata.value };
   }
@@ -155,8 +180,12 @@ let knownTrackIds: string[] = [];
 
 const subscribeToSequence = (
   seq: AudioSequence<any, any>,
-  _trackId: string,
+  track: AudioTrack<any>,
 ) => {
+  // Instrument track buffers are synthesized at runtime — their sequences must
+  // never be subscribed for dirty-state tracking or written to the DB.
+  if (track.kind !== "recorded") return;
+
   if (sequenceSubscriptions.has(seq.id)) return;
 
   const handler = () => {
@@ -189,7 +218,7 @@ const syncSequenceSubscriptions = (track: AudioTrack<any>) => {
         });
         notifyDirty();
       }
-      subscribeToSequence(seq, track.id);
+      subscribeToSequence(seq, track);
     }
   }
 
@@ -198,6 +227,13 @@ const syncSequenceSubscriptions = (track: AudioTrack<any>) => {
     if (!currentSeqIds.has(seqId)) {
       unsub();
       sequenceSubscriptions.delete(seqId);
+      // Mark the removed sequence dirty so performGranularSave will call
+      // deleteSequenceRecord for it. Without this, any sequence removed
+      // after its last save cycle is silently orphaned in the DB and
+      // causes an overlap error on the next project load.
+      if (!loadingProject) {
+        dirtyState = markSequenceDirty(dirtyState, seqId, { properties: true });
+      }
     }
   }
 };
@@ -268,7 +304,10 @@ const tearDownAllSubscriptions = () => {
 const handleTimelineChange = () => {
   const id = currentProjectId.value;
   if (!id) return;
-  saveTimelineState(id, { ratio: timeline.ratio, offsetTime: timeline.offsetTime });
+  saveTimelineState(id, {
+    ratio: timeline.ratio,
+    offsetTime: timeline.offsetTime,
+  });
 };
 
 // ─── Core save logic ───────────────────────────────────────────────────────
@@ -323,7 +362,9 @@ const performGranularSave = async (projectId: string): Promise<boolean> => {
 
     // Tracks
     const currentTracks = [...player.getTracks()];
-    const currentTrackMap = new Map(currentTracks.map((t, i) => [t.id, { track: t, sortOrder: i }]));
+    const currentTrackMap = new Map(
+      currentTracks.map((t, i) => [t.id, { track: t, sortOrder: i }]),
+    );
 
     for (const [trackId, flags] of Object.entries(snapshot.tracks)) {
       if (!flags.properties) continue;
@@ -332,7 +373,11 @@ const performGranularSave = async (projectId: string): Promise<boolean> => {
       if (entry) {
         // Track still exists — upsert.
         ops.push(
-          storage.upsertTrackRecord(projectId, entry.track.toJSON(), entry.sortOrder),
+          storage.upsertTrackRecord(
+            projectId,
+            entry.track.toJSON(),
+            entry.sortOrder,
+          ),
         );
       } else {
         // Track was deleted.
@@ -363,6 +408,13 @@ const performGranularSave = async (projectId: string): Promise<boolean> => {
         continue;
       }
 
+      // Instrument track audio buffers are always synthesized at runtime —
+      // they must never be persisted. Only recorded tracks have saveable audio.
+      if (ownerTrack.kind !== "recorded") continue;
+
+      // Never persist transient live-capture sequences.
+      if (ownerSeq.type === recordingSequenceType) continue;
+
       if (flags.buffer) {
         // Buffer changed — compress and store (slow path).
         const buffered = ownerSeq as BufferedAudioSequence<any>;
@@ -377,7 +429,11 @@ const performGranularSave = async (projectId: string): Promise<boolean> => {
       } else if (flags.properties) {
         // Only metadata changed (time, playbackRate).
         ops.push(
-          storage.upsertSequenceRecord(projectId, ownerTrack.id, ownerSeq.toJSON()),
+          storage.upsertSequenceRecord(
+            projectId,
+            ownerTrack.id,
+            ownerSeq.toJSON(),
+          ),
         );
       }
     }
@@ -410,7 +466,9 @@ const performSave = async (projectId: string): Promise<boolean> => {
 
 const autoSave = createAutoSave({
   shouldSave: () => !!currentProjectId.value && dirty.value && !saving.value,
-  save: async () => { await performSave(currentProjectId.value!); },
+  save: async () => {
+    await performSave(currentProjectId.value!);
+  },
   debounceMs: 5_000,
 });
 
@@ -426,6 +484,7 @@ onUnmounted(() => {
   timeline.removeEventListener("change", handleTimelineChange);
   tearDownAllSubscriptions();
   autoSave.dispose();
+  activeScope?.stop();
 });
 
 // ─── Save ───────────────────────────────────────────────────────────────────
@@ -450,14 +509,23 @@ const doSaveAs = async (newMetadata: ProjectMetadata) => {
 
 // ─── Load ───────────────────────────────────────────────────────────────────
 
+// Tracks the active effect scope created for the currently loaded project.
+// Stopped when a new project is loaded (replacing the current one) or on unmount.
+let activeScope: ReturnType<typeof effectScope> | null = null;
+
 const doLoad = async (projectId: string) => {
   try {
     // Need a temporary AudioContext to decode compressed audio.
     const ctx = new AudioContext();
 
+    // Stop any previous project's reactive scope before creating a new one.
+    activeScope?.stop();
+    activeScope = null;
+
     // deserializeProject creates instrument tracks that use Vue reactivity,
     // so it must run inside an effectScope.
     const scope = effectScope();
+    activeScope = scope;
     const loaded = await scope.run(() => storage.loadProject(projectId, ctx));
     // scope stays alive — instrument tracks need their reactive watchers.
 
@@ -509,7 +577,8 @@ const doLoad = async (projectId: string) => {
     browserOpen.value = false;
   } catch (e) {
     loadingProject = false;
-    saveError.value = e instanceof Error ? e.message : "Failed to load project.";
+    saveError.value =
+      e instanceof Error ? e.message : "Failed to load project.";
   }
 };
 
@@ -563,6 +632,8 @@ const unsavedDiscard = () => {
 
 const unsavedSave = async () => {
   await doSave();
+  // If save failed, leave the prompt open so the user sees the error.
+  if (saveError.value) return;
   unsavedPromptOpen.value = false;
   if (unsavedAction.value === "new") openMetadataDialog("new");
   else if (unsavedAction.value === "open") browserOpen.value = true;
@@ -609,21 +680,32 @@ onMounted(async () => {
 // ─── localStorage helpers ───────────────────────────────────────────────────
 
 const persistLastProjectId = (id: string) => {
-  try { localStorage.setItem(LAST_PROJECT_KEY, id); } catch { /* noop */ }
+  try {
+    localStorage.setItem(LAST_PROJECT_KEY, id);
+  } catch {
+    /* noop */
+  }
 };
 
 const loadLastProjectId = (): string | null => {
-  try { return localStorage.getItem(LAST_PROJECT_KEY); } catch { return null; }
+  try {
+    return localStorage.getItem(LAST_PROJECT_KEY);
+  } catch {
+    return null;
+  }
 };
 
 const clearLastProjectId = () => {
-  try { localStorage.removeItem(LAST_PROJECT_KEY); } catch { /* noop */ }
+  try {
+    localStorage.removeItem(LAST_PROJECT_KEY);
+  } catch {
+    /* noop */
+  }
 };
 
 // ─── TypeScript type alias for convenience ──────────────────────────────────
 
 type AudioSequence<K, T> = import("./lib/audio/sequence").AudioSequence<K, T>;
-
 </script>
 
 <template>
@@ -636,7 +718,10 @@ type AudioSequence<K, T> = import("./lib/audio/sequence").AudioSequence<K, T>;
         </a>
       </li>
       <li>
-        <a class="flex gap-3 items-center py-2.5 text-base" @click="guardedOpen">
+        <a
+          class="flex gap-3 items-center py-2.5 text-base"
+          @click="guardedOpen"
+        >
           <i class="iconify mdi--folder-open-outline size-5" />
           Open Project
         </a>
@@ -649,19 +734,28 @@ type AudioSequence<K, T> = import("./lib/audio/sequence").AudioSequence<K, T>;
         </a>
       </li>
       <li>
-        <a class="flex gap-3 items-center py-2.5 text-base" @click="openMetadataDialog('save-as')">
+        <a
+          class="flex gap-3 items-center py-2.5 text-base"
+          @click="openMetadataDialog('save-as')"
+        >
           <i class="iconify mdi--content-save-edit-outline size-5" />
           Save As
         </a>
       </li>
       <li>
-        <a class="flex gap-3 items-center py-2.5 text-base" @click="openMetadataDialog('edit')">
+        <a
+          class="flex gap-3 items-center py-2.5 text-base"
+          @click="openMetadataDialog('edit')"
+        >
           <i class="iconify mdi--tag-edit-outline size-5" />
           Project Info
         </a>
       </li>
       <li>
-        <a class="flex gap-3 items-center py-2.5 text-base" @click="exportOpen = true">
+        <a
+          class="flex gap-3 items-center py-2.5 text-base"
+          @click="exportOpen = true"
+        >
           <i class="iconify mdi--file-music-outline size-5" />
           Export Audio
         </a>
@@ -669,7 +763,15 @@ type AudioSequence<K, T> = import("./lib/audio/sequence").AudioSequence<K, T>;
     </template>
 
     <header class="flex flex-col">
-      <ProjectHeader v-model="metadata.name" @update:modelValue="() => { dirtyState = markProjectDirty(dirtyState); notifyDirty(); }" />
+      <ProjectHeader
+        v-model="metadata.name"
+        @update:modelValue="
+          () => {
+            dirtyState = markProjectDirty(dirtyState);
+            notifyDirty();
+          }
+        "
+      />
       <AudioPlayer />
     </header>
 
@@ -680,7 +782,9 @@ type AudioSequence<K, T> = import("./lib/audio/sequence").AudioSequence<K, T>;
       </div>
     </main>
 
-    <footer><BottomPanel :saving="saving" :dirty="dirty" :error="saveError" /></footer>
+    <footer>
+      <BottomPanel :saving="saving" :dirty="dirty" :error="saveError" />
+    </footer>
   </SideMenu>
 
   <!-- Project Browser modal -->
@@ -705,10 +809,16 @@ type AudioSequence<K, T> = import("./lib/audio/sequence").AudioSequence<K, T>;
   <dialog class="modal" :class="{ 'modal-open': metadataOpen }">
     <div class="modal-box bg-base-300 max-w-md">
       <h3 class="mb-6 text-lg font-bold">{{ metadataDialogTitle }}</h3>
-      <ProjectMetadataForm v-model="stagedMetadata" />
+      <ProjectMetadataForm ref="metadataFormRef" v-model="stagedMetadata" />
       <div class="modal-action">
-        <button class="btn btn-ghost" @click="cancelMetadataDialog">Cancel</button>
-        <button class="btn btn-primary" @click="confirmMetadataDialog">
+        <button class="btn btn-ghost" @click="cancelMetadataDialog">
+          Cancel
+        </button>
+        <button
+          class="btn btn-primary"
+          :disabled="!(metadataFormRef?.isValid ?? true)"
+          @click="confirmMetadataDialog"
+        >
           {{ metadataDialogConfirmLabel }}
         </button>
       </div>

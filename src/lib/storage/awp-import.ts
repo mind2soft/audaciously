@@ -72,6 +72,13 @@ export async function importProject(file: File): Promise<ImportOutcome> {
 // ─── Import Helpers ──────────────────────────────────────────────────────────────────
 
 async function unzipFile(file: File): Promise<Record<string, Uint8Array>> {
+  const MAX_AWP_FILE_SIZE = 512 * 1024 * 1024; // 512 MB
+  if (file.size > MAX_AWP_FILE_SIZE) {
+    throw new Error(
+      `File is too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum allowed size is 512 MB.`,
+    );
+  }
+
   try {
     const arrayBuffer = await file.arrayBuffer();
     return await unzipAsync(new Uint8Array(arrayBuffer));
@@ -145,6 +152,11 @@ async function buildRecordsWithFreshIds(
         const seqId = nanoid();
         const audioBlobId = nanoid();
 
+        // Defence-in-depth: assert audioFile path is safe even after manifest validation.
+        if (!/^audio\/[^/]+\.pcm$/.test(seqEntry.audioFile)) {
+          throw new Error(`Invalid audioFile path "${seqEntry.audioFile}".`);
+        }
+
         const pcmBytes = entries[seqEntry.audioFile];
         if (!pcmBytes) {
           throw new Error(
@@ -155,6 +167,11 @@ async function buildRecordsWithFreshIds(
         // Split raw PCM bytes back into per-channel Float32Arrays and compress.
         const { numberOfChannels, lengthInFrames, sampleRate } =
           seqEntry.audioMeta;
+
+        if (sampleRate < 8000 || sampleRate > 384_000) {
+          throw new Error(`Invalid sampleRate ${sampleRate}.`);
+        }
+
         const channelData = await compressChannels(
           pcmBytes,
           numberOfChannels,

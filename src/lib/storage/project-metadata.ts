@@ -9,6 +9,26 @@ export interface ProjectMetadata {
   description: string;
 }
 
+// ─── Serialization ────────────────────────────────────────────────────────────
+
+/**
+ * Return a plain, structured-clone-safe snapshot of a ProjectMetadata object.
+ *
+ * This is the metadata equivalent of `track.toJSON()` / `sequence.toJSON()`:
+ * all consumers that write metadata to IndexedDB must go through this function
+ * rather than spreading the live object directly, which may carry Vue reactive
+ * proxies that cannot be serialized by the structured-clone algorithm.
+ */
+export function serializeMetadata(metadata: ProjectMetadata): ProjectMetadata {
+  return {
+    name: metadata.name,
+    author: metadata.author,
+    genre: metadata.genre,
+    tags: [...metadata.tags],
+    description: metadata.description,
+  };
+}
+
 // ─── Defaults ─────────────────────────────────────────────────────────────────
 
 /** Create a fresh metadata object with sensible defaults. */
@@ -35,19 +55,22 @@ const MAX_DESCRIPTION_LENGTH = 1000;
 export function validateProjectName(name: string): string | null {
   const trimmed = name.trim();
   if (trimmed.length === 0) return "Project name is required.";
-  if (trimmed.length > MAX_NAME_LENGTH) return `Project name must be at most ${MAX_NAME_LENGTH} characters.`;
+  if (trimmed.length > MAX_NAME_LENGTH)
+    return `Project name must be at most ${MAX_NAME_LENGTH} characters.`;
   return null;
 }
 
 /** Returns an error message or `null` if valid. */
 export function validateAuthor(author: string): string | null {
-  if (author.length > MAX_AUTHOR_LENGTH) return `Author must be at most ${MAX_AUTHOR_LENGTH} characters.`;
+  if (author.length > MAX_AUTHOR_LENGTH)
+    return `Author must be at most ${MAX_AUTHOR_LENGTH} characters.`;
   return null;
 }
 
 /** Returns an error message or `null` if valid. */
 export function validateGenre(genre: string): string | null {
-  if (genre.length > MAX_GENRE_LENGTH) return `Genre must be at most ${MAX_GENRE_LENGTH} characters.`;
+  if (genre.length > MAX_GENRE_LENGTH)
+    return `Genre must be at most ${MAX_GENRE_LENGTH} characters.`;
   return null;
 }
 
@@ -56,7 +79,8 @@ export function validateTags(tags: string[]): string | null {
   if (tags.length > MAX_TAGS) return `At most ${MAX_TAGS} tags allowed.`;
   for (const tag of tags) {
     if (tag.trim().length === 0) return "Tags must not be empty.";
-    if (tag.length > MAX_TAG_LENGTH) return `Each tag must be at most ${MAX_TAG_LENGTH} characters.`;
+    if (tag.length > MAX_TAG_LENGTH)
+      return `Each tag must be at most ${MAX_TAG_LENGTH} characters.`;
   }
   return null;
 }
@@ -78,7 +102,9 @@ export interface MetadataValidationResult {
 }
 
 /** Validate all metadata fields at once. */
-export function validateMetadata(metadata: ProjectMetadata): MetadataValidationResult {
+export function validateMetadata(
+  metadata: ProjectMetadata,
+): MetadataValidationResult {
   const errors: Partial<Record<keyof ProjectMetadata, string>> = {};
 
   const nameErr = validateProjectName(metadata.name);

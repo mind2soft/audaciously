@@ -55,6 +55,17 @@ export async function decompressBlobToFloat32Array(
         return;
       }
 
+      const MAX_DECOMPRESSED_BYTES = 256 * 1024 * 1024; // 256 MB per blob
+      if (decompressed.byteLength > MAX_DECOMPRESSED_BYTES) {
+        reject(
+          new Error(
+            `Decompressed audio data too large (${(decompressed.byteLength / 1024 / 1024).toFixed(1)} MB). ` +
+              `Maximum allowed is ${MAX_DECOMPRESSED_BYTES / 1024 / 1024} MB per channel.`,
+          ),
+        );
+        return;
+      }
+
       // Copy into a properly-aligned Float32Array (inflate output may not
       // share an ArrayBuffer aligned for float access).
       const result = new Float32Array(decompressed.byteLength / 4);

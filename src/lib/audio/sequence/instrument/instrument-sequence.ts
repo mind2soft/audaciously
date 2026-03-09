@@ -53,9 +53,10 @@ export function createInstrumentSequence(
       currentTime = currentTime ?? state.playback.context.currentTime;
 
       source.buffer = buffer;
-      const playbackRate = isFinite(base.playbackRate) && base.playbackRate > 0
-        ? base.playbackRate
-        : 1;
+      const playbackRate =
+        isFinite(base.playbackRate) && base.playbackRate > 0
+          ? base.playbackRate
+          : 1;
       source.playbackRate.value = playbackRate;
 
       state.playback.activeSource = source;
@@ -114,9 +115,10 @@ export function createInstrumentSequence(
         base.playbackRate = value;
 
         if (hasChanged && state.playback?.activeSource) {
-          const safeRate = isFinite(base.playbackRate) && base.playbackRate > 0
-            ? base.playbackRate
-            : 1;
+          const safeRate =
+            isFinite(base.playbackRate) && base.playbackRate > 0
+              ? base.playbackRate
+              : 1;
           state.playback.activeSource.playbackRate.value = safeRate;
           dispatchEvent({ type: "change" });
         }

@@ -1,6 +1,7 @@
 import { nanoid } from "nanoid";
 import type { AudioTrack } from "../audio/track";
 import type { BufferedAudioSequence } from "../audio/sequence";
+import { recordingSequenceType } from "../audio/sequence/recorded/index";
 import { createRecordedTrack } from "../audio/track/recorded/recorded-track";
 import { createRecordedSequence } from "../audio/sequence/recorded/recorded-sequence";
 import { createInstrumentTrack } from "../audio/track/instrument/instrument-track";
@@ -56,6 +57,10 @@ export function serializeProject(
 
     if (track.kind === "recorded") {
       for (const seq of track.getSequences()) {
+        // Never persist transient live-capture sequences — they are replaced by
+        // the final RecordedSequence once recording finishes.
+        if (seq.type === recordingSequenceType) continue;
+
         const buffered = seq as BufferedAudioSequence<any>;
         const audioBlobId = nanoid();
 
@@ -166,7 +171,11 @@ function deserializeInstrumentTrack(
 ): AudioTrack<any> | null {
   if (!record.instrumentId) return null;
 
-  const track = createInstrumentTrack(record.name, record.instrumentId, record.id);
+  const track = createInstrumentTrack(
+    record.name,
+    record.instrumentId,
+    record.id,
+  );
   applyCommonTrackProps(track, record);
 
   // Apply instrument-specific state. Setting these synchronously ensures
@@ -175,14 +184,19 @@ function deserializeInstrumentTrack(
   if (record.timeSignature) track.timeSignature = record.timeSignature;
   if (record.notes) track.notes = record.notes;
   if (record.selectedNoteType) track.selectedNoteType = record.selectedNoteType;
-  if (record.pitchScrollTop !== undefined) track.pitchScrollTop = record.pitchScrollTop;
-  if (record.showWaveform !== undefined) track.showWaveform = record.showWaveform;
+  if (record.pitchScrollTop !== undefined)
+    track.pitchScrollTop = record.pitchScrollTop;
+  if (record.showWaveform !== undefined)
+    track.showWaveform = record.showWaveform;
   if (record.octaveRange) track.octaveRange = record.octaveRange;
 
   return track;
 }
 
-function applyCommonTrackProps(track: AudioTrack<any>, record: TrackRecord): void {
+function applyCommonTrackProps(
+  track: AudioTrack<any>,
+  record: TrackRecord,
+): void {
   track.volume = record.volume;
   track.balance = record.balance;
   track.muted = record.muted;

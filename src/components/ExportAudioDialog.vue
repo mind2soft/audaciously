@@ -48,7 +48,7 @@ watch(
       stage.value = "";
       progress.value = -1;
     }
-  }
+  },
 );
 
 onUpdated(() => {
@@ -64,14 +64,15 @@ onUpdated(() => {
 
 const triggerDownload = (blob: Blob, name: string, ext: string) => {
   const safeName =
-    (name || "untitled").replace(/[^a-zA-Z0-9 _-]/g, "_").trim() || "untitled";
+    (name || "untitled").replaceAll(/[^a-zA-Z0-9 _-]/g, "_").trim() ||
+    "untitled";
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = `${safeName}.${ext}`;
   document.body.appendChild(anchor);
   anchor.click();
-  document.body.removeChild(anchor);
+  anchor.remove();
   URL.revokeObjectURL(url);
 };
 
@@ -258,27 +259,22 @@ const doCancel = () => {
 
       <!-- Actions -->
       <div class="modal-action">
-        <button
-          class="btn btn-ghost"
-          :disabled="exporting"
-          @click="doCancel"
-        >
+        <button class="btn btn-ghost" :disabled="exporting" @click="doCancel">
           Cancel
         </button>
-        <button
-          class="btn btn-primary"
-          :disabled="exporting"
-          @click="doExport"
-        >
-          <i v-if="exporting" class="iconify mdi--loading animate-spin size-4" />
+        <button class="btn btn-primary" :disabled="exporting" @click="doExport">
+          <i
+            v-if="exporting"
+            class="iconify mdi--loading animate-spin size-4"
+          />
           {{ exporting ? "Exporting\u2026" : "Export" }}
         </button>
       </div>
     </div>
 
-    <!-- Clicking the backdrop closes without exporting -->
+    <!-- Clicking the backdrop closes without exporting — disabled during active export -->
     <form method="dialog" class="modal-backdrop">
-      <button @click="doCancel">close</button>
+      <button @click.prevent="doCancel">close</button>
     </form>
   </dialog>
 </template>

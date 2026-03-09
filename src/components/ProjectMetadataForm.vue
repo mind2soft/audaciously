@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onUnmounted, ref } from "vue";
 import type { ProjectMetadata } from "../lib/storage/project-metadata";
 import {
   GENRE_SUGGESTIONS,
@@ -42,6 +42,8 @@ const availableTagSuggestions = computed(() =>
 );
 
 function addTag(tag?: string) {
+  // S-7: Reject whitespace-only input before attempting to add a tag.
+  if (!tagInput.value.trim() && !tag) return;
   const value = (tag ?? tagInput.value).trim().toLowerCase();
   if (value && !props.modelValue.tags.includes(value)) {
     update("tags", [...props.modelValue.tags, value]);
@@ -64,10 +66,21 @@ function handleTagKeydown(e: KeyboardEvent) {
   }
 }
 
+// S-6: Store the timer ID so it can be cleared on unmount.
+let tagBlurTimer: ReturnType<typeof setTimeout> | undefined;
+
 function handleTagBlur() {
   // Delay to allow click on suggestion before hiding.
-  window.setTimeout(() => (showTagSuggestions.value = false), 150);
+  tagBlurTimer = globalThis.setTimeout(
+    () => (showTagSuggestions.value = false),
+    150,
+  );
 }
+
+onUnmounted(() => {
+  // S-6: Prevent the blur timer from firing after the component is gone.
+  if (tagBlurTimer !== undefined) clearTimeout(tagBlurTimer);
+});
 
 // ── Validation ──────────────────────────────────────────────────────────────
 
@@ -78,6 +91,21 @@ const tagsError = computed(() => validateTags(props.modelValue.tags));
 const descriptionError = computed(() =>
   validateDescription(props.modelValue.description),
 );
+
+// W-15: Derived validity flag — requires at minimum a non-empty name and no
+// validation errors on any field.
+const isValid = computed(
+  () =>
+    props.modelValue.name.trim().length > 0 &&
+    !nameError.value &&
+    !authorError.value &&
+    !genreError.value &&
+    !tagsError.value &&
+    !descriptionError.value,
+);
+
+// Expose so parent dialogs can disable their confirm button (W-15).
+defineExpose({ isValid });
 </script>
 
 <template>
@@ -93,9 +121,7 @@ const descriptionError = computed(() =>
         :class="{ 'input-error': nameError }"
         placeholder="My awesome track"
         :value="modelValue.name"
-        @input="
-          update('name', ($event.target as HTMLInputElement).value)
-        "
+        @input="update('name', ($event.target as HTMLInputElement).value)"
       />
       <div v-if="nameError" class="label">
         <span class="label-text-alt text-error">{{ nameError }}</span>
@@ -113,9 +139,7 @@ const descriptionError = computed(() =>
         :class="{ 'input-error': authorError }"
         placeholder="Your name"
         :value="modelValue.author"
-        @input="
-          update('author', ($event.target as HTMLInputElement).value)
-        "
+        @input="update('author', ($event.target as HTMLInputElement).value)"
       />
       <div v-if="authorError" class="label">
         <span class="label-text-alt text-error">{{ authorError }}</span>
@@ -134,9 +158,7 @@ const descriptionError = computed(() =>
         :class="{ 'input-error': genreError }"
         placeholder="Select or type a genre"
         :value="modelValue.genre"
-        @input="
-          update('genre', ($event.target as HTMLInputElement).value)
-        "
+        @input="update('genre', ($event.target as HTMLInputElement).value)"
       />
       <datalist id="genre-suggestions">
         <option v-for="g in GENRE_SUGGESTIONS" :key="g" :value="g" />
@@ -188,7 +210,11 @@ const descriptionError = computed(() =>
 
         <!-- Suggestion dropdown -->
         <ul
-          v-if="showTagSuggestions && tagInput.length > 0 && availableTagSuggestions.length > 0"
+          v-if="
+            showTagSuggestions &&
+            tagInput.length > 0 &&
+            availableTagSuggestions.length > 0
+          "
           class="menu menu-sm bg-base-200 rounded-box shadow-lg absolute z-10 w-full mt-1 max-h-40 overflow-y-auto"
         >
           <li
@@ -216,10 +242,7 @@ const descriptionError = computed(() =>
         placeholder="Describe your project..."
         :value="modelValue.description"
         @input="
-          update(
-            'description',
-            ($event.target as HTMLTextAreaElement).value,
-          )
+          update('description', ($event.target as HTMLTextAreaElement).value)
         "
       />
       <div v-if="descriptionError" class="label">

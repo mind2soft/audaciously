@@ -6,6 +6,24 @@ import type { AudioEffect } from "../audio/sequence";
 
 export const AWP_SCHEMA_VERSION = "1.0";
 
+// ─── Validation Limits ────────────────────────────────────────────────────────
+
+const MAX_AUDIO_CHANNELS = 32;
+const MAX_AUDIO_FRAMES = 48_000 * 60 * 60 * 2; // 2 hours at 48 kHz
+
+const MAX_TRACKS = 64;
+const MAX_SEQUENCES_PER_TRACK = 512;
+const MAX_NOTES_PER_TRACK = 10_000;
+
+const MAX_PROJECT_NAME_LENGTH = 200;
+const MAX_PROJECT_DESCRIPTION_LENGTH = 5_000;
+const MAX_PROJECT_AUTHOR_LENGTH = 200;
+const MAX_PROJECT_GENRE_LENGTH = 100;
+const MAX_PROJECT_TAGS = 50;
+const MAX_TAG_LENGTH = 50;
+
+const ALLOWED_BEAT_UNITS: ReadonlyArray<number> = [1, 2, 4, 8, 16];
+
 // ─── Manifest Types ───────────────────────────────────────────────────────────
 
 /** Top-level manifest structure (manifest.json inside the .awp ZIP). */
@@ -110,6 +128,11 @@ export function validateManifest(data: unknown): ManifestValidationResult {
 
   // ── Tracks ────────────────────────────────────────────────────────────────
   if (Array.isArray(manifest.tracks)) {
+    if (manifest.tracks.length > MAX_TRACKS) {
+      errors.push(
+        `Manifest contains too many tracks (${manifest.tracks.length}). Maximum is ${MAX_TRACKS}.`,
+      );
+    }
     for (let i = 0; i < manifest.tracks.length; i++) {
       validateTrackEntry(manifest.tracks[i], i, errors);
     }
@@ -140,7 +163,50 @@ function validateProjectInfo(
 ): void {
   if (typeof project.name !== "string" || project.name.trim().length === 0) {
     errors.push("Project name is required.");
+  } else if (project.name.length > MAX_PROJECT_NAME_LENGTH) {
+    errors.push(
+      `Project name exceeds maximum length of ${MAX_PROJECT_NAME_LENGTH} characters.`,
+    );
   }
+
+  if (typeof project.description === "string") {
+    if (project.description.length > MAX_PROJECT_DESCRIPTION_LENGTH) {
+      errors.push(
+        `Project description exceeds maximum length of ${MAX_PROJECT_DESCRIPTION_LENGTH} characters.`,
+      );
+    }
+  }
+
+  if (typeof project.author === "string") {
+    if (project.author.length > MAX_PROJECT_AUTHOR_LENGTH) {
+      errors.push(
+        `Project author exceeds maximum length of ${MAX_PROJECT_AUTHOR_LENGTH} characters.`,
+      );
+    }
+  }
+
+  if (typeof project.genre === "string") {
+    if (project.genre.length > MAX_PROJECT_GENRE_LENGTH) {
+      errors.push(
+        `Project genre exceeds maximum length of ${MAX_PROJECT_GENRE_LENGTH} characters.`,
+      );
+    }
+  }
+
+  if (Array.isArray(project.tags)) {
+    if (project.tags.length > MAX_PROJECT_TAGS) {
+      errors.push(`Project tags exceed maximum count of ${MAX_PROJECT_TAGS}.`);
+    }
+    for (let i = 0; i < project.tags.length; i++) {
+      const tag = project.tags[i];
+      if (typeof tag === "string" && tag.length > MAX_TAG_LENGTH) {
+        errors.push(
+          `Project tag ${i} exceeds maximum length of ${MAX_TAG_LENGTH} characters.`,
+        );
+      }
+    }
+  }
+
   if (typeof project.bpm !== "number" || project.bpm <= 0) {
     errors.push("Project bpm must be a positive number.");
   }
@@ -174,7 +240,46 @@ function validateTrackEntry(
     errors.push(`${prefix}: instrument track missing instrumentId.`);
   }
 
+  // ── Instrument-specific validations ─────────────────────────────────────
+  if (track.kind === "instrument") {
+    if (
+      Array.isArray(track.notes) &&
+      track.notes.length > MAX_NOTES_PER_TRACK
+    ) {
+      errors.push(
+        `${prefix}: too many notes (${track.notes.length}). Maximum is ${MAX_NOTES_PER_TRACK}.`,
+      );
+    }
+
+    if (track.timeSignature && typeof track.timeSignature === "object") {
+      const ts = track.timeSignature as Record<string, unknown>;
+      if (
+        typeof ts.beatUnit !== "number" ||
+        !ALLOWED_BEAT_UNITS.includes(ts.beatUnit)
+      ) {
+        errors.push(
+          `${prefix}: timeSignature.beatUnit must be one of ${ALLOWED_BEAT_UNITS.join(", ")}.`,
+        );
+      }
+      if (
+        typeof ts.beatsPerMeasure !== "number" ||
+        !Number.isInteger(ts.beatsPerMeasure) ||
+        ts.beatsPerMeasure < 1 ||
+        ts.beatsPerMeasure > 32
+      ) {
+        errors.push(
+          `${prefix}: timeSignature.beatsPerMeasure must be an integer between 1 and 32.`,
+        );
+      }
+    }
+  }
+
   if (track.kind === "recorded" && Array.isArray(track.sequences)) {
+    if (track.sequences.length > MAX_SEQUENCES_PER_TRACK) {
+      errors.push(
+        `${prefix}: too many sequences (${track.sequences.length}). Maximum is ${MAX_SEQUENCES_PER_TRACK}.`,
+      );
+    }
     for (let i = 0; i < track.sequences.length; i++) {
       validateSequenceEntry(track.sequences[i], index, i, errors);
     }
@@ -201,6 +306,19 @@ function validateSequenceEntry(
 
   if (typeof seq.audioFile !== "string" || seq.audioFile.length === 0) {
     errors.push(`${prefix}: missing audioFile path.`);
+  } else {
+    // Normalise backslashes then apply path-traversal and prefix guards.
+    const normalisedAudioFile = seq.audioFile.replace(/\\/g, "/");
+    if (normalisedAudioFile.includes("\0")) {
+      errors.push(`${prefix}: audioFile path contains null bytes.`);
+    } else if (
+      normalisedAudioFile.includes("../") ||
+      normalisedAudioFile.includes("./")
+    ) {
+      errors.push(`${prefix}: audioFile path must not contain path traversal.`);
+    } else if (!normalisedAudioFile.startsWith("audio/")) {
+      errors.push(`${prefix}: audioFile path must start with "audio/".`);
+    }
   }
 
   if (!seq.audioMeta || typeof seq.audioMeta !== "object") {
@@ -212,11 +330,16 @@ function validateSequenceEntry(
     }
     if (
       typeof meta.numberOfChannels !== "number" ||
-      meta.numberOfChannels < 1
+      meta.numberOfChannels < 1 ||
+      meta.numberOfChannels > MAX_AUDIO_CHANNELS
     ) {
       errors.push(`${prefix}: invalid audioMeta.numberOfChannels.`);
     }
-    if (typeof meta.lengthInFrames !== "number" || meta.lengthInFrames < 1) {
+    if (
+      typeof meta.lengthInFrames !== "number" ||
+      meta.lengthInFrames < 1 ||
+      meta.lengthInFrames > MAX_AUDIO_FRAMES
+    ) {
       errors.push(`${prefix}: invalid audioMeta.lengthInFrames.`);
     }
   }

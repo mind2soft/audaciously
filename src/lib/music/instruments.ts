@@ -32,26 +32,41 @@ export interface NoteTypeInfo {
 
 export const NOTE_TYPE_LIST: NoteTypeInfo[] = [
   { id: "double-whole", label: "Double Whole", fraction: "2/1", glyph: "𝅜" },
-  { id: "whole",        label: "Whole",        fraction: "1/1", glyph: "𝅝" },
-  { id: "half",         label: "Half",         fraction: "1/2", glyph: "𝅗𝅥" },
-  { id: "quarter",      label: "Quarter",      fraction: "1/4", glyph: "♩" },
-  { id: "eighth",       label: "Eighth",       fraction: "1/8", glyph: "♪" },
-  { id: "sixteenth",    label: "Sixteenth",    fraction: "1/16", glyph: "𝅘𝅥𝅯" },
-  { id: "thirty-second", label: "32nd",        fraction: "1/32", glyph: "𝅘𝅥𝅰" },
+  { id: "whole", label: "Whole", fraction: "1/1", glyph: "𝅝" },
+  { id: "half", label: "Half", fraction: "1/2", glyph: "𝅗𝅥" },
+  { id: "quarter", label: "Quarter", fraction: "1/4", glyph: "♩" },
+  { id: "eighth", label: "Eighth", fraction: "1/8", glyph: "♪" },
+  { id: "sixteenth", label: "Sixteenth", fraction: "1/16", glyph: "𝅘𝅥𝅯" },
+  { id: "thirty-second", label: "32nd", fraction: "1/32", glyph: "𝅘𝅥𝅰" },
 ];
 
 // ─── Octave range ─────────────────────────────────────────────────────────────
 
-export interface OctaveRange { low: number; high: number; }
+export interface OctaveRange {
+  low: number;
+  high: number;
+}
 
 export const PIANO_OCTAVE_MIN = 1;
 export const PIANO_OCTAVE_MAX = 8;
 export const PIANO_DEFAULT_OCTAVE_RANGE: OctaveRange = { low: 3, high: 5 };
 
-export const PIANO_OCTAVE_PRESETS: Array<{ label: string; title: string; range: OctaveRange }> = [
-  { label: "Standard", title: "C3 – B5 · 3 octaves", range: { low: 3, high: 5 } },
-  { label: "Extended", title: "C2 – B6 · 5 octaves", range: { low: 2, high: 6 } },
-  { label: "Full",     title: "C1 – B8 · 8 octaves", range: { low: 1, high: 8 } },
+export const PIANO_OCTAVE_PRESETS: Array<{
+  label: string;
+  title: string;
+  range: OctaveRange;
+}> = [
+  {
+    label: "Standard",
+    title: "C3 – B5 · 3 octaves",
+    range: { low: 3, high: 5 },
+  },
+  {
+    label: "Extended",
+    title: "C2 – B6 · 5 octaves",
+    range: { low: 2, high: 6 },
+  },
+  { label: "Full", title: "C1 – B8 · 8 octaves", range: { low: 1, high: 8 } },
 ];
 
 /**
@@ -97,7 +112,20 @@ export interface MusicInstrument {
 
 // Piano: C1 – B8 (96 chromatic semitones, top = B8, bottom = C1)
 function buildPianoPitches(): InstrumentPitch[] {
-  const noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+  const noteNames = [
+    "C",
+    "C#",
+    "D",
+    "D#",
+    "E",
+    "F",
+    "F#",
+    "G",
+    "G#",
+    "A",
+    "A#",
+    "B",
+  ];
   const pitches: InstrumentPitch[] = [];
   for (let octave = 8; octave >= 1; octave--) {
     for (let n = 11; n >= 0; n--) {
@@ -122,15 +150,15 @@ export const DRUMS_INSTRUMENT: MusicInstrument = {
   label: "Drums",
   icon: "mdi--drum",
   pitches: [
-    { id: "crash",        label: "Crash",       short: "Csh"  },
-    { id: "ride",         label: "Ride",        short: "Ride" },
-    { id: "hihat-open",   label: "Hi-Hat Open", short: "HHO"  },
-    { id: "hihat-closed", label: "Hi-Hat Cls.", short: "HHC"  },
-    { id: "snare",        label: "Snare",       short: "Snr"  },
-    { id: "tom-hi",       label: "Tom Hi",      short: "TmH"  },
-    { id: "tom-mid",      label: "Tom Mid",     short: "TmM"  },
-    { id: "tom-lo",       label: "Tom Lo",      short: "TmL"  },
-    { id: "kick",         label: "Kick",        short: "Kck"  },
+    { id: "crash", label: "Crash", short: "Csh" },
+    { id: "ride", label: "Ride", short: "Ride" },
+    { id: "hihat-open", label: "Hi-Hat Open", short: "HHO" },
+    { id: "hihat-closed", label: "Hi-Hat Cls.", short: "HHC" },
+    { id: "snare", label: "Snare", short: "Snr" },
+    { id: "tom-hi", label: "Tom Hi", short: "TmH" },
+    { id: "tom-mid", label: "Tom Mid", short: "TmM" },
+    { id: "tom-lo", label: "Tom Lo", short: "TmL" },
+    { id: "kick", label: "Kick", short: "Kck" },
   ],
   rowHeight: 16,
 };
@@ -140,4 +168,7 @@ export const MUSIC_INSTRUMENTS: Record<MusicInstrumentId, MusicInstrument> = {
   drums: DRUMS_INSTRUMENT,
 };
 
-export const INSTRUMENT_LIST: MusicInstrument[] = [PIANO_INSTRUMENT, DRUMS_INSTRUMENT];
+export const INSTRUMENT_LIST: MusicInstrument[] = [
+  PIANO_INSTRUMENT,
+  DRUMS_INSTRUMENT,
+];

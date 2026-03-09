@@ -103,7 +103,7 @@ const createRecorder = (options?: RecorderOptions): Recorder => {
       event.recorder = recorder;
       event.timestamp = Date.now();
       return event;
-    }
+    },
   );
 
   function initAudioContext() {
@@ -141,7 +141,7 @@ const createRecorder = (options?: RecorderOptions): Recorder => {
     internal.mediaRecorder?.removeEventListener("resume", resumeEventListener);
     internal.mediaRecorder?.removeEventListener(
       "dataavailable",
-      dateAvailableEventListener
+      dateAvailableEventListener,
     );
     internal.mediaRecorder?.removeEventListener("stop", stopEventListener);
 
@@ -175,7 +175,7 @@ const createRecorder = (options?: RecorderOptions): Recorder => {
       const buffer = internal.audioContext.createBuffer(
         1,
         internal.analyserData.length,
-        internal.audioContext.sampleRate
+        internal.audioContext.sampleRate,
       );
 
       internal.analyserNode.getFloatTimeDomainData(internal.analyserData);
@@ -227,12 +227,16 @@ const createRecorder = (options?: RecorderOptions): Recorder => {
         offset += ab.byteLength;
       }
 
-      const audioBuffer = await internal.audioContext.decodeAudioData(arrayBuffer);
+      const audioBuffer =
+        await internal.audioContext.decodeAudioData(arrayBuffer);
 
       // Guard: discard if superseded or recording already stopped
       if (seq !== internal.previewSeq || internal.state !== "recording") return;
 
-      dispatchEvent({ type: "bufferupdate", buffer: audioBuffer } as RecorderBufferUpdateEvent);
+      dispatchEvent({
+        type: "bufferupdate",
+        buffer: audioBuffer,
+      } as RecorderBufferUpdateEvent);
     } catch {
       // Decode can legitimately fail on partial/incomplete container data
       // (common on Safari with AAC/MP4).  Silently ignore and wait for the
@@ -258,7 +262,7 @@ const createRecorder = (options?: RecorderOptions): Recorder => {
       },
       () => {
         updatePermissionState("denied");
-      }
+      },
     );
 
   const recorder: Recorder = {
@@ -279,7 +283,7 @@ const createRecorder = (options?: RecorderOptions): Recorder => {
       let mediaStream: MediaStream | null = null;
       try {
         mediaStream = await navigator.mediaDevices.getUserMedia(
-          internal.mediaStreamConstraints
+          internal.mediaStreamConstraints,
         );
       } catch (err) {
         if (err instanceof OverconstrainedError) {
@@ -288,7 +292,7 @@ const createRecorder = (options?: RecorderOptions): Recorder => {
           // so recording can still proceed.
           console.warn(
             "recorder: OverconstrainedError – retrying with plain { audio: true }",
-            err
+            err,
           );
           try {
             mediaStream = await navigator.mediaDevices.getUserMedia({
@@ -310,14 +314,14 @@ const createRecorder = (options?: RecorderOptions): Recorder => {
         internal.blobs = [];
         internal.mediaRecorder = new MediaRecorder(
           mediaStream,
-          sanitizeMediaRecorderOptions(options?.mediaRecorderOptions)
+          sanitizeMediaRecorderOptions(options?.mediaRecorderOptions),
         );
 
         internal.sourceNode = audioContext.createMediaStreamSource(mediaStream);
         internal.analyserNode = audioContext.createAnalyser();
 
         internal.analyserData = new Float32Array(
-          internal.analyserNode.frequencyBinCount
+          internal.analyserNode.frequencyBinCount,
         );
 
         internal.sourceNode.connect(internal.analyserNode);
@@ -327,7 +331,7 @@ const createRecorder = (options?: RecorderOptions): Recorder => {
         internal.mediaRecorder.addEventListener("resume", resumeEventListener);
         internal.mediaRecorder.addEventListener(
           "dataavailable",
-          dateAvailableEventListener
+          dateAvailableEventListener,
         );
         internal.mediaRecorder.addEventListener("stop", stopEventListener);
         internal.mediaRecorder.start(timeslice);
@@ -362,7 +366,7 @@ const createRecorder = (options?: RecorderOptions): Recorder => {
       const audioContext = initAudioContext();
       const bufferSize = internal.blobs.reduce(
         (len, blob) => len + blob.size,
-        0
+        0,
       );
 
       if (!bufferSize) {

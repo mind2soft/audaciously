@@ -23,7 +23,7 @@
     "@iconify/tailwind": "^1.2.0",
     "@tailwindcss/vite": "^4.2.1",
     "@vitejs/plugin-vue": "^5.2.4",
-    "@vue/tsconfig": "^0.7.0",
+    "@vue/tsconfig": "^0.9.0",
     "daisyui": "5.0.0-beta.7",
     "postcss": "^8.5.8",
     "tailwindcss": "^4.2.1",

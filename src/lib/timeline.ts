@@ -39,8 +39,8 @@ export enum ScaleDirection {
 const tickWidth = 128;
 const scale_a = 4;
 const scale_b = 3;
-const scale_min = 0.01;
-const scale_max = 5000;
+export const scale_min = 0.01;
+export const scale_max = 5000;
 
 const getOptimalTimeStep = (ratio: number) => {
   let timeStep = 1;

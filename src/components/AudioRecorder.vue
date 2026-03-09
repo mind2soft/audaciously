@@ -14,6 +14,9 @@ import type {
 import type { AudioPlayer } from "../lib/audio/player";
 import type { RecordedAudioTrack } from "../lib/audio/track/recorded/recorded-track";
 
+// W-11: Maximum recording duration (4 hours) to auto-stop runaway recordings.
+const MAX_RECORDING_MS = 4 * 60 * 60 * 1000;
+
 const props = defineProps<{
   isPlayerPlaying?: boolean;
 }>();
@@ -32,29 +35,76 @@ const recordingTrack = ref<RecordedAudioTrack>();
 const recordingSequence = ref<RecordingSequence>();
 const recordingStart = ref<number>(0);
 
+// W-10: Re-entrancy guard — prevents concurrent handleRecord invocations.
+let recordingInFlight = false;
+// W-11: Timer ID for the maximum-duration auto-stop.
+let maxDurationTimer: ReturnType<typeof setTimeout> | undefined;
+
 const handleUpdateRecorderState = () => {
   recorderState.value = recorder.state;
 };
 
 const handleRecord = async () => {
-  recordingStart.value = player.currentTime;
+  // W-10: Guard against re-entrant calls (double-click, keyboard shortcut).
+  if (recordingInFlight) return;
+  recordingInFlight = true;
 
-  recordingSequence.value = createRecordingSequence(recordingStart.value);
+  // Capture the track reference before async work so we can roll it back on error (W-12).
+  let addedTrack: RecordedAudioTrack | undefined;
 
-  recordingTrack.value = createRecordedTrack("test");
-  recordingTrack.value.addSequence(recordingSequence.value);
+  try {
+    recordingStart.value = player.currentTime;
 
-  player.addTrack(recordingTrack.value);
-  // Await playback start so the recording timestamp and playback are
-  // synchronised (player.play() returns a Promise that resolves once the
-  // AudioContext has been resumed and playback has begun).
-  await player.play();
+    recordingSequence.value = createRecordingSequence(recordingStart.value);
 
-  handleUpdateRecorderState();
+    recordingTrack.value = createRecordedTrack(`Track ${player.trackCount + 1}`);
+    recordingTrack.value.addSequence(recordingSequence.value);
+
+    addedTrack = recordingTrack.value;
+    player.addTrack(addedTrack);
+
+    // W-11: Schedule auto-stop after maximum recording duration.
+    maxDurationTimer = setTimeout(() => {
+      if (recorder.state === "recording") {
+        recorder.stop();
+      }
+    }, MAX_RECORDING_MS);
+
+    // Await playback start so the recording timestamp and playback are
+    // synchronised (player.play() returns a Promise that resolves once the
+    // AudioContext has been resumed and playback has begun).
+    await player.play();
+
+    handleUpdateRecorderState();
+  } catch (err) {
+    // W-12: Roll back the orphaned track if it was added before the error.
+    if (addedTrack) {
+      try {
+        player.removeTrack(addedTrack);
+      } catch {
+        // Best-effort removal; ignore secondary errors.
+      }
+      recordingTrack.value = undefined;
+    }
+    // W-11: Clear the timer if playback never started.
+    if (maxDurationTimer !== undefined) {
+      clearTimeout(maxDurationTimer);
+      maxDurationTimer = undefined;
+    }
+    throw err;
+  } finally {
+    recordingInFlight = false;
+  }
 };
 
 const handleRecorderStop = () => {
   player.pause();
+
+  // W-11: Clear the auto-stop timer when recording ends normally.
+  if (maxDurationTimer !== undefined) {
+    clearTimeout(maxDurationTimer);
+    maxDurationTimer = undefined;
+  }
 
   if (recordingTrack.value && recordingSequence.value) {
     recordingTrack.value.removeSequence(recordingSequence.value);
@@ -103,6 +153,10 @@ onBeforeUnmount(() => {
   recorder.removeEventListener("error", handleUpdateRecorderState);
   recorder.removeEventListener("data", handleRecorderData);
   recorder.removeEventListener("bufferupdate", handleBufferUpdate);
+  // W-11: Clean up any pending auto-stop timer.
+  if (maxDurationTimer !== undefined) {
+    clearTimeout(maxDurationTimer);
+  }
 });
 
 const handleRecordToggle = () => {

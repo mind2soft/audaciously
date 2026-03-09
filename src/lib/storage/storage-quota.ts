@@ -51,10 +51,7 @@ export async function estimateStorage(): Promise<StorageEstimateResult> {
  * Returns `false` when the API is unavailable or the request is denied.
  */
 export async function requestPersistence(): Promise<boolean> {
-  if (
-    typeof navigator === "undefined" ||
-    !navigator.storage?.persist
-  ) {
+  if (typeof navigator === "undefined" || !navigator.storage?.persist) {
     return false;
   }
 

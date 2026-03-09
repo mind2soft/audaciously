@@ -1,8 +1,8 @@
 export const sideMenuId = "side-menu-trigger" as const;
 
-export const recorderKey = Symbol.for("@recorder");
-export const playerKey = Symbol.for("@player");
-export const timelineKey = Symbol.for("@timeline");
-export const toolsKey = Symbol.for("@tools");
-export const selectedTrackKey = Symbol.for("@selectedTrack");
-export const storageKey = Symbol.for("@storage");
+export const recorderKey = Symbol("@recorder");
+export const playerKey = Symbol("@player");
+export const timelineKey = Symbol("@timeline");
+export const toolsKey = Symbol("@tools");
+export const selectedTrackKey = Symbol("@selectedTrack");
+export const storageKey = Symbol("@storage");

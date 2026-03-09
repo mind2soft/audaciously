@@ -39,7 +39,10 @@ export function createSequenceSplitTool(
           const splitPosition = event.offsetX;
           const splitTime = formatPixelToTime(timeline.ratio, splitPosition);
           // The split tool is only registered on recorded sequences in practice.
-          const split = splitSequence(sequence as BufferedAudioSequence<any>, splitTime);
+          const split = splitSequence(
+            sequence as BufferedAudioSequence<any>,
+            splitTime,
+          );
 
           track.removeSequence(sequence.id);
           (track as AudioTrack<any>).addSequence(split.left);

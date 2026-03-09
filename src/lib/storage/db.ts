@@ -1,5 +1,9 @@
 import Dexie, { type Table } from "dexie";
-import type { MusicInstrumentId, NoteDuration, OctaveRange } from "../music/instruments";
+import type {
+  MusicInstrumentId,
+  NoteDuration,
+  OctaveRange,
+} from "../music/instruments";
 import type { PlacedNote, TimeSignature } from "../audio/track/instrument";
 import type { AudioEffect } from "../audio/sequence";
 

@@ -9,14 +9,17 @@ import type {
 export interface WaveformProcessor {
   getLinearPath(
     framesData: AudioBuffer,
-    options: LinearPathOptions
+    options: LinearPathOptions,
   ): Promise<string>;
+  /** Reject any in-flight request for this processor and remove it from the
+   *  promises map. Call when the owning component is unmounted / destroyed. */
+  dispose(): void;
 }
 
 type PathPromise = {
   seqNum: number;
   resolve(path: string): void;
-  reject(): void;
+  reject(reason?: unknown): void;
 };
 
 const processor = new WaveformWorker();
@@ -36,7 +39,7 @@ const getFramesData = (
   audioBuffer: AudioBuffer,
   channel: number,
   animation: boolean,
-  animationframes: number
+  animationframes: number,
 ) => {
   const rawData = audioBuffer.getChannelData(channel);
 
@@ -72,7 +75,7 @@ export function createWaveformProcessor(): WaveformProcessor {
           audioBuffer,
           channel,
           animation,
-          animationframes
+          animationframes,
         );
 
         promises.set(id, { seqNum, resolve, reject });
@@ -84,6 +87,16 @@ export function createWaveformProcessor(): WaveformProcessor {
           options,
         } satisfies WaveformMessage);
       });
+    },
+
+    dispose() {
+      // Reject and remove the pending promise entry for this processor instance.
+      // The module-level worker is shared across all instances and is not terminated here.
+      const pending = promises.get(id);
+      if (pending) {
+        pending.reject(new Error("WaveformProcessor disposed"));
+        promises.delete(id);
+      }
     },
   };
 }
