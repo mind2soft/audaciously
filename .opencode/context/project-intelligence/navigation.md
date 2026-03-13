@@ -1,17 +1,17 @@
-<!-- Context: project-intelligence/navigation | Priority: critical | Version: 1.2 | Updated: 2026-03-09 -->
+<!-- Context: project-intelligence/navigation | Priority: critical | Version: 1.3 | Updated: 2026-03-13 -->
 
 # Project Intelligence — Audaciously
 
-Browser-based DAW (Digital Audio Workstation). Vue 3 + Web Audio API. No server.
+Browser-based DAW (Digital Audio Workstation). Vue 3 + Pinia + Web Audio API. Node-based architecture. No server.
 
 ## Quick Routes
 
 | Need | File |
 |------|------|
-| Tech stack & all patterns (current codebase) | [technical-domain.md](technical-domain.md) |
+| Tech stack, architecture & all patterns (current codebase) | [technical-domain.md](technical-domain.md) |
 
 ## Deep Dives — Current Codebase
 
 | File | Description | Priority |
 |------|-------------|----------|
-| [technical-domain.md](technical-domain.md) | Stack, factory pattern, worker protocol, naming, standards | critical |
+| [technical-domain.md](technical-domain.md) | Stack, node architecture, Pinia stores, composable pattern, piano-roll tools, naming, standards | critical |

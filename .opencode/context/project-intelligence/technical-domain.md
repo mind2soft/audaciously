@@ -1,12 +1,12 @@
-<!-- Context: project-intelligence/technical | Priority: critical | Version: 1.0 | Updated: 2026-02-28 -->
+<!-- Context: project-intelligence/technical | Priority: critical | Version: 2.0 | Updated: 2026-03-13 -->
 
 # Technical Domain — Audaciously
 
 **Purpose**: Tech stack, architecture, and development patterns for this browser-based DAW.
-**Last Updated**: 2026-02-28
+**Last Updated**: 2026-03-13
 
 ## Quick Reference
-**Update Triggers**: New lib added | Pattern changes | Worker protocol changes | Audio API changes
+**Update Triggers**: New lib added | Pattern changes | Store protocol changes | Audio API changes
 **Audience**: Developers, AI agents
 
 ---
@@ -18,79 +18,96 @@
 | Framework | Vue 3 (`<script setup>`) | ^3.5 |
 | Language | TypeScript (strict) | ^5.9 |
 | Build | Vite | ^6.4 |
-| Styling | Tailwind v4 + DaisyUI 5 | ^4.2 / 5.0-beta |
+| Styling | Tailwind CSS 4 + DaisyUI 5 | ^4.2 / 5.0-beta |
+| State | Pinia | ^3 |
+| Persistence | Dexie (IndexedDB) | — |
 | Audio | Web Audio API (browser-native) | — |
-| Workers | Vite `?worker` Web Workers | — |
+| MP3 encoding | lamejs | — |
+| Compression | fflate (.awp project files) | — |
 | IDs | nanoid | ^5.1 |
+| Icons | Iconify / MDI | — |
 
 ---
 
-## Core Architecture Pattern
+## Core Architecture — Node Tree
 
-All stateful objects use **factory functions** (not classes). Private state lives in a closure. Events use `createEmitter`.
+The app uses a **node-based architecture**. Everything on the timeline is a reference to a node.
 
 ```ts
-// ✅ Correct pattern — createX() returning an interface
-export interface AudioTrack extends Emitter<AudioTrackEventMap> {
-  readonly id: string;
-  volume: number;
-  play(context: AudioContext, options?: AudioTrackPlayOptions): Promise<void>;
-  stop(): void;
-}
+// src/features/nodes/node.ts
+type ProjectNode = FolderNode | RecordedNode | InstrumentNode;
+```
 
-export const createAudioTrack = (name: string): AudioTrack => {
-  const internal: AudioTrackInternal = { id: nanoid(), volume: 1, ... };
-  const { dispatchEvent, ...emitter } = createEmitter<AudioTrackEventMap>(
-    (event) => { event.track = track; return event; }
-  );
-  const track: AudioTrack = {
-    get id() { return internal.id; },
-    set volume(v) { internal.volume = v; dispatchEvent({ type: "change" }); },
-    ...emitter,
-  };
-  return track;
-};
+Nodes live in a Pinia store (`useNodesStore`). Timeline segments reference nodes by ID — never copies.
+
+---
+
+## State Management (Pinia)
+
+All global state lives in `src/stores/`. Stores are setup-style (no Options API).
+
+```ts
+export const useNodesStore = defineStore("nodes", () => {
+  // state as refs, actions as plain functions
+  return { /* public surface only */ };
+});
 ```
 
 ---
 
 ## Vue Component Pattern
 
-`<script setup>` SFCs. Props typed with `defineProps<{}>()`. Dependencies via `inject`.
+`<script setup>` SFCs. Props and emits typed inline. Use Pinia stores directly — no `inject` for data.
 
 ```vue
 <script setup lang="ts">
-import { computed, inject } from "vue";
-import type { Ref } from "vue";
-import { playerKey } from "../lib/provider-keys";
-import type { AudioPlayer } from "../lib/audio/player";
-
-const props = defineProps<{ track: AudioTrack; isSelected: boolean }>();
-const emit = defineEmits<{ select: [AudioTrack | null] }>();
-
-const player = inject<AudioPlayer>(playerKey);
-const duration = computed(() => props.track.duration);
+const props = defineProps<{ node: InstrumentNode }>();
+const emit = defineEmits<{ "update:notes": [notes: PlacedNote[]] }>();
+// composables, computed, event handlers
 </script>
+<template>...</template>
 ```
 
 ---
 
-## Web Worker Pattern
+## Composable Pattern
 
-Workers live in `src/workers/`, use `?worker` Vite suffix, pure DSP only (no Web Audio API in workers).
+All tools and reusable logic use `useX(ctx)` factory composables — never classes.
 
 ```ts
-// Main thread: synthWorker.ts
-import SynthWorker from "../../workers/synth-processor?worker";
-const worker = new SynthWorker(); // one shared instance
+export interface XToolContext { /* typed inputs — refs, emits, computed */ }
 
-// Worker → main: typed request/response + seqNum cancellation
-export interface SynthRequest { trackId: string; seqNum: number; ... }
-export interface SynthResponse { trackId: string; seqNum: number; left: Float32Array; right: Float32Array; }
-
-// Transfer result zero-copy
-self.postMessage(response, [response.left.buffer, response.right.buffer]);
+export function useXTool(ctx: XToolContext) {
+  // refs, computed, handlers
+  onUnmounted(() => { /* cleanup: RAF loops, global event listeners */ });
+  return { cursor, onMousedown, onMousemove, onMouseleave };
+}
+export type XTool = ReturnType<typeof useXTool>;
 ```
+
+---
+
+## Pure Helpers (`src/lib/`)
+
+All reusable logic extracted to `src/lib/` as pure functions — no side effects, no Vue imports.
+
+```ts
+// src/lib/piano-roll/note-utils.ts
+export function cutNotesInRange(notes: PlacedNote[], start: number, end: number): CutResult { ... }
+```
+
+---
+
+## Piano Roll Tools
+
+Tools are discriminated by `PianoRollToolId = "place" | "pan" | "copy" | "cut" | "paste"`.
+
+Key rules:
+- **Immutable note arrays** — mutations return new arrays; `ctx.emitNotes(newArray)` never mutates in place
+- **Snap semantics** — `snapBeatFloor` for placement; `snapBeatRound` for selection/pan/paste boundaries
+- **Cut gap-close** — shift snapped to `max(durationBeats)` of shifted notes; guards against 0-shift
+- **Clipboard** — `localStorage`-backed, cross-tab sync via `storage` event, typed `ClipboardEntry` discriminated union
+- **Beat line colours** — pan: `--color-accent` | copy: `--color-info` | paste: `--color-secondary` | cut: `--color-warning`
 
 ---
 
@@ -98,35 +115,36 @@ self.postMessage(response, [response.left.buffer, response.right.buffer]);
 
 | Type | Convention | Example |
 |------|-----------|---------|
-| Files | kebab-case | `instrument-track.ts`, `AudioPlayer.vue` |
-| Vue components | PascalCase | `TrackSidebar.vue`, `AudioSequence.vue` |
-| Factories | `createX()` | `createAudioTrack()`, `createPlayer()` |
-| Interfaces | PascalCase noun | `AudioTrack`, `InstrumentTrack` |
-| Internal state | `XInternal` interface | `AudioTrackInternal` |
-| Provider keys | `xKey` symbol | `playerKey`, `timelineKey` |
-| Workers | `x-processor.ts` | `synth-processor.ts` |
+| Composables | `camelCase` file | `useCutTool.ts`, `usePianoClipboard.ts` |
+| Vue components | `PascalCase` file | `PianoRoll.vue`, `PianoNodeView.vue` |
+| Lib modules | `kebab-case` file | `note-utils.ts`, `tool-types.ts` |
+| Store files | `camelCase` file | `nodes.ts`, `player.ts` |
+| Types / interfaces | PascalCase noun | `PlacedNote`, `InstrumentNode`, `ClipboardEntry` |
+| Store actions | verb + noun | `setInstrumentNotes`, `addFolderNode` |
+| IDs | `nanoid()` | all nodes, notes, segments |
+
+No classes — factory composables only.
 
 ---
 
 ## Code Standards
 
-- TypeScript strict + `noUnusedLocals` + `noUnusedParameters` (enforced by build)
-- `src/workers/` excluded from `tsconfig.app.json` (separate `tsconfig.worker.json`)
-- Workers: pure math only — no `AudioContext`, `GainNode`, etc.
-- Hidden `AudioTrack`s (instrument playback) **never** passed to `player.addTrack()` — avoids spurious UI rows
-- `player.setExtraDuration()` used to register external duration contributors
-- Composables (`useX`) use `watchEffect` + `onUnmounted` cleanup pattern
-- `nanoid()` for all stable IDs (tracks, sequences, notes)
-- Transferable `Float32Array` buffers for zero-copy worker results
+- TypeScript strict — no `any` except explicitly cast in event dispatch
+- Immutable note arrays — never mutate `PlacedNote[]` in place
+- All beat positions clamped: `Math.max(0, ...)`
+- All user input to notes passes through snap helpers before committing
+- No OS clipboard — `localStorage` only (privacy + cross-tab sync)
+- `onUnmounted` cleanup — all composables remove RAF loops and global event listeners
+- `nanoid()` for all new IDs
 
 ---
 
 ## Security / Constraints
 
 - Pure browser app — no server, no user-generated HTML, no eval
-- Worker isolation: synth DSP runs in worker, never touches DOM
 - No external network requests at runtime
 - Audio output routed through master `GainNode` → `AnalyserNode` → `destination`
+- No OS clipboard access — internal clipboard via `localStorage` only
 
 ---
 
@@ -134,12 +152,14 @@ self.postMessage(response, [response.left.buffer, response.right.buffer]);
 
 | Pattern | File |
 |---------|------|
-| Factory + emitter pattern | `src/lib/audio/track.ts`, `src/lib/audio/player.ts` |
-| Emitter implementation | `src/lib/emitter.ts` |
-| Sequence protocol | `src/lib/audio/sequence/AudioBufferSequence.ts` |
-| Worker protocol | `src/workers/synth-processor.ts` |
-| Worker client | `src/lib/music/synthWorker.ts` |
-| Composable pattern | `src/lib/music/useInstrumentPlayback.ts` |
-| Provider keys | `src/lib/provider-keys.ts` |
-| Vue component example | `src/components/TrackSidebar.vue` |
+| Node union type | `src/features/nodes/node.ts` |
+| InstrumentNode | `src/features/nodes/instrument/instrument-node.ts` |
+| Pinia store example | `src/stores/nodes.ts` |
+| Tool ID discriminated union | `src/lib/piano-roll/tool-types.ts` |
+| Pure note helpers | `src/lib/piano-roll/note-utils.ts` |
+| Clipboard composable | `src/composables/usePianoClipboard.ts` |
+| Cut tool composable | `src/composables/useCutTool.ts` |
+| Copy tool composable | `src/composables/useCopyTool.ts` |
+| Piano roll component | `src/components/controls/PianoRoll.vue` |
+| Node view component | `src/components/app/node-views/PianoNodeView.vue` |
 | Build config | `tsconfig.app.json`, `vite.config.ts` |
