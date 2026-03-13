@@ -1,0 +1,464 @@
+<script lang="ts">
+/**
+ * Module-level export so parent components (PianoNodeView) can read the label
+ * width and align their own header columns accordingly.
+ */
+export const PIANO_ROLL_LABEL_WIDTH = 44;
+</script>
+
+<script setup lang="ts">
+/**
+ * PianoRoll — interactive piano note editor for an InstrumentNode.
+ *
+ * Props
+ * ─────
+ * node          InstrumentNode (piano kind).
+ * zoomRatio     Zoom multiplier (owned by PianoNodeView).
+ * activeTool    Which editing tool is currently active.
+ * currentTime   Playback position in seconds — drives the playhead overlay.
+ *
+ * Emits
+ * ─────
+ * update:notes   New notes array after any edit.
+ * scroll         New scrollLeft (px) whenever the scroll container scrolls.
+ * copied         Number of notes copied to the clipboard (> 0 guaranteed).
+ */
+
+import { computed, ref } from "vue";
+import {
+  PIANO_INSTRUMENT,
+  filterPitchesByOctaveRange,
+} from "../../lib/music/instruments";
+import {
+  getSecondsPerBeat,
+  getNoteDurationBeats,
+} from "../../lib/audio/track/instrument/utils";
+import { baseSecondWidthInPixels } from "../../lib/util/formatTime";
+import type { InstrumentNode, PlacedNote } from "../../features/nodes";
+import type { PianoRollToolId } from "../../lib/piano-roll/tool-types";
+
+import { usePlaceTool } from "../../composables/usePlaceTool";
+import { usePanTool } from "../../composables/usePanTool";
+import { useCopyTool } from "../../composables/useCopyTool";
+import { useCutTool } from "../../composables/useCutTool";
+import { usePasteTool } from "../../composables/usePasteTool";
+
+const NOTE_HEIGHT_PX = PIANO_INSTRUMENT.rowHeight;
+const LABEL_WIDTH_PX = PIANO_ROLL_LABEL_WIDTH;
+
+// ── Props / emits ─────────────────────────────────────────────────────────────
+
+const props = defineProps<{
+  node: InstrumentNode;
+  zoomRatio: number;
+  activeTool: PianoRollToolId;
+  currentTime?: number;
+}>();
+
+const emit = defineEmits<{
+  "update:notes": [notes: PlacedNote[]];
+  scroll: [scrollLeft: number];
+  copied: [noteCount: number];
+  cut: [noteCount: number];
+}>();
+
+// ── Refs ──────────────────────────────────────────────────────────────────────
+
+const gridRef = ref<HTMLDivElement>();
+const scrollRef = ref<HTMLDivElement>();
+const scrollLeftPx = ref(0);
+
+// ── Derived pixel / beat constants ────────────────────────────────────────────
+
+const pxPerBeat = computed(
+  () =>
+    getSecondsPerBeat(props.node.bpm) *
+    props.zoomRatio *
+    baseSecondWidthInPixels,
+);
+const pxPerMeasure = computed(
+  () => pxPerBeat.value * props.node.timeSignature.beatsPerMeasure,
+);
+
+const GRID_WIDTH = 6000; // px
+
+// ── Pitches ───────────────────────────────────────────────────────────────────
+
+const pitches = computed(() =>
+  filterPitchesByOctaveRange(PIANO_INSTRUMENT.pitches, props.node.octaveRange),
+);
+
+const totalGridHeight = computed(() => pitches.value.length * NOTE_HEIGHT_PX);
+
+const visibleNotes = computed(() => {
+  const ids = new Set(pitches.value.map((p) => p.id));
+  return props.node.notes.filter((n) => ids.has(n.pitchId));
+});
+
+// ── Snap (current note type in beats) ─────────────────────────────────────────
+
+const snapBeats = computed(() =>
+  getNoteDurationBeats(
+    props.node.selectedNoteType,
+    props.node.timeSignature.beatUnit,
+  ),
+);
+
+// ── Grid background ───────────────────────────────────────────────────────────
+
+const gridBackground = computed(() => {
+  const mpx = pxPerMeasure.value;
+  const bpx = pxPerBeat.value;
+  const rh = NOTE_HEIGHT_PX;
+
+  const measureLine = "rgba(255,255,255,0.12)";
+  const beatLine = "rgba(255,255,255,0.05)";
+  const rowLine = "rgba(255,255,255,0.04)";
+
+  const hGrad = `repeating-linear-gradient(
+    to bottom,
+    transparent 0px, transparent ${rh - 1}px,
+    ${rowLine} ${rh - 1}px, ${rowLine} ${rh}px
+  )`;
+
+  const vGrad =
+    bpx > 4
+      ? `repeating-linear-gradient(
+          to right,
+          ${beatLine} 0px, ${beatLine} 1px,
+          transparent 1px, transparent ${bpx}px
+        )`
+      : null;
+
+  const mGrad = `repeating-linear-gradient(
+    to right,
+    ${measureLine} 0px, ${measureLine} 1px,
+    transparent 1px, transparent ${mpx}px
+  )`;
+
+  return [hGrad, vGrad, mGrad].filter(Boolean).join(", ");
+});
+
+// ── Shared tool context ───────────────────────────────────────────────────────
+
+const allNotes = computed(() => props.node.notes);
+
+const toolCtxBase = {
+  notes: allNotes,
+  pitches,
+  pxPerBeat,
+  snapBeats,
+  rowHeightPx: NOTE_HEIGHT_PX,
+  gridRef,
+  scrollRef,
+  emitNotes: (notes: PlacedNote[]) => emit("update:notes", notes),
+};
+
+// ── Tool composables ──────────────────────────────────────────────────────────
+
+const placeTool = usePlaceTool(toolCtxBase);
+const panTool = usePanTool(toolCtxBase);
+const copyTool = useCopyTool({
+  ...toolCtxBase,
+  onCopied: (count) => emit("copied", count),
+});
+const cutTool = useCutTool({
+  ...toolCtxBase,
+  onCopied: (count) => emit("cut", count),
+});
+const pasteTool = usePasteTool(toolCtxBase);
+
+// ── Mouse event dispatch ──────────────────────────────────────────────────────
+
+function dispatch<K extends "onMousedown" | "onMousemove" | "onMouseleave">(
+  method: K,
+  ...args: Parameters<ReturnType<typeof usePlaceTool>[K]>
+): void {
+  const tool =
+    props.activeTool === "place"
+      ? placeTool
+      : props.activeTool === "pan"
+        ? panTool
+        : props.activeTool === "copy"
+          ? copyTool
+          : props.activeTool === "cut"
+            ? cutTool
+            : pasteTool;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (tool[method] as (...a: any[]) => void)(...args);
+}
+
+function onMousedown(evt: MouseEvent): void {
+  dispatch("onMousedown", evt);
+}
+function onMousemove(evt: MouseEvent): void {
+  dispatch("onMousemove", evt);
+}
+function onMouseleave(): void {
+  dispatch("onMouseleave");
+}
+
+// ── Active cursor ──────────────────────────────────────────────────────────────
+
+const activeCursor = computed(() => {
+  if (props.activeTool === "place") return placeTool.cursor;
+  if (props.activeTool === "pan") return panTool.cursor;
+  if (props.activeTool === "copy") return copyTool.cursor;
+  if (props.activeTool === "cut") return cutTool.cursor;
+  return pasteTool.cursor;
+});
+
+// ── Display notes ─────────────────────────────────────────────────────────────
+
+/**
+ * During a pan drag, replace the displayed positions with the real-time
+ * preview. Outside of a pan drag this is identical to visibleNotes.
+ */
+const displayNotes = computed(() => {
+  if (props.activeTool === "pan" && panTool.previewNotes.value) {
+    const ids = new Set(pitches.value.map((p) => p.id));
+    return panTool.previewNotes.value.filter((n) => ids.has(n.pitchId));
+  }
+  return visibleNotes.value;
+});
+
+// ── Note style helpers ────────────────────────────────────────────────────────
+
+function noteLeft(note: PlacedNote): number {
+  return note.startBeat * pxPerBeat.value;
+}
+function noteWidth(note: PlacedNote): number {
+  return Math.max(2, note.durationBeats * pxPerBeat.value);
+}
+function noteTop(note: PlacedNote): number {
+  const idx = pitches.value.findIndex((p) => p.id === note.pitchId);
+  return idx >= 0 ? idx * NOTE_HEIGHT_PX : 0;
+}
+
+/** Background colour for a placed note — dimmed when being dragged away. */
+function noteColor(note: PlacedNote): string {
+  if (
+    props.activeTool === "copy" &&
+    copyTool.selectedNoteIds.value.has(note.id)
+  ) {
+    return "var(--color-secondary)";
+  }
+  if (
+    props.activeTool === "cut" &&
+    cutTool.selectedNoteIds.value.has(note.id)
+  ) {
+    return "var(--color-warning)";
+  }
+  if (
+    props.activeTool === "pan" &&
+    panTool.isDragging.value &&
+    panTool.draggedIds.value.has(note.id)
+  ) {
+    return "color-mix(in oklab, var(--color-primary) 60%, transparent)";
+  }
+  return "var(--color-primary)";
+}
+
+// ── Beat-line pixel position ──────────────────────────────────────────────────
+
+/** Left offset (px) for the pan / paste beat-line indicator. */
+const beatLinePx = computed<number | null>(() => {
+  let beat: number | null = null;
+  if (props.activeTool === "pan") {
+    beat = panTool.beatLine.value;
+  } else if (props.activeTool === "copy" && !copyTool.isSelecting.value) {
+    beat = copyTool.beatLine.value;
+  } else if (props.activeTool === "cut" && !cutTool.isSelecting.value) {
+    beat = cutTool.beatLine.value;
+  } else if (props.activeTool === "paste") {
+    beat = pasteTool.beatLine.value;
+  }
+  return beat !== null ? beat * pxPerBeat.value : null;
+});
+
+// ── Copy / Cut selection overlay ──────────────────────────────────────────────
+
+const selectionOverlay = computed(() => {
+  const range =
+    props.activeTool === "copy"
+      ? copyTool.selectionRange.value
+      : props.activeTool === "cut"
+        ? cutTool.selectionRange.value
+        : null;
+  if (!range) return null;
+  return {
+    left: range.start * pxPerBeat.value,
+    width: (range.end - range.start) * pxPerBeat.value,
+    color: props.activeTool === "cut" ? "var(--color-warning)" : "var(--color-info)",
+  };
+});
+
+// ── Scroll ────────────────────────────────────────────────────────────────────
+
+function onScrollBody(): void {
+  const sl = scrollRef.value?.scrollLeft ?? 0;
+  scrollLeftPx.value = sl;
+  emit("scroll", sl);
+}
+
+// ── Playhead ──────────────────────────────────────────────────────────────────
+
+const playheadLeft = computed(
+  () =>
+    LABEL_WIDTH_PX +
+    (props.currentTime ?? 0) * props.zoomRatio * baseSecondWidthInPixels -
+    scrollLeftPx.value,
+);
+</script>
+
+<template>
+  <div
+    class="relative flex flex-col h-full w-full overflow-hidden bg-base-100 select-none"
+  >
+    <!-- ── Roll body ──────────────────────────────────────────────────────── -->
+    <div
+      ref="scrollRef"
+      class="flex-1 flex overflow-auto"
+      @scroll="onScrollBody"
+    >
+      <!-- Left pitch labels — sticky so they don't scroll horizontally -->
+      <div
+        class="sticky left-0 z-10 shrink-0 self-start overflow-hidden flex flex-col border-r border-base-300/60 bg-base-200"
+        :style="{ width: `${LABEL_WIDTH_PX}px` }"
+      >
+        <div
+          v-for="pitch in pitches"
+          :key="pitch.id"
+          class="shrink-0 flex items-center justify-end pr-1 text-xs leading-none"
+          :class="{
+            'text-base-content/70': !pitch.id.includes('#'),
+            'text-base-content/40 bg-base-300/30': pitch.id.includes('#'),
+          }"
+          :style="{ height: `${NOTE_HEIGHT_PX}px` }"
+        >
+          {{ pitch.short ?? pitch.label }}
+        </div>
+      </div>
+
+      <!-- Note grid -->
+      <div
+        ref="gridRef"
+        class="relative shrink-0"
+        :style="{
+          width: `${GRID_WIDTH}px`,
+          height: `${totalGridHeight}px`,
+          background: gridBackground,
+          cursor: activeCursor,
+        }"
+        @mousemove="onMousemove"
+        @mouseleave="onMouseleave"
+        @mousedown="onMousedown"
+        @contextmenu.prevent
+      >
+        <!-- Black-key row tints -->
+        <div
+          v-for="(pitch, idx) in pitches"
+          :key="`bg-${pitch.id}`"
+          class="absolute left-0 right-0 pointer-events-none"
+          :class="pitch.id.includes('#') ? 'bg-base-300/20' : ''"
+          :style="{
+            top: `${idx * NOTE_HEIGHT_PX}px`,
+            height: `${NOTE_HEIGHT_PX}px`,
+          }"
+        />
+
+        <!-- ── Placed / preview notes ────────────────────────────────────── -->
+        <div
+          v-for="note in displayNotes"
+          :key="note.id"
+          class="absolute rounded-sm pointer-events-none transition-colors duration-75"
+          :style="{
+            left: `${noteLeft(note)}px`,
+            width: `${noteWidth(note)}px`,
+            top: `${noteTop(note)}px`,
+            height: `${NOTE_HEIGHT_PX - 1}px`,
+            backgroundColor: noteColor(note),
+          }"
+        />
+
+        <!-- ── Place tool: hover preview ────────────────────────────────── -->
+        <div
+          v-if="activeTool === 'place' && placeTool.hoverPreviewNote.value"
+          class="absolute rounded-sm pointer-events-none border border-dashed"
+          :style="{
+            left: `${noteLeft(placeTool.hoverPreviewNote.value)}px`,
+            width: `${noteWidth(placeTool.hoverPreviewNote.value)}px`,
+            top: `${noteTop(placeTool.hoverPreviewNote.value)}px`,
+            height: `${NOTE_HEIGHT_PX - 1}px`,
+            backgroundColor: placeTool.hoverHasOverlap.value
+              ? 'color-mix(in oklab, var(--color-warning) 50%, transparent)'
+              : 'color-mix(in oklab, var(--color-primary) 50%, transparent)',
+            borderColor: placeTool.hoverHasOverlap.value
+              ? 'var(--color-warning)'
+              : 'var(--color-primary)',
+            opacity: 0.7,
+          }"
+        />
+
+        <!-- ── Pan / Paste tool: beat-line indicator ─────────────────────── -->
+        <div
+          v-if="beatLinePx !== null"
+          class="absolute top-0 bottom-0 w-0.5 pointer-events-none z-10"
+          :style="{
+            left: `${beatLinePx}px`,
+            backgroundColor:
+              activeTool === 'paste'
+                ? 'var(--color-secondary)'
+                : activeTool === 'copy'
+                  ? 'var(--color-info)'
+                  : activeTool === 'cut'
+                    ? 'var(--color-warning)'
+                    : 'var(--color-accent)',
+            opacity: 0.8,
+          }"
+        />
+
+        <!-- ── Paste tool: ghost notes ───────────────────────────────────── -->
+        <template v-if="activeTool === 'paste' && pasteTool.ghostNotes.value">
+          <div
+            v-for="ghost in pasteTool.ghostNotes.value"
+            :key="ghost.id"
+            class="absolute rounded-sm pointer-events-none border border-dashed"
+            :style="{
+              left: `${noteLeft(ghost)}px`,
+              width: `${noteWidth(ghost)}px`,
+              top: `${noteTop(ghost)}px`,
+              height: `${NOTE_HEIGHT_PX - 1}px`,
+              backgroundColor:
+                'color-mix(in oklab, var(--color-secondary) 40%, transparent)',
+              borderColor: 'var(--color-secondary)',
+              opacity: 0.75,
+            }"
+          />
+        </template>
+
+        <!-- ── Copy / Cut tool: selection rectangle ───────────────────────── -->
+        <div
+          v-if="(activeTool === 'copy' || activeTool === 'cut') && selectionOverlay"
+          class="absolute top-0 bottom-0 pointer-events-none z-10"
+          :style="{
+            left: `${selectionOverlay.left}px`,
+            width: `${selectionOverlay.width}px`,
+            backgroundColor:
+              `color-mix(in oklab, ${selectionOverlay.color} 15%, transparent)`,
+            borderLeft: `1px solid color-mix(in oklab, ${selectionOverlay.color} 60%, transparent)`,
+            borderRight: `1px solid color-mix(in oklab, ${selectionOverlay.color} 60%, transparent)`,
+          }"
+        />
+      </div>
+    </div>
+
+    <!-- Playhead overlay -->
+    <div
+      v-if="currentTime !== undefined"
+      class="absolute top-0 bottom-0 w-px bg-accent opacity-75 pointer-events-none z-[5]"
+      :style="{ left: `${playheadLeft}px` }"
+      aria-hidden="true"
+    />
+  </div>
+</template>

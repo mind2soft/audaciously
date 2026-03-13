@@ -1,0 +1,83 @@
+// features/nodes/instrument/instrument-node.ts
+// InstrumentNode — piano/drum instrument with notes; buffer is synthesized.
+// See: .opencode/context/refactor/01-terminology.md
+//
+// NOTE: The reactive synth render loop (watchEffect + synthWorker) is NOT here.
+// It lives in composables/useInstrumentNode.ts (P4-02). This file is pure data.
+
+import { nanoid } from "nanoid";
+import type { ProjectNodeBase } from "../node";
+import type { AudioEffect } from "../../effects/types";
+import type {
+  MusicInstrumentId,
+  NoteDuration,
+  OctaveRange,
+} from "../../../lib/music/instruments";
+import { PIANO_DEFAULT_OCTAVE_RANGE } from "../../../lib/music/instruments";
+
+// ─── Re-exported types (originally from track/instrument/index.ts) ─────────────
+
+export interface TimeSignature {
+  /** Beats per measure (numerator). */
+  beatsPerMeasure: number;
+  /** Note value that receives one beat (denominator, e.g. 4 = quarter note). */
+  beatUnit: number;
+}
+
+export const DEFAULT_TIME_SIGNATURE: TimeSignature = {
+  beatsPerMeasure: 4,
+  beatUnit: 4,
+};
+
+export interface PlacedNote {
+  id: string;
+  /** Beat index from the start of the track (0-based, float allowed). */
+  startBeat: number;
+  /** Duration in beats. */
+  durationBeats: number;
+  /** Pitch ID matching one of the instrument's pitches[].id values. */
+  pitchId: string;
+}
+
+// ─── InstrumentNode interface ─────────────────────────────────────────────────
+
+export interface InstrumentNode extends ProjectNodeBase {
+  readonly kind: "instrument";
+  instrumentId: MusicInstrumentId;
+  bpm: number;
+  timeSignature: TimeSignature;
+  notes: PlacedNote[];
+  selectedNoteType: NoteDuration;
+  pitchScrollTop: number;
+  octaveRange: OctaveRange;
+  showWaveform: boolean;
+  /** Synthesized audio buffer (regenerated when notes/bpm/timeSignature change). */
+  buffer: AudioBuffer | null;
+  /** Effects applied during playback of this node's buffer. */
+  effects: AudioEffect[];
+}
+
+// ─── Factory ──────────────────────────────────────────────────────────────────
+
+/** Create a new InstrumentNode with a unique id. */
+export function createInstrumentNode(
+  name: string,
+  instrumentId: MusicInstrumentId,
+  id?: string,
+): InstrumentNode {
+  return {
+    id: id ?? nanoid(),
+    name,
+    kind: "instrument",
+    instrumentId,
+    bpm: 120,
+    timeSignature: { ...DEFAULT_TIME_SIGNATURE },
+    notes: [],
+    selectedNoteType: "quarter",
+    pitchScrollTop: 0,
+    octaveRange: { ...PIANO_DEFAULT_OCTAVE_RANGE },
+    showWaveform: false,
+    buffer: null,
+    effects: [],
+  };
+}

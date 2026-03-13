@@ -1,4 +1,4 @@
-<!-- Context: project-intelligence/navigation | Priority: critical | Version: 1.0 | Updated: 2026-02-28 -->
+<!-- Context: project-intelligence/navigation | Priority: critical | Version: 1.2 | Updated: 2026-03-09 -->
 
 # Project Intelligence — Audaciously
 
@@ -8,9 +8,9 @@ Browser-based DAW (Digital Audio Workstation). Vue 3 + Web Audio API. No server.
 
 | Need | File |
 |------|------|
-| Tech stack & all patterns | [technical-domain.md](technical-domain.md) |
+| Tech stack & all patterns (current codebase) | [technical-domain.md](technical-domain.md) |
 
-## Deep Dives
+## Deep Dives — Current Codebase
 
 | File | Description | Priority |
 |------|-------------|----------|

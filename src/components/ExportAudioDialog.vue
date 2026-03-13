@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { ref, inject, watch, onUpdated } from "vue";
-import { playerKey } from "../lib/provider-keys";
-import type { AudioPlayer } from "../lib/audio/player";
+import { ref, watch } from "vue";
+import { usePlayerStore } from "../stores/player";
 import { mixdownProject } from "../lib/audio/mixdown";
 import { encodeMp3 } from "../lib/audio/encode/mp3-encoder";
 import { encodeWav } from "../lib/audio/encode/wav-encoder";
@@ -15,8 +14,8 @@ const emit = defineEmits<{
   close: [];
 }>();
 
-const player = inject<AudioPlayer>(playerKey);
-if (!player) throw new Error("missing player");
+const playerStore = usePlayerStore();
+const player = playerStore.getEngine();
 
 const dialogRef = ref<HTMLDialogElement>();
 
@@ -42,7 +41,11 @@ const error = ref<string | null>(null);
 watch(
   () => props.open,
   (isOpen) => {
-    if (!isOpen) {
+    if (!dialogRef.value) return;
+    if (isOpen) {
+      if (!dialogRef.value.open) dialogRef.value.showModal();
+    } else {
+      if (dialogRef.value.open) dialogRef.value.close();
       // Reset transient state when closed
       error.value = null;
       stage.value = "";
@@ -50,15 +53,6 @@ watch(
     }
   },
 );
-
-onUpdated(() => {
-  if (!dialogRef.value) return;
-  if (props.open) {
-    dialogRef.value.showModal();
-  } else {
-    dialogRef.value.close();
-  }
-});
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 

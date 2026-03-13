@@ -1,24 +1,26 @@
 import { nanoid } from "nanoid";
-import type { AudioPlayer } from "../audio/player";
-import { serializeMetadata, type ProjectMetadata } from "./project-metadata";
-import type { AudioTrackJSON } from "../audio/track";
-import type { AudioSequenceJSON } from "../audio/sequence";
 import {
   db,
   type ProjectRecord,
   type AudioBlobRecord,
+  type NodeRecord,
   type TrackRecord,
-  type SequenceRecord,
+  type SegmentRecord,
 } from "./db";
 import {
-  serializeProject,
-  deserializeProject,
+  serializeNodes,
+  serializeSequence,
+  deserializeNodes,
+  deserializeSequence,
   type DeserializedProjectData,
 } from "./project-serialization";
+import { serializeMetadata, type ProjectMetadata } from "./project-metadata";
 import {
   compressFloat32Array,
   decompressBlobToFloat32Array,
 } from "./compression";
+import type { NodeTreeJSON } from "../../stores/nodes";
+import type { SequenceJSON } from "../../stores/sequence";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -33,7 +35,7 @@ export interface ProjectSummary {
   updatedAt: Date;
   sizeBytes: number;
   durationSeconds: number;
-  trackCount: number;
+  nodeCount: number;
 }
 
 /** Result of loading a project from IndexedDB. */
@@ -47,24 +49,26 @@ export interface LoadedProject {
 /**
  * Serialize and persist a project to IndexedDB.
  *
- * Audio buffers from recorded tracks are DEFLATE-compressed via fflate's
- * worker pool before storage. Instrument track buffers are NOT stored
- * (regenerable from notes + bpm + instrumentId).
+ * Audio buffers from recorded nodes are DEFLATE-compressed via fflate's worker
+ * pool before storage. Instrument node buffers are NOT stored (regenerable from
+ * notes + bpm + instrumentId).
  *
- * The operation is a full replace: old data for this projectId is deleted
- * and rewritten inside a single Dexie transaction.
+ * The operation is a full replace: old data for this projectId is deleted and
+ * rewritten inside a single Dexie transaction.
  */
 export async function saveProject(
   projectId: string,
-  player: AudioPlayer,
+  nodesJSON: NodeTreeJSON,
+  sequenceJSON: SequenceJSON,
   metadata: ProjectMetadata,
+  totalDuration: number,
 ): Promise<void> {
-  const tracks = [...player.getTracks()];
-  const serialized = serializeProject(projectId, tracks);
+  const { nodeRecords, audioBlobs } = serializeNodes(projectId, nodesJSON);
+  const { trackRecords, segmentRecords } = serializeSequence(projectId, sequenceJSON);
 
   // Compress audio buffers in parallel (fflate worker pool).
   const audioBlobRecords: AudioBlobRecord[] = await Promise.all(
-    serialized.audioBlobs.map(async (ref) => {
+    audioBlobs.map(async (ref) => {
       const { sampleRate, numberOfChannels, length } = ref.buffer;
       const channelData: Blob[] = [];
 
@@ -85,9 +89,9 @@ export async function saveProject(
     }),
   );
 
-  // Derive project-level bpm from first instrument track, or default.
+  // Derive project-level bpm from first instrument node, or default.
   const bpm =
-    serialized.tracks.find((t) => t.kind === "instrument")?.bpm ?? 120;
+    nodeRecords.find((n) => n.kind === "instrument")?.bpm ?? 120;
 
   // Derive sampleRate from first audio blob, or default.
   const sampleRate = audioBlobRecords[0]?.sampleRate ?? 44100;
@@ -103,12 +107,9 @@ export async function saveProject(
   // Full replace inside a single transaction.
   await db.transaction(
     "rw",
-    db.projects,
-    db.tracks,
-    db.sequences,
-    db.audioBlobs,
+    [db.projects, db.nodes, db.tracks, db.segments, db.audioBlobs],
     async () => {
-      // Preserve createdAt from existing record; null means this is a brand-new project.
+      // Preserve createdAt from existing record; null means brand-new project.
       const existing = await db.projects.get(projectId);
 
       const metadataSnapshot = serializeMetadata(metadata);
@@ -118,30 +119,28 @@ export async function saveProject(
         createdAt: existing?.createdAt ?? now,
         updatedAt: now,
         sizeBytes,
-        durationSeconds: player.totalDuration,
+        durationSeconds: totalDuration,
         bpm,
         sampleRate,
+        rootIds: [...nodesJSON.rootIds],
+        timelineEffects: JSON.parse(JSON.stringify(sequenceJSON.timelineEffects ?? [])),
       };
 
       // Delete old data for this project.
       await Promise.all([
+        db.nodes.where("projectId").equals(projectId).delete(),
         db.tracks.where("projectId").equals(projectId).delete(),
-        db.sequences.where("projectId").equals(projectId).delete(),
+        db.segments.where("projectId").equals(projectId).delete(),
         db.audioBlobs.where("projectId").equals(projectId).delete(),
       ]);
 
       // Write new data.
       await db.projects.put(projectRecord);
 
-      if (serialized.tracks.length > 0) {
-        await db.tracks.bulkPut(serialized.tracks);
-      }
-      if (serialized.sequences.length > 0) {
-        await db.sequences.bulkPut(serialized.sequences);
-      }
-      if (audioBlobRecords.length > 0) {
-        await db.audioBlobs.bulkPut(audioBlobRecords);
-      }
+      if (nodeRecords.length > 0) await db.nodes.bulkPut(nodeRecords);
+      if (trackRecords.length > 0) await db.tracks.bulkPut(trackRecords);
+      if (segmentRecords.length > 0) await db.segments.bulkPut(segmentRecords);
+      if (audioBlobRecords.length > 0) await db.audioBlobs.bulkPut(audioBlobRecords);
     },
   );
 }
@@ -149,14 +148,10 @@ export async function saveProject(
 // ─── Load ─────────────────────────────────────────────────────────────────────
 
 /**
- * Load a project from IndexedDB and reconstruct live domain objects.
+ * Load a project from IndexedDB and reconstruct live store JSON.
  *
  * Compressed audio blobs are decompressed via fflate's worker pool and
  * converted to AudioBuffers using the provided audio context.
- *
- * **Must be called from a Vue `effectScope()` or component `setup()`**
- * because `deserializeProject` creates instrument tracks that use Vue
- * reactivity internally.
  *
  * Returns `null` if no project with the given ID exists.
  */
@@ -167,9 +162,10 @@ export async function loadProject(
   const record = await db.projects.get(id);
   if (!record) return null;
 
-  const [trackRecords, sequenceRecords, audioBlobRecords] = await Promise.all([
+  const [nodeRecords, trackRecords, segmentRecords, audioBlobRecords] = await Promise.all([
+    db.nodes.where("projectId").equals(id).toArray(),
     db.tracks.where("projectId").equals(id).toArray(),
-    db.sequences.where("projectId").equals(id).toArray(),
+    db.segments.where("projectId").equals(id).toArray(),
     db.audioBlobs.where("projectId").equals(id).toArray(),
   ]);
 
@@ -196,9 +192,28 @@ export async function loadProject(
     }),
   );
 
-  const data = deserializeProject(trackRecords, sequenceRecords, audioBuffers);
+  // Reconstruct store JSON.
+  const { nodesById, rootIds } = deserializeNodes(
+    nodeRecords,
+    record.rootIds ?? [],
+    audioBuffers,
+  );
 
-  return { record, data };
+  const { tracks } = deserializeSequence(trackRecords, segmentRecords);
+
+  const nodesJSON: NodeTreeJSON = {
+    nodesById,
+    rootIds,
+    selectedNodeId: null, // Selection is transient UI state — not persisted.
+  };
+
+  const sequenceJSON: SequenceJSON = {
+    tracks,
+    timelineEffects: record.timelineEffects ?? [],
+    selectedSegmentId: null, // Selection is transient UI state — not persisted.
+  };
+
+  return { record, data: { nodesJSON, sequenceJSON } };
 }
 
 // ─── List ─────────────────────────────────────────────────────────────────────
@@ -223,7 +238,7 @@ export async function listProjects(): Promise<ProjectSummary[]> {
         updatedAt: p.updatedAt,
         sizeBytes: p.sizeBytes,
         durationSeconds: p.durationSeconds,
-        trackCount: await db.tracks.where("projectId").equals(p.id).count(),
+        nodeCount: await db.nodes.where("projectId").equals(p.id).count(),
       }),
     ),
   );
@@ -232,21 +247,19 @@ export async function listProjects(): Promise<ProjectSummary[]> {
 // ─── Delete ───────────────────────────────────────────────────────────────────
 
 /**
- * Delete a project and all related tracks, sequences, and audio blobs.
+ * Delete a project and all related nodes, tracks, segments, and audio blobs.
  *
  * Idempotent — succeeds silently if the project does not exist.
  */
 export async function deleteProject(id: string): Promise<void> {
   await db.transaction(
     "rw",
-    db.projects,
-    db.tracks,
-    db.sequences,
-    db.audioBlobs,
+    [db.projects, db.nodes, db.tracks, db.segments, db.audioBlobs],
     async () => {
       await Promise.all([
+        db.nodes.where("projectId").equals(id).delete(),
         db.tracks.where("projectId").equals(id).delete(),
-        db.sequences.where("projectId").equals(id).delete(),
+        db.segments.where("projectId").equals(id).delete(),
         db.audioBlobs.where("projectId").equals(id).delete(),
         db.projects.delete(id),
       ]);
@@ -266,37 +279,54 @@ export async function duplicateProject(id: string): Promise<string | null> {
   const project = await db.projects.get(id);
   if (!project) return null;
 
-  const [tracks, sequences, audioBlobs] = await Promise.all([
+  const [nodes, tracks, segments, audioBlobs] = await Promise.all([
+    db.nodes.where("projectId").equals(id).toArray(),
     db.tracks.where("projectId").equals(id).toArray(),
-    db.sequences.where("projectId").equals(id).toArray(),
+    db.segments.where("projectId").equals(id).toArray(),
     db.audioBlobs.where("projectId").equals(id).toArray(),
   ]);
 
   const newProjectId = nanoid();
+  const nodeIdMap = new Map<string, string>();
   const trackIdMap = new Map<string, string>();
   const blobIdMap = new Map<string, string>();
 
-  const newTracks = tracks.map((t) => {
+  const newNodes: NodeRecord[] = nodes.map((n) => {
+    const newId = nanoid();
+    nodeIdMap.set(n.id, newId);
+    return { ...n, id: newId, projectId: newProjectId };
+  });
+
+  const newTracks: TrackRecord[] = tracks.map((t) => {
     const newId = nanoid();
     trackIdMap.set(t.id, newId);
     return { ...t, id: newId, projectId: newProjectId };
   });
 
-  const newBlobs = audioBlobs.map((b) => {
+  const newBlobs: AudioBlobRecord[] = audioBlobs.map((b) => {
     const newId = nanoid();
     blobIdMap.set(b.id, newId);
     return { ...b, id: newId, projectId: newProjectId };
   });
 
-  const newSequences = sequences.map((s) => ({
+  // Remap nodeId references in segments, and update audioBlobId in node records.
+  const newSegments: SegmentRecord[] = segments.map((s) => ({
     ...s,
     id: nanoid(),
     projectId: newProjectId,
     trackId: trackIdMap.get(s.trackId) ?? s.trackId,
-    audioBlobId: s.audioBlobId
-      ? (blobIdMap.get(s.audioBlobId) ?? s.audioBlobId)
-      : undefined,
+    nodeId: nodeIdMap.get(s.nodeId) ?? s.nodeId,
   }));
+
+  // Remap audioBlobId references in node records.
+  for (const node of newNodes) {
+    if (node.audioBlobId) {
+      node.audioBlobId = blobIdMap.get(node.audioBlobId) ?? node.audioBlobId;
+    }
+  }
+
+  // Remap rootIds to new IDs.
+  const newRootIds = (project.rootIds ?? []).map((rid) => nodeIdMap.get(rid) ?? rid);
 
   const now = new Date();
   const newProject: ProjectRecord = {
@@ -305,18 +335,17 @@ export async function duplicateProject(id: string): Promise<string | null> {
     name: `${project.name} (Copy)`,
     createdAt: now,
     updatedAt: now,
+    rootIds: newRootIds,
   };
 
   await db.transaction(
     "rw",
-    db.projects,
-    db.tracks,
-    db.sequences,
-    db.audioBlobs,
+    [db.projects, db.nodes, db.tracks, db.segments, db.audioBlobs],
     async () => {
       await db.projects.put(newProject);
+      if (newNodes.length > 0) await db.nodes.bulkPut(newNodes);
       if (newTracks.length > 0) await db.tracks.bulkPut(newTracks);
-      if (newSequences.length > 0) await db.sequences.bulkPut(newSequences);
+      if (newSegments.length > 0) await db.segments.bulkPut(newSegments);
       if (newBlobs.length > 0) await db.audioBlobs.bulkPut(newBlobs);
     },
   );
@@ -346,8 +375,8 @@ export async function getProjectSize(id: string): Promise<number> {
 // ─── Metadata Update ──────────────────────────────────────────────────────────
 
 /**
- * Update only the user-editable metadata fields of a project without
- * touching tracks, sequences, or audio blobs.
+ * Update only the user-editable metadata fields of a project without touching
+ * nodes, tracks, segments, or audio blobs.
  */
 export async function updateProjectMetadata(
   id: string,
@@ -359,34 +388,64 @@ export async function updateProjectMetadata(
   });
 }
 
-// ─── Granular track / sequence ops ───────────────────────────────────────────
+// ─── Granular node / track / segment ops ─────────────────────────────────────
 //
-// These are used by the auto-save path when only part of a project has changed,
+// Used by the auto-save path when only part of a project has changed,
 // avoiding the expensive full-replace (and re-compression) of saveProject().
+
+/**
+ * Insert or replace a single node record (no audio blob).
+ * Also bumps `projects.updatedAt` in the same transaction.
+ */
+export async function upsertNodeRecord(
+  record: NodeRecord,
+): Promise<void> {
+  await db.transaction("rw", db.projects, db.nodes, async () => {
+    await db.nodes.put(record);
+    await db.projects.update(record.projectId, { updatedAt: new Date() });
+  });
+}
+
+/**
+ * Delete a single node record.
+ * Also removes any associated audio blob and bumps `projects.updatedAt`.
+ */
+export async function deleteNodeRecord(
+  projectId: string,
+  nodeId: string,
+): Promise<void> {
+  await db.transaction(
+    "rw",
+    db.projects,
+    db.nodes,
+    db.audioBlobs,
+    async () => {
+      const node = await db.nodes.get(nodeId);
+
+      await db.nodes.delete(nodeId);
+
+      if (node?.audioBlobId) {
+        await db.audioBlobs.delete(node.audioBlobId);
+      }
+
+      await db.projects.update(projectId, { updatedAt: new Date() });
+    },
+  );
+}
 
 /**
  * Insert or replace a single track record.
  * Also bumps `projects.updatedAt` in the same transaction.
  */
-export async function upsertTrackRecord(
-  projectId: string,
-  trackJSON: AudioTrackJSON,
-  sortOrder: number,
-): Promise<void> {
-  const record: TrackRecord = {
-    ...(trackJSON as unknown as TrackRecord),
-    projectId,
-    sortOrder,
-  };
-
+export async function upsertTrackRecord(record: TrackRecord): Promise<void> {
   await db.transaction("rw", db.projects, db.tracks, async () => {
     await db.tracks.put(record);
-    await db.projects.update(projectId, { updatedAt: new Date() });
+    await db.projects.update(record.projectId, { updatedAt: new Date() });
   });
 }
 
 /**
- * Delete a single track record (and its sequences) for a project.
+ * Delete a single track record and all its segments.
  * Also bumps `projects.updatedAt`.
  */
 export async function deleteTrackRecord(
@@ -397,105 +456,56 @@ export async function deleteTrackRecord(
     "rw",
     db.projects,
     db.tracks,
-    db.sequences,
-    db.audioBlobs,
+    db.segments,
     async () => {
-      // Collect sequence IDs so we can delete their audio blobs too.
-      const seqs = await db.sequences
-        .where("trackId")
-        .equals(trackId)
-        .toArray();
-      const blobIds = seqs
-        .map((s) => s.audioBlobId)
-        .filter((id): id is string => !!id);
-
       await Promise.all([
         db.tracks.delete(trackId),
-        db.sequences.where("trackId").equals(trackId).delete(),
-        ...(blobIds.length > 0 ? [db.audioBlobs.bulkDelete(blobIds)] : []),
+        db.segments.where("trackId").equals(trackId).delete(),
       ]);
-
       await db.projects.update(projectId, { updatedAt: new Date() });
     },
   );
 }
 
 /**
- * Insert or replace a single sequence record (properties only, no audio blob).
- * Use `upsertAudioBlob` when the buffer itself has changed.
+ * Insert or replace a single segment record.
  * Also bumps `projects.updatedAt`.
- *
- * IMPORTANT: `put()` is a full replace, so we must carry forward the existing
- * `audioBlobId` — otherwise moving a sequence (time change) would silently
- * orphan its audio blob and the audio would disappear on next project load.
  */
-export async function upsertSequenceRecord(
+export async function upsertSegmentRecord(record: SegmentRecord): Promise<void> {
+  await db.transaction("rw", db.projects, db.segments, async () => {
+    await db.segments.put(record);
+    await db.projects.update(record.projectId, { updatedAt: new Date() });
+  });
+}
+
+/**
+ * Delete a single segment record.
+ * Also bumps `projects.updatedAt`.
+ */
+export async function deleteSegmentRecord(
   projectId: string,
-  trackId: string,
-  seqJSON: AudioSequenceJSON,
+  segmentId: string,
 ): Promise<void> {
-  await db.transaction("rw", db.projects, db.sequences, async () => {
-    // Preserve the existing audioBlobId — this field is owned by upsertAudioBlob
-    // and must survive metadata-only updates (e.g. sequence time/playbackRate changes).
-    const existing = await db.sequences.get(seqJSON.id);
-
-    const record: SequenceRecord = {
-      id: seqJSON.id,
-      trackId,
-      projectId,
-      time: seqJSON.time,
-      playbackRate: seqJSON.playbackRate,
-      audioBlobId: existing?.audioBlobId,
-    };
-
-    await db.sequences.put(record);
+  await db.transaction("rw", db.projects, db.segments, async () => {
+    await db.segments.delete(segmentId);
     await db.projects.update(projectId, { updatedAt: new Date() });
   });
 }
 
 /**
- * Delete a single sequence record (and its audio blob if any).
- * Also bumps `projects.updatedAt`.
- */
-export async function deleteSequenceRecord(
-  projectId: string,
-  sequenceId: string,
-): Promise<void> {
-  await db.transaction(
-    "rw",
-    db.projects,
-    db.sequences,
-    db.audioBlobs,
-    async () => {
-      const seq = await db.sequences.get(sequenceId);
-
-      await db.sequences.delete(sequenceId);
-
-      if (seq?.audioBlobId) {
-        await db.audioBlobs.delete(seq.audioBlobId);
-      }
-
-      await db.projects.update(projectId, { updatedAt: new Date() });
-    },
-  );
-}
-
-/**
- * Compress and store the AudioBuffer for a recorded sequence.
+ * Compress and store the AudioBuffer for a recorded node.
  *
- * If a blob already exists for this sequence it is replaced in-place (same
- * `audioBlobId`).  Otherwise a new blob ID is minted and the sequence record
- * is updated to reference it.
+ * If a blob already exists for this node it is replaced in-place (same
+ * `audioBlobId`). Otherwise a new blob ID is minted and the node record is
+ * updated to reference it.
  *
- * This is the slow path — called only when `DirtySequence.buffer === true`.
+ * This is the slow path — called only when the buffer has actually changed.
  */
 export async function upsertAudioBlob(
   projectId: string,
-  trackId: string,
-  seqJSON: AudioSequenceJSON,
+  nodeId: string,
   buffer: AudioBuffer,
 ): Promise<void> {
-  // Compress all channels in parallel.
   const { sampleRate, numberOfChannels, length } = buffer;
   const channelData: Blob[] = await Promise.all(
     Array.from({ length: numberOfChannels }, (_, ch) =>
@@ -506,11 +516,10 @@ export async function upsertAudioBlob(
   await db.transaction(
     "rw",
     db.projects,
-    db.sequences,
+    db.nodes,
     db.audioBlobs,
     async () => {
-      // Re-use existing audioBlobId or mint a new one.
-      const existing = await db.sequences.get(seqJSON.id);
+      const existing = await db.nodes.get(nodeId);
       const audioBlobId = existing?.audioBlobId ?? nanoid();
 
       const blobRecord: AudioBlobRecord = {
@@ -522,20 +531,8 @@ export async function upsertAudioBlob(
         channelData,
       };
 
-      const seqRecord: SequenceRecord = {
-        id: seqJSON.id,
-        trackId,
-        projectId,
-        time: seqJSON.time,
-        playbackRate: seqJSON.playbackRate,
-        audioBlobId,
-      };
-
-      await Promise.all([
-        db.audioBlobs.put(blobRecord),
-        db.sequences.put(seqRecord),
-      ]);
-
+      await db.audioBlobs.put(blobRecord);
+      await db.nodes.update(nodeId, { audioBlobId });
       await db.projects.update(projectId, { updatedAt: new Date() });
     },
   );

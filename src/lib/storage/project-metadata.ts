@@ -44,7 +44,7 @@ export function createDefaultMetadata(): ProjectMetadata {
 
 // ─── Field Validation ─────────────────────────────────────────────────────────
 
-const MAX_NAME_LENGTH = 100;
+const MAX_NAME_LENGTH = 64;
 const MAX_AUTHOR_LENGTH = 100;
 const MAX_GENRE_LENGTH = 50;
 const MAX_TAG_LENGTH = 30;

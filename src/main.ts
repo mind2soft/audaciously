@@ -1,61 +1,16 @@
 import { createApp } from "vue";
+import { createPinia } from "pinia";
 import "./style.css";
 import App from "./App.vue";
-import { createRecorder } from "./lib/audio/recorder";
-import {
-  playerKey,
-  recorderKey,
-  storageKey,
-  timelineKey,
-  toolsKey,
-} from "./lib/provider-keys";
-import { createPlayer } from "./lib/audio/player";
-import { createTimeline } from "./lib/timeline";
-import { createTools } from "./lib/audio/tools";
-import { createSelectTool } from "./lib/audio/tool/select";
-import { createSequenceMoveTool } from "./lib/audio/tool/sequence-move";
-import { createSequenceSplitTool } from "./lib/audio/tool/sequence-split";
-import { createSequenceCutTool } from "./lib/audio/tool/sequence-cut";
-import { loadSettings, settingsToMediaStreamConstraints } from "./lib/settings";
-import { createStorageService } from "./lib/storage/storage-service";
 
-// Restore persisted settings before the app mounts so every component sees
-// the correct initial state without any timing gymnastics.
-const settings = loadSettings();
+// Recorder and StorageService are now module-level singletons:
+//   src/lib/audio/recorder-singleton.ts
+//   src/lib/storage/storage-singleton.ts
+//
+// AudioPlayer and Timeline are wrapped by Pinia stores:
+//   src/stores/player.ts  (createPlayer, initialized with persisted settings)
+//   src/stores/timeline.ts (createTimeline)
+//
+// All old provide() / inject() patterns have been removed.
 
-const recorder = createRecorder({
-  mediaStreamConstraints: settingsToMediaStreamConstraints(settings),
-});
-
-const player = createPlayer();
-player.volume = settings.volume;
-// setOutputDeviceId is async, but at startup there is no AudioContext yet so
-// it resolves immediately after storing the value — no need to await here.
-void player.setOutputDeviceId(settings.outputDeviceId);
-
-const timeline = createTimeline();
-const storage = createStorageService();
-
-const interruptPlayback = () => {
-  if (player.state === "playing") {
-    player.pause();
-  }
-};
-
-createApp(App)
-  .provide(recorderKey, recorder)
-  .provide(playerKey, player)
-  .provide(storageKey, storage)
-  .provide(timelineKey, timeline) // provide timeline instance
-  .provide(
-    toolsKey,
-    createTools({
-      tools: [
-        createSelectTool(timeline, { onInteract: interruptPlayback }),
-        createSequenceMoveTool(timeline, { onInteract: interruptPlayback }),
-        createSequenceSplitTool(timeline, { onInteract: interruptPlayback }),
-        createSequenceCutTool({ onInteract: interruptPlayback }),
-      ],
-    }),
-  )
-  .mount("#app");
+createApp(App).use(createPinia()).mount("#app");

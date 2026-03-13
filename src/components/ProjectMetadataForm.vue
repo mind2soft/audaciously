@@ -117,6 +117,7 @@ defineExpose({ isValid });
       </div>
       <input
         type="text"
+        maxlength="64"
         class="input input-bordered w-full"
         :class="{ 'input-error': nameError }"
         placeholder="My awesome track"
@@ -215,7 +216,7 @@ defineExpose({ isValid });
             tagInput.length > 0 &&
             availableTagSuggestions.length > 0
           "
-          class="menu menu-sm bg-base-200 rounded-box shadow-lg absolute z-10 w-full mt-1 max-h-40 overflow-y-auto"
+          class="menu menu-sm bg-base-300 rounded-box shadow-lg absolute z-10 w-full mt-1 max-h-40 overflow-y-auto"
         >
           <li
             v-for="suggestion in availableTagSuggestions.slice(0, 8)"

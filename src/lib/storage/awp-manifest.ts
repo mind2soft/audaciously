@@ -1,6 +1,6 @@
 import type { MusicInstrumentId, NoteDuration } from "../music/instruments";
-import type { PlacedNote, TimeSignature } from "../audio/track/instrument";
-import type { AudioEffect } from "../audio/sequence";
+import type { PlacedNote, TimeSignature } from "../../features/nodes/instrument/instrument-node";
+import type { AudioEffect } from "../../features/effects/types";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
