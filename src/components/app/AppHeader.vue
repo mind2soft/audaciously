@@ -73,15 +73,9 @@ function closeMenu(): void {
         class="absolute left-0 top-full mt-1 z-50 menu menu-sm bg-base-300 border border-base-300/60 rounded-md shadow-lg min-w-48"
       >
         <li role="none">
-          <button role="menuitem" @click="project.doNew(); closeMenu()">
-            <i class="iconify mdi--file-outline size-4" />
-            New Project
-          </button>
-        </li>
-        <li role="none">
           <button role="menuitem" @click="project.browserOpen = true; closeMenu()">
-            <i class="iconify mdi--folder-open-outline size-4" />
-            Open Project
+            <i class="iconify mdi--folder-multiple-outline size-4" />
+            Project Manager
           </button>
         </li>
         <li role="separator" aria-hidden="true" class="pointer-events-none"><div class="border-t border-base-content/10 my-0.5 -mx-1" /></li>

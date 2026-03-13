@@ -11,7 +11,7 @@
  *
  * Store connections
  * ─────────────────
- * useProjectStore — browserOpen (modal flag), doLoad()
+ * useProjectStore — browserOpen (modal flag), doLoad(), doNew(), dirty, hasProject
  *
  * Injections
  * ──────────
@@ -39,6 +39,7 @@ const project = useProjectStore();
 
 const dialogRef = ref<HTMLDialogElement | null>(null);
 const deleteDialogRef = ref<HTMLDialogElement | null>(null);
+const newConfirmDialogRef = ref<HTMLDialogElement | null>(null);
 
 // ── State ────────────────────────────────────────────────────────────────────
 
@@ -46,6 +47,7 @@ const projects = ref<ProjectSummary[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
 const confirmDeleteId = ref<string | null>(null);
+const newConfirmOpen = ref(false);
 const duplicating = ref<string | null>(null);
 
 type SortField = "name" | "updatedAt" | "sizeBytes";
@@ -76,6 +78,18 @@ watch(
       if (!deleteDialogRef.value.open) deleteDialogRef.value.showModal();
     } else {
       if (deleteDialogRef.value.open) deleteDialogRef.value.close();
+    }
+  },
+);
+
+watch(
+  () => newConfirmOpen.value,
+  (open) => {
+    if (!newConfirmDialogRef.value) return;
+    if (open) {
+      if (!newConfirmDialogRef.value.open) newConfirmDialogRef.value.showModal();
+    } else {
+      if (newConfirmDialogRef.value.open) newConfirmDialogRef.value.close();
     }
   },
 );
@@ -181,6 +195,25 @@ const confirmDelete = async () => {
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Failed to delete project.";
   }
+};
+
+const requestNew = () => {
+  if (project.dirty && project.hasProject) {
+    newConfirmOpen.value = true;
+  } else {
+    project.doNew();
+    project.browserOpen = false;
+  }
+};
+
+const cancelNewConfirm = () => {
+  newConfirmOpen.value = false;
+};
+
+const confirmNew = () => {
+  newConfirmOpen.value = false;
+  project.doNew();
+  project.browserOpen = false;
 };
 
 const handleDuplicate = async (id: string) => {
@@ -330,8 +363,17 @@ watch(
 
       <!-- ── Modal header ──────────────────────────────────────────────── -->
       <div class="flex items-center justify-between mb-4">
-        <h2 class="text-lg font-semibold">Saved Projects</h2>
+        <h2 class="text-lg font-semibold">Project Manager</h2>
         <div class="flex items-center gap-1">
+          <button
+            class="btn btn-primary btn-xs gap-1"
+            title="New Project"
+            aria-label="New Project"
+            @click="requestNew"
+          >
+            <i class="iconify mdi--file-plus-outline size-4" aria-hidden="true" />
+            New Project
+          </button>
           <button
             class="btn btn-ghost btn-xs gap-1"
             title="Import .awp file"
@@ -550,6 +592,28 @@ watch(
       </div>
       <form method="dialog" class="modal-backdrop">
         <button @click.prevent="cancelDelete">close</button>
+      </form>
+    </dialog>
+
+    <!-- ── New Project confirmation modal ────────────────────────────── -->
+    <dialog
+      ref="newConfirmDialogRef"
+      class="modal"
+      @cancel.prevent="cancelNewConfirm"
+    >
+      <div class="modal-box bg-base-300 max-w-sm">
+        <h3 class="mb-2 text-lg font-bold">Discard Changes?</h3>
+        <p class="py-4 text-sm text-base-content/70">
+          You have unsaved changes. Starting a new project will discard them.
+          This cannot be undone.
+        </p>
+        <div class="modal-action">
+          <button class="btn btn-ghost" @click="cancelNewConfirm">Cancel</button>
+          <button class="btn btn-warning" @click="confirmNew">Discard &amp; New</button>
+        </div>
+      </div>
+      <form method="dialog" class="modal-backdrop">
+        <button @click.prevent="cancelNewConfirm">close</button>
       </form>
     </dialog>
 
