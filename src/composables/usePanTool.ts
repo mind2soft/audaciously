@@ -16,6 +16,7 @@ import {
   snapBeatRound,
   clientXToRawBeat,
   resolveOverlapsKeepRightmost,
+  computeSnapBeats,
 } from "../lib/piano-roll/note-utils";
 
 // ── Context ───────────────────────────────────────────────────────────────────
@@ -25,6 +26,7 @@ export interface PanToolContext {
   pitches: ComputedRef<InstrumentPitch[]>;
   pxPerBeat: ComputedRef<number>;
   snapBeats: ComputedRef<number>;
+  beatsPerMeasure: ComputedRef<number>;
   rowHeightPx: number;
   gridRef: Ref<HTMLDivElement | undefined>;
   emitNotes: (notes: PlacedNote[]) => void;
@@ -143,13 +145,15 @@ export function usePanTool(ctx: PanToolContext) {
         .map((n) => n.id),
     );
 
-    // Snap step = largest note duration in the dragged set.
-    // This keeps all inter-note spacing intact after the move.
+    // Snap step = largest note duration in the dragged set, capped at
+    // beatsPerMeasure so notes crossing a measure boundary always land on
+    // a measure boundary after the move.
     const dragged = ctx.notes.value.filter((n) => draggedIds.value.has(n.id));
-    dragSnapBeats.value =
+    const maxDuration =
       dragged.length > 0
         ? Math.max(...dragged.map((n) => n.durationBeats))
         : ctx.snapBeats.value;
+    dragSnapBeats.value = computeSnapBeats(maxDuration, ctx.beatsPerMeasure.value);
 
     document.addEventListener("mousemove", onDocMousemove);
     document.addEventListener("mouseup", onDocMouseup, { once: true });

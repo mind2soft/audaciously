@@ -18,7 +18,7 @@ import {
   createFadeOutEffect,
 } from "../features/effects";
 import type { PlacedNote, TimeSignature } from "../features/nodes/instrument/instrument-node";
-import type { MusicInstrumentId, NoteDuration } from "../lib/music/instruments";
+import type { MusicInstrumentId, NoteDuration, OctaveRange } from "../lib/music/instruments";
 
 // ── Serialization types ────────────────────────────────────────────────────────
 
@@ -289,6 +289,13 @@ export const useNodesStore = defineStore("nodes", () => {
     }
   }
 
+  function setInstrumentOctaveRange(id: string, range: OctaveRange): void {
+    const node = nodesById.value.get(id);
+    if (node && node.kind === "instrument") {
+      (node as InstrumentNode).octaveRange = { ...range };
+    }
+  }
+
   // ── Auto-naming helpers ────────────────────────────────────────────────────
 
   function nextFolderName(): string {
@@ -368,6 +375,7 @@ export const useNodesStore = defineStore("nodes", () => {
     setInstrumentBpm,
     setInstrumentTimeSignature,
     setInstrumentSelectedNoteType,
+    setInstrumentOctaveRange,
     // auto-naming
     nextFolderName,
     nextRecordedName,

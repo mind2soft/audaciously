@@ -42,6 +42,7 @@ import { usePanTool } from "../../composables/usePanTool";
 import { useCopyTool } from "../../composables/useCopyTool";
 import { useCutTool } from "../../composables/useCutTool";
 import { usePasteTool } from "../../composables/usePasteTool";
+import { computeSnapBeats } from "../../lib/piano-roll/note-utils";
 
 const NOTE_HEIGHT_PX = PIANO_INSTRUMENT.rowHeight;
 const LABEL_WIDTH_PX = PIANO_ROLL_LABEL_WIDTH;
@@ -97,11 +98,17 @@ const visibleNotes = computed(() => {
 
 // ── Snap (current note type in beats) ─────────────────────────────────────────
 
-const snapBeats = computed(() =>
+const noteDurationBeats = computed(() =>
   getNoteDurationBeats(
     props.node.selectedNoteType,
     props.node.timeSignature.beatUnit,
   ),
+);
+
+const beatsPerMeasure = computed(() => props.node.timeSignature.beatsPerMeasure);
+
+const snapBeats = computed(() =>
+  computeSnapBeats(noteDurationBeats.value, beatsPerMeasure.value),
 );
 
 // ── Grid background ───────────────────────────────────────────────────────────
@@ -148,6 +155,8 @@ const toolCtxBase = {
   pitches,
   pxPerBeat,
   snapBeats,
+  noteDurationBeats,
+  beatsPerMeasure,
   rowHeightPx: NOTE_HEIGHT_PX,
   gridRef,
   scrollRef,

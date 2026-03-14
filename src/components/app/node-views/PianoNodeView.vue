@@ -8,7 +8,7 @@
  *   Row 3  Player controls: [play] [separator] [note buttons + BPM] [flex-1] [tools]
  */
 
-import { ref, computed } from "vue";
+import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useNodesStore } from "../../../stores/nodes";
 import { useNodePlayback } from "../../../composables/useNodePlayback";
 import { useInstrumentNode } from "../../../composables/useInstrumentNode";
@@ -18,9 +18,14 @@ import { baseSecondWidthInPixels } from "../../../lib/util/formatTime";
 import type { InstrumentNode } from "../../../features/nodes";
 import type { NoteDuration } from "../../../lib/music/instruments";
 import type { PianoRollToolId } from "../../../lib/piano-roll/tool-types";
-import PianoRoll, { PIANO_ROLL_LABEL_WIDTH } from "../../controls/PianoRoll.vue";
+import PianoRoll, {
+  PIANO_ROLL_LABEL_WIDTH,
+} from "../../controls/PianoRoll.vue";
 import TimelineRuler from "../../controls/TimelineRuler.vue";
 import ZoomControl from "../../controls/ZoomControl.vue";
+import ButtonGroup, {
+  type ButtonGroupItem,
+} from "../../controls/ButtonGroup.vue";
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -48,8 +53,12 @@ const scrollLeft = ref(0);
 
 // TimelineRuler: offsetTime is scroll position in seconds
 const GRID_WIDTH = 6000; // px — must match PianoRoll's constant
-const offsetTime = computed(() => scrollLeft.value / (zoomRatio.value * baseSecondWidthInPixels));
-const totalDurationSeconds = computed(() => GRID_WIDTH / (zoomRatio.value * baseSecondWidthInPixels));
+const offsetTime = computed(
+  () => scrollLeft.value / (zoomRatio.value * baseSecondWidthInPixels),
+);
+const totalDurationSeconds = computed(
+  () => GRID_WIDTH / (zoomRatio.value * baseSecondWidthInPixels),
+);
 
 // ── Note-type selection ───────────────────────────────────────────────────────
 
@@ -70,6 +79,78 @@ const activeTool = ref<PianoRollToolId>("place");
 // ── Clipboard ─────────────────────────────────────────────────────────────────
 
 const { hasPianoNotes } = usePianoClipboard();
+
+// ── Button-group items ────────────────────────────────────────────────────────
+
+/** Static — NOTE_TYPE_LIST never changes at runtime. */
+const noteTypeItems: ButtonGroupItem[] = NOTE_TYPE_LIST.map((nt) => ({
+  id: nt.id,
+  label: nt.label,
+  title: `${nt.label} (${nt.fraction})`,
+  glyph: nt.glyph,
+}));
+
+/** Reactive — paste is disabled when the clipboard is empty. */
+const toolItems = computed<ButtonGroupItem[]>(() => [
+  { id: "place", label: "Place", title: "Place notes", icon: "pencil-outline" },
+  {
+    id: "pan",
+    label: "Pan",
+    title: "Pan — drag notes in time",
+    icon: "hand-front-left-outline",
+  },
+  { id: "copy", label: "Copy", title: "Copy notes", icon: "content-copy" },
+  {
+    id: "cut",
+    label: "Cut",
+    title: "Cut — remove notes and close gap",
+    icon: "content-cut",
+    activeClass: "btn-warning",
+  },
+  {
+    id: "paste",
+    label: "Paste",
+    title: "Paste notes",
+    icon: "content-paste",
+    disabled: !hasPianoNotes.value,
+  },
+]);
+
+/** Wrappers absorb the string → specific-type casts from ButtonGroup's generic emit. */
+function onNoteTypeSelected(id: string): void {
+  selectNoteType(id as NoteDuration);
+}
+
+function onToolSelected(id: string): void {
+  activeTool.value = id as PianoRollToolId;
+}
+
+// ── Row 3 compact mode (overflow detection) ───────────────────────────────────
+
+/**
+ * Minimum container width (px) at which all buttons fit comfortably inline.
+ * Below this threshold both button groups switch to compact/dropdown mode.
+ */
+const ROW3_COMPACT_THRESHOLD = 520;
+
+const row3Ref = ref<HTMLElement | null>(null);
+const row3Compact = ref(false);
+
+let _row3Observer: ResizeObserver | null = null;
+
+onMounted(() => {
+  if (!row3Ref.value) return;
+  _row3Observer = new ResizeObserver(([entry]) => {
+    row3Compact.value =
+      (entry?.contentRect.width ?? 0) < ROW3_COMPACT_THRESHOLD;
+  });
+  _row3Observer.observe(row3Ref.value);
+});
+
+onUnmounted(() => {
+  _row3Observer?.disconnect();
+  _row3Observer = null;
+});
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
 
@@ -95,9 +176,13 @@ function onCut(noteCount: number): void {
 </script>
 
 <template>
-  <div class="flex flex-col h-full w-full overflow-hidden bg-base-100 select-none">
+  <div
+    class="flex flex-col h-full w-full overflow-hidden bg-base-100 select-none"
+  >
     <!-- ── Row 1: Header (label | ruler | zoom) ──────────────────────────── -->
-    <div class="shrink-0 flex items-stretch h-10 border-b border-base-300/60 bg-base-200">
+    <div
+      class="shrink-0 flex items-stretch h-10 border-b border-base-300/60 bg-base-200"
+    >
       <!-- Track label — same width as the pitch label column in PianoRoll -->
       <div
         class="shrink-0 flex items-center gap-1.5 px-2 border-r border-base-300/60 text-xs text-base-content/60"
@@ -140,7 +225,10 @@ function onCut(noteCount: number): void {
     />
 
     <!-- ── Row 3: Player controls ─────────────────────────────────────────── -->
-    <div class="shrink-0 flex items-center gap-2 px-3 py-1.5 bg-base-200 border-t border-base-300/60 min-h-10">
+    <div
+      ref="row3Ref"
+      class="shrink-0 flex items-center gap-2 px-3 py-1.5 bg-base-200 border-t border-base-300/60 min-h-10"
+    >
       <!-- Play/Pause -->
       <button
         class="btn btn-sm btn-ghost btn-square"
@@ -157,64 +245,24 @@ function onCut(noteCount: number): void {
       <!-- Separator -->
       <div class="w-px h-5 bg-base-300/60 mx-1" aria-hidden="true" />
 
-      <!-- Note type buttons -->
-      <div class="flex gap-1">
-        <button
-          v-for="nt in NOTE_TYPE_LIST"
-          :key="nt.id"
-          class="btn btn-xs"
-          :class="node.selectedNoteType === nt.id ? 'btn-primary' : 'btn-ghost'"
-          :title="nt.label"
-          @click="selectNoteType(nt.id)"
-        >
-          {{ nt.fraction }}
-        </button>
-      </div>
-      <span class="text-xs text-base-content/40">{{ node.bpm }} BPM</span>
+      <!-- Note-type selector -->
+      <ButtonGroup
+        :items="noteTypeItems"
+        :model-value="node.selectedNoteType"
+        :compact="row3Compact"
+        @update:model-value="onNoteTypeSelected"
+      />
 
       <div class="flex-1" />
 
-      <button
-        class="btn btn-xs"
-        :class="activeTool === 'place' ? 'btn-primary' : 'btn-ghost'"
-        title="Place notes"
-        @click="activeTool = 'place'"
-      >
-        <i class="iconify mdi--pencil-outline size-3.5" aria-hidden="true" />
-      </button>
-      <button
-        class="btn btn-xs"
-        :class="activeTool === 'pan' ? 'btn-primary' : 'btn-ghost'"
-        title="Pan — drag notes in time"
-        @click="activeTool = 'pan'"
-      >
-        <i class="iconify mdi--hand-front-left-outline size-3.5" aria-hidden="true" />
-      </button>
-      <button
-        class="btn btn-xs"
-        :class="activeTool === 'copy' ? 'btn-primary' : 'btn-ghost'"
-        title="Copy notes"
-        @click="activeTool = 'copy'"
-      >
-        <i class="iconify mdi--content-copy size-3.5" aria-hidden="true" />
-      </button>
-      <button
-        class="btn btn-xs"
-        :class="activeTool === 'cut' ? 'btn-warning' : 'btn-ghost'"
-        title="Cut — remove notes and close gap"
-        @click="activeTool = 'cut'"
-      >
-        <i class="iconify mdi--content-cut size-3.5" aria-hidden="true" />
-      </button>
-      <button
-        class="btn btn-xs"
-        :class="activeTool === 'paste' ? 'btn-primary' : 'btn-ghost'"
-        :disabled="!hasPianoNotes"
-        title="Paste notes"
-        @click="activeTool = 'paste'"
-      >
-        <i class="iconify mdi--content-paste size-3.5" aria-hidden="true" />
-      </button>
+      <!-- Tool selector -->
+      <ButtonGroup
+        :items="toolItems"
+        :model-value="activeTool"
+        :compact="row3Compact"
+        dropdown-align="end"
+        @update:model-value="onToolSelected"
+      />
     </div>
 
     <!-- ── Toast notification ─────────────────────────────────────────────── -->

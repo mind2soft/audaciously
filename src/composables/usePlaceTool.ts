@@ -22,6 +22,7 @@ export interface PlaceToolContext {
   pitches: ComputedRef<InstrumentPitch[]>;
   pxPerBeat: ComputedRef<number>;
   snapBeats: ComputedRef<number>;
+  noteDurationBeats: ComputedRef<number>;
   rowHeightPx: number;
   gridRef: Ref<HTMLDivElement | undefined>;
   emitNotes: (notes: PlacedNote[]) => void;
@@ -46,7 +47,7 @@ export function usePlaceTool(ctx: PlaceToolContext) {
     return {
       id: "hover-preview",
       startBeat: hoverStartBeat.value,
-      durationBeats: ctx.snapBeats.value,
+      durationBeats: ctx.noteDurationBeats.value,
       pitchId: hoverPitchId.value,
     };
   });
@@ -107,7 +108,7 @@ export function usePlaceTool(ctx: PlaceToolContext) {
       const newNote: PlacedNote = {
         id: nanoid(),
         startBeat,
-        durationBeats: ctx.snapBeats.value,
+        durationBeats: ctx.noteDurationBeats.value,
         pitchId,
       };
       const filtered = ctx.notes.value.filter((n) => !notesOverlap(n, newNote));

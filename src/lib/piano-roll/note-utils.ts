@@ -38,6 +38,46 @@ export function hitTestNote(
 // ── Beat snapping ─────────────────────────────────────────────────────────────
 
 /**
+ * Compute the snap step (in beats) for a given note duration and time signature.
+ *
+ * The invariant: a note whose duration causes it to cross a measure boundary
+ * must always start exactly on a measure boundary.
+ *
+ * A snap step `s` is safe iff `s` divides `beatsPerMeasure` and `d ≤ s`,
+ * which reduces to: `beatsPerMeasure / noteDurationBeats` must be an integer.
+ *
+ * - If `noteDurationBeats >= beatsPerMeasure`  → snap = beatsPerMeasure
+ * - If `beatsPerMeasure / noteDurationBeats` is an integer (clean subdivision)
+ *                                              → snap = noteDurationBeats
+ * - Otherwise (note doesn't cleanly subdivide the measure)
+ *                                              → snap = beatsPerMeasure
+ *
+ * Examples:
+ *   whole note (d=4) in 4/4 (bpm=4)  → 4/4=1 integer  → snap=4 (measure)
+ *   half  note (d=2) in 4/4 (bpm=4)  → 4/2=2 integer  → snap=2
+ *   whole note (d=2) in 3/8 (bpm=3)  → 3/2=1.5 ✗      → snap=3 (measure)
+ *   half  note (d=2) in 3/4 (bpm=3)  → 3/2=1.5 ✗      → snap=3 (measure)
+ *   half  note (d=1) in 3/8 (bpm=3)  → 3/1=3 integer  → snap=1
+ *
+ * Assumptions:
+ *   - All supported NoteDuration values are powers of 2, so bpm/d is exact in
+ *     IEEE 754. Non-power-of-2 durations (e.g. triplets) would need an
+ *     epsilon-based integer check.
+ *   - Invalid inputs (noteDurationBeats ≤ 0, NaN, Infinity) safely return
+ *     beatsPerMeasure via the explicit guard below.
+ */
+export function computeSnapBeats(
+  noteDurationBeats: number,
+  beatsPerMeasure: number,
+): number {
+  if (noteDurationBeats <= 0 || !isFinite(noteDurationBeats))
+    return beatsPerMeasure;
+  if (noteDurationBeats >= beatsPerMeasure) return beatsPerMeasure;
+  const ratio = beatsPerMeasure / noteDurationBeats;
+  return Number.isInteger(ratio) ? noteDurationBeats : beatsPerMeasure;
+}
+
+/**
  * Floor-snap: cursor always lands INSIDE the placed note.
  * Used by the place tool so the new note starts at-or-before the click.
  */
