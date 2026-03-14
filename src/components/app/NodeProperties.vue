@@ -14,7 +14,6 @@ import FolderNodeProperties from "./node-properties/FolderNodeProperties.vue";
 import RecordedNodeProperties from "./node-properties/RecordedNodeProperties.vue";
 import InstrumentNodeProperties from "./node-properties/InstrumentNodeProperties.vue";
 import PianoNodeProperties from "./node-properties/PianoNodeProperties.vue";
-import DrumNodeProperties from "./node-properties/DrumNodeProperties.vue";
 import EffectsPanel from "../controls/EffectsPanel.vue";
 
 const nodes = useNodesStore();
@@ -35,7 +34,7 @@ const selectedInstrument = computed((): InstrumentNode | null => {
 const instrumentSubPanel = computed(() => {
   const inst = selectedInstrument.value;
   if (!inst) return null;
-  return inst.instrumentId === "piano" ? PianoNodeProperties : DrumNodeProperties;
+  return inst.instrumentId === "piano" ? PianoNodeProperties : null;
 });
 
 /** Icon class per node kind. */

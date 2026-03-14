@@ -43,6 +43,8 @@ import { useCopyTool } from "../../composables/useCopyTool";
 import { useCutTool } from "../../composables/useCutTool";
 import { usePasteTool } from "../../composables/usePasteTool";
 import { computeSnapBeats } from "../../lib/piano-roll/note-utils";
+import { useNotePreview } from "../../composables/useNotePreview";
+import PianoRollKeys from "./PianoRollKeys.vue";
 
 const NOTE_HEIGHT_PX = PIANO_INSTRUMENT.rowHeight;
 const LABEL_WIDTH_PX = PIANO_ROLL_LABEL_WIDTH;
@@ -54,6 +56,8 @@ const props = defineProps<{
   zoomRatio: number;
   activeTool: PianoRollToolId;
   currentTime?: number;
+  /** When true, all editing interactions are suppressed (e.g. during playback). */
+  readonly?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -105,7 +109,9 @@ const noteDurationBeats = computed(() =>
   ),
 );
 
-const beatsPerMeasure = computed(() => props.node.timeSignature.beatsPerMeasure);
+const beatsPerMeasure = computed(
+  () => props.node.timeSignature.beatsPerMeasure,
+);
 
 const snapBeats = computed(() =>
   computeSnapBeats(noteDurationBeats.value, beatsPerMeasure.value),
@@ -146,6 +152,10 @@ const gridBackground = computed(() => {
   return [hGrad, vGrad, mGrad].filter(Boolean).join(", ");
 });
 
+// ── Note preview ──────────────────────────────────────────────────────────────
+
+const notePreview = useNotePreview();
+
 // ── Shared tool context ───────────────────────────────────────────────────────
 
 const allNotes = computed(() => props.node.notes);
@@ -161,6 +171,7 @@ const toolCtxBase = {
   gridRef,
   scrollRef,
   emitNotes: (notes: PlacedNote[]) => emit("update:notes", notes),
+  onPlace: (pitchId: string) => notePreview.playNote(pitchId),
 };
 
 // ── Tool composables ──────────────────────────────────────────────────────────
@@ -198,9 +209,11 @@ function dispatch<K extends "onMousedown" | "onMousemove" | "onMouseleave">(
 }
 
 function onMousedown(evt: MouseEvent): void {
+  if (props.readonly) return;
   dispatch("onMousedown", evt);
 }
 function onMousemove(evt: MouseEvent): void {
+  if (props.readonly) return;
   dispatch("onMousemove", evt);
 }
 function onMouseleave(): void {
@@ -210,6 +223,7 @@ function onMouseleave(): void {
 // ── Active cursor ──────────────────────────────────────────────────────────────
 
 const activeCursor = computed(() => {
+  if (props.readonly) return "not-allowed";
   if (props.activeTool === "place") return placeTool.cursor;
   if (props.activeTool === "pan") return panTool.cursor;
   if (props.activeTool === "copy") return copyTool.cursor;
@@ -298,7 +312,8 @@ const selectionOverlay = computed(() => {
   return {
     left: range.start * pxPerBeat.value,
     width: (range.end - range.start) * pxPerBeat.value,
-    color: props.activeTool === "cut" ? "var(--color-warning)" : "var(--color-info)",
+    color:
+      props.activeTool === "cut" ? "var(--color-warning)" : "var(--color-info)",
   };
 });
 
@@ -331,23 +346,12 @@ const playheadLeft = computed(
       @scroll="onScrollBody"
     >
       <!-- Left pitch labels — sticky so they don't scroll horizontally -->
-      <div
-        class="sticky left-0 z-10 shrink-0 self-start overflow-hidden flex flex-col border-r border-base-300/60 bg-base-200"
-        :style="{ width: `${LABEL_WIDTH_PX}px` }"
-      >
-        <div
-          v-for="pitch in pitches"
-          :key="pitch.id"
-          class="shrink-0 flex items-center justify-end pr-1 text-xs leading-none"
-          :class="{
-            'text-base-content/70': !pitch.id.includes('#'),
-            'text-base-content/40 bg-base-300/30': pitch.id.includes('#'),
-          }"
-          :style="{ height: `${NOTE_HEIGHT_PX}px` }"
-        >
-          {{ pitch.short ?? pitch.label }}
-        </div>
-      </div>
+      <PianoRollKeys
+        :pitches="pitches"
+        :row-height-px="NOTE_HEIGHT_PX"
+        :width-px="LABEL_WIDTH_PX"
+        :disabled="readonly"
+      />
 
       <!-- Note grid -->
       <div
@@ -448,13 +452,14 @@ const playheadLeft = computed(
 
         <!-- ── Copy / Cut tool: selection rectangle ───────────────────────── -->
         <div
-          v-if="(activeTool === 'copy' || activeTool === 'cut') && selectionOverlay"
+          v-if="
+            (activeTool === 'copy' || activeTool === 'cut') && selectionOverlay
+          "
           class="absolute top-0 bottom-0 pointer-events-none z-10"
           :style="{
             left: `${selectionOverlay.left}px`,
             width: `${selectionOverlay.width}px`,
-            backgroundColor:
-              `color-mix(in oklab, ${selectionOverlay.color} 15%, transparent)`,
+            backgroundColor: `color-mix(in oklab, ${selectionOverlay.color} 15%, transparent)`,
             borderLeft: `1px solid color-mix(in oklab, ${selectionOverlay.color} 60%, transparent)`,
             borderRight: `1px solid color-mix(in oklab, ${selectionOverlay.color} 60%, transparent)`,
           }"
@@ -465,7 +470,7 @@ const playheadLeft = computed(
     <!-- Playhead overlay -->
     <div
       v-if="currentTime !== undefined"
-      class="absolute top-0 bottom-0 w-px bg-accent opacity-75 pointer-events-none z-[5]"
+      class="absolute top-0 bottom-0 w-px bg-accent opacity-75 pointer-events-none z-5"
       :style="{ left: `${playheadLeft}px` }"
       aria-hidden="true"
     />

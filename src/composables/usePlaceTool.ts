@@ -26,6 +26,8 @@ export interface PlaceToolContext {
   rowHeightPx: number;
   gridRef: Ref<HTMLDivElement | undefined>;
   emitNotes: (notes: PlacedNote[]) => void;
+  /** Called with the placed note's pitchId whenever a new note is successfully placed. */
+  onPlace?: (pitchId: string) => void;
 }
 
 // ── Composable ────────────────────────────────────────────────────────────────
@@ -113,6 +115,7 @@ export function usePlaceTool(ctx: PlaceToolContext) {
       };
       const filtered = ctx.notes.value.filter((n) => !notesOverlap(n, newNote));
       ctx.emitNotes([...filtered, newNote]);
+      ctx.onPlace?.(pitchId);
     }
 
     document.addEventListener("mouseup", onDocMouseup, { once: true });

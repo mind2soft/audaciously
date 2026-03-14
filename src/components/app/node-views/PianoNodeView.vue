@@ -217,6 +217,7 @@ function onCut(noteCount: number): void {
       :zoom-ratio="zoomRatio"
       :active-tool="activeTool"
       :current-time="previewCurrentTime"
+      :readonly="previewState === 'playing'"
       class="flex-1 min-h-0"
       @update:notes="onUpdateNotes"
       @scroll="scrollLeft = $event"
