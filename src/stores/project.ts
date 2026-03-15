@@ -31,6 +31,7 @@ export const useProjectStore = defineStore("project", () => {
   // ── Modals / dialogs ──────────────────────────────────────────────────────
   const browserOpen = ref(false);
   const exportOpen = ref(false);
+  const settingsOpen = ref(false);
   const unsavedPromptOpen = ref(false);
   const metadataOpen = ref(false);
   const metadataMode = ref<"edit" | "new" | "save-as">("edit");
@@ -259,6 +260,7 @@ export const useProjectStore = defineStore("project", () => {
     // modals
     browserOpen,
     exportOpen,
+    settingsOpen,
     unsavedPromptOpen,
     metadataOpen,
     metadataMode,

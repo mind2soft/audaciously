@@ -113,6 +113,13 @@ function closeMenu(): void {
             Export Audio
           </button>
         </li>
+        <li role="separator" aria-hidden="true" class="pointer-events-none"><div class="border-t border-base-content/10 my-0.5 -mx-1" /></li>
+        <li role="none">
+          <button role="menuitem" @click="project.settingsOpen = true; closeMenu()">
+            <i class="iconify mdi--cog-outline size-4" />
+            Settings
+          </button>
+        </li>
       </ul>
 
       <!-- Click-away overlay -->

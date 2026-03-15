@@ -25,6 +25,7 @@ import StatusBar from "./components/app/StatusBar.vue";
 import ProjectBrowser from "./components/app/ProjectBrowser.vue";
 import ProjectMetadataForm from "./components/ProjectMetadataForm.vue";
 import ExportAudioDialog from "./components/ExportAudioDialog.vue";
+import SettingsDialog from "./components/SettingsDialog.vue";
 import type { ProjectMetadata } from "./lib/storage/project-metadata";
 import { createDefaultMetadata } from "./lib/storage/project-metadata";
 
@@ -290,5 +291,11 @@ watch(
     :open="project.exportOpen"
     :project-name="project.projectName"
     @close="project.exportOpen = false"
+  />
+
+  <!-- Settings dialog -->
+  <SettingsDialog
+    :open="project.settingsOpen"
+    @close="project.settingsOpen = false"
   />
 </template>
