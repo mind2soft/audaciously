@@ -22,6 +22,7 @@ import { useSequenceStore } from "../stores/sequence";
 import { useNodesStore } from "../stores/nodes";
 import type { Track } from "../features/sequence/track";
 import type { Segment } from "../features/sequence/segment";
+import type { RecordedNode, InstrumentNode } from "../features/nodes";
 
 // ── Public types ───────────────────────────────────────────────────────────────
 
@@ -112,8 +113,8 @@ export function useSegmentDrag(
   /** Effective playback duration of a segment (respects trim). */
   function _segmentDuration(segment: Segment): number {
     const node = nodesStore.nodesById.get(segment.nodeId);
-    if (!node || node.kind === "folder" || !(node as any).buffer) return 0;
-    const bufferDuration: number = (node as any).buffer.duration;
+    if (!node || node.kind === "folder") return 0;
+    const bufferDuration = (node as RecordedNode | InstrumentNode).targetBuffer?.duration ?? 0;
     return Math.max(0, bufferDuration - segment.trimStart - segment.trimEnd);
   }
 

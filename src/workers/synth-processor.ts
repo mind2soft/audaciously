@@ -11,7 +11,7 @@
  *   Swapping an engine out requires no changes to the worker protocol.
  *
  * • Per-note cache    — each rendered note is stored in a Map keyed by a
- *   fingerprint: "${instrumentId}:${pitchId}:${durationBeats}:${bpm}:${sr}".
+ *   fingerprint: "${instrumentId}:${pitchKey}:${durationBeats}:${bpm}:${sr}".
  *   Only cache-miss notes are re-synthesised; all others are reused.
  *
  * • Mixing            — every per-note buffer is summed sample-by-sample at
@@ -32,15 +32,17 @@
  * Worker → Main:  SynthResponse  |  SynthError
  */
 
-import type { MusicInstrumentId } from "../lib/music/instruments";
+import type { MusicInstrumentType, InstrumentPitchKey } from "../lib/music/instruments";
+import type { AudioTrackID } from "../lib/audio/track/track";
+import type { PlacedNoteID } from "../features/nodes/instrument/instrument-node";
 
 // ─── Protocol types (also exported for the main-thread wrapper) ───────────────
 
 /** A single placed note sent from the main thread. */
 export interface SynthNote {
   /** Unique stable note id (nanoid). */
-  id: string;
-  pitchId: string;
+  id: PlacedNoteID;
+  pitchKey: InstrumentPitchKey;
   /** Beat position from track start. */
   startBeat: number;
   /** Duration in beats. */
@@ -50,10 +52,10 @@ export interface SynthNote {
 /** Request sent from the main thread to the worker. */
 export interface SynthRequest {
   /** Stable track identifier. */
-  trackId: string;
+  trackId: AudioTrackID;
   /** Monotonically increasing per-track; supersedes any lower seqNum. */
   seqNum: number;
-  instrumentId: MusicInstrumentId;
+  instrumentType: MusicInstrumentType;
   bpm: number;
   /** Target sample rate (e.g. 44100 or 48000). */
   sampleRate: number;
@@ -62,7 +64,7 @@ export interface SynthRequest {
 
 /** Successful response from the worker. */
 export interface SynthResponse {
-  trackId: string;
+  trackId: AudioTrackID;
   seqNum: number;
   /** Left-channel PCM samples. */
   left: Float32Array;
@@ -77,7 +79,7 @@ export interface SynthResponse {
 
 /** Error response (render was not completed). */
 export interface SynthError {
-  trackId: string;
+  trackId: AudioTrackID;
   seqNum: number;
   error: string;
 }
@@ -95,14 +97,14 @@ interface InstrumentEngine {
   /**
    * Render one note to a stereo buffer.
    *
-   * @param pitchId      Instrument-specific pitch/pad identifier.
+   * @param pitchKey      Instrument-specific pitch/pad identifier.
    * @param durationSec  Note duration in seconds (sustain length).
    * @param sampleRate   Target sample rate in Hz.
    * @returns            [left, right] Float32Arrays of equal length.
    *                     The length encodes the full sound including release.
    */
   renderNote(
-    pitchId: string,
+    pitchKey: InstrumentPitchKey,
     durationSec: number,
     sampleRate: number,
   ): [Float32Array, Float32Array];
@@ -258,7 +260,7 @@ function midiToHz(midi: number): number {
 }
 
 /** Build the PITCH_ID → MIDI map once. */
-const PITCH_ID_TO_MIDI: Record<string, number> = (() => {
+const PITCH_ID_TO_MIDI: Record<InstrumentPitchKey, number> = (() => {
   const names = [
     "C",
     "C#",
@@ -273,7 +275,7 @@ const PITCH_ID_TO_MIDI: Record<string, number> = (() => {
     "A#",
     "B",
   ];
-  const map: Record<string, number> = {};
+  const map: Record<InstrumentPitchKey, number> = {};
   for (let octave = 2; octave <= 6; octave++) {
     for (let n = 0; n < 12; n++) {
       map[`${names[n]}${octave}`] = (octave + 1) * 12 + n;
@@ -286,11 +288,11 @@ const PITCH_ID_TO_MIDI: Record<string, number> = (() => {
 
 class PianoSynthEngine implements InstrumentEngine {
   renderNote(
-    pitchId: string,
+    pitchKey: InstrumentPitchKey,
     durationSec: number,
     sampleRate: number,
   ): [Float32Array, Float32Array] {
-    const midi = PITCH_ID_TO_MIDI[pitchId];
+    const midi = PITCH_ID_TO_MIDI[pitchKey];
     if (midi === undefined) {
       const empty = new Float32Array(1);
       return [empty, empty.slice()];
@@ -354,13 +356,13 @@ class PianoSynthEngine implements InstrumentEngine {
 
 class DrumSynthEngine implements InstrumentEngine {
   renderNote(
-    pitchId: string,
+    pitchKey: InstrumentPitchKey,
     _durationSec: number,
     sampleRate: number,
   ): [Float32Array, Float32Array] {
     let mono: Float32Array;
 
-    switch (pitchId) {
+    switch (pitchKey) {
       case "kick":
         mono = this.renderKick(sampleRate);
         break;
@@ -467,7 +469,7 @@ class DrumSynthEngine implements InstrumentEngine {
  * available.  The registry is keyed by SynthInstrumentId so the worker loop
  * never needs to change.
  */
-const ENGINES: Record<MusicInstrumentId, InstrumentEngine> = {
+const ENGINES: Record<MusicInstrumentType, InstrumentEngine> = {
   piano: new PianoSynthEngine(),
   drums: new DrumSynthEngine(),
 };
@@ -479,13 +481,13 @@ const ENGINES: Record<MusicInstrumentId, InstrumentEngine> = {
  * When samples are introduced the key will include a sample-set version/hash.
  */
 function noteFingerprint(
-  instrumentId: MusicInstrumentId,
-  pitchId: string,
+  instrumentId: MusicInstrumentType,
+  pitchKey: InstrumentPitchKey,
   durationBeats: number,
   bpm: number,
   sampleRate: number,
 ): string {
-  return `${instrumentId}:${pitchId}:${durationBeats}:${bpm}:${sampleRate}`;
+  return `${instrumentId}:${pitchKey}:${durationBeats}:${bpm}:${sampleRate}`;
 }
 
 /** Cache: fingerprint → [leftChannel, rightChannel] */
@@ -497,9 +499,9 @@ const NOTE_CACHE_MAX_SIZE = 500;
 // ─── Cancellation ─────────────────────────────────────────────────────────────
 
 /** Latest seqNum seen per trackId. */
-const latestSeqNum = new Map<string, number>();
+const latestSeqNum = new Map<AudioTrackID, number>();
 
-function isCancelled(trackId: string, seqNum: number): boolean {
+function isCancelled(trackId: AudioTrackID, seqNum: number): boolean {
   return (latestSeqNum.get(trackId) ?? seqNum) > seqNum;
 }
 
@@ -508,7 +510,14 @@ function isCancelled(trackId: string, seqNum: number): boolean {
 const TAIL_PADDING_SEC = 2;
 
 function renderTrack(req: SynthRequest): SynthResponse {
-  const { trackId, seqNum, instrumentId, bpm, sampleRate, notes } = req;
+  const {
+    trackId,
+    seqNum,
+    instrumentType: instrumentId,
+    bpm,
+    sampleRate,
+    notes,
+  } = req;
 
   // Empty track — return a silent 1-sample buffer.
   if (notes.length === 0) {
@@ -531,14 +540,14 @@ function renderTrack(req: SynthRequest): SynthResponse {
 
     const fp = noteFingerprint(
       instrumentId,
-      note.pitchId,
+      note.pitchKey,
       note.durationBeats,
       bpm,
       sampleRate,
     );
     if (!noteCache.has(fp)) {
       const durationSec = note.durationBeats * secPerBeat;
-      const [l, r] = engine.renderNote(note.pitchId, durationSec, sampleRate);
+      const [l, r] = engine.renderNote(note.pitchKey, durationSec, sampleRate);
       // Evict oldest entry if cache is full (FIFO — Map preserves insertion order).
       if (noteCache.size >= NOTE_CACHE_MAX_SIZE) {
         noteCache.delete(noteCache.keys().next().value!);
@@ -564,7 +573,7 @@ function renderTrack(req: SynthRequest): SynthResponse {
   for (const note of notes) {
     const fp = noteFingerprint(
       instrumentId,
-      note.pitchId,
+      note.pitchKey,
       note.durationBeats,
       bpm,
       sampleRate,
@@ -587,7 +596,7 @@ function renderTrack(req: SynthRequest): SynthResponse {
   for (const note of notes) {
     const fp = noteFingerprint(
       instrumentId,
-      note.pitchId,
+      note.pitchKey,
       note.durationBeats,
       bpm,
       sampleRate,
@@ -620,6 +629,23 @@ function renderTrack(req: SynthRequest): SynthResponse {
 
 // ─── Worker message handler ───────────────────────────────────────────────────
 
+function isValidSynthNote(note: unknown): note is SynthNote {
+  if (!note || typeof note !== "object") return false;
+  const n = note as Record<string, unknown>;
+  return (
+    typeof n.id === "string" &&
+    n.id.length > 0 &&
+    typeof n.pitchKey === "string" &&
+    n.pitchKey.length > 0 &&
+    typeof n.startBeat === "number" &&
+    Number.isFinite(n.startBeat) &&
+    n.startBeat >= 0 &&
+    typeof n.durationBeats === "number" &&
+    n.durationBeats > 0 &&
+    Number.isFinite(n.durationBeats)
+  );
+}
+
 function isValidSynthRequest(req: unknown): req is SynthRequest {
   if (!req || typeof req !== "object") return false;
   const r = req as Record<string, unknown>;
@@ -628,15 +654,17 @@ function isValidSynthRequest(req: unknown): req is SynthRequest {
     r.trackId.length > 0 &&
     typeof r.seqNum === "number" &&
     Number.isFinite(r.seqNum) &&
-    typeof r.instrumentId === "string" &&
+    r.seqNum >= 0 &&
+    (r.instrumentType === "piano" || r.instrumentType === "drums") &&
     typeof r.bpm === "number" &&
     r.bpm > 0 &&
     r.bpm < 1000 &&
     typeof r.sampleRate === "number" &&
-    r.sampleRate > 0 &&
+    r.sampleRate >= 8_000 &&
     r.sampleRate <= 384_000 &&
     Array.isArray(r.notes) &&
-    r.notes.length <= 10_000
+    r.notes.length <= 10_000 &&
+    r.notes.every(isValidSynthNote)
   );
 }
 

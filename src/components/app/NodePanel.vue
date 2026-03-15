@@ -20,7 +20,7 @@ import { ref } from "vue";
 import { useNodesStore } from "../../stores/nodes";
 import NodeTree from "../controls/NodeTree.vue";
 import ScrollArea from "../layout/ScrollArea.vue";
-import type { MusicInstrumentId } from "../../lib/music/instruments";
+import type { MusicInstrumentType } from "../../lib/music/instruments";
 import { INSTRUMENT_LIST } from "../../lib/music/instruments";
 
 const nodes = useNodesStore();
@@ -47,7 +47,7 @@ function createRecorded(): void {
   nodes.selectNode(node.id);
 }
 
-function createInstrument(instrumentId: MusicInstrumentId): void {
+function createInstrument(instrumentId: MusicInstrumentType): void {
   addDropdownOpen.value = false;
   const name = nodes.nextInstrumentName(instrumentId);
   const node = nodes.addInstrumentNode(name, instrumentId);
@@ -67,10 +67,13 @@ function onNodeDragStart(nodeId: string): void {
 
 <template>
   <div class="flex flex-col h-full w-full overflow-hidden bg-base-100">
-
     <!-- ── Section header ──────────────────────────────────────────────── -->
-    <div class="flex items-center justify-between px-3 py-1.5 shrink-0 bg-base-200 border-b border-base-300/60">
-      <span class="text-xs font-semibold text-base-content/70 uppercase tracking-wide">
+    <div
+      class="flex items-center justify-between px-3 py-1.5 shrink-0 bg-base-200 border-b border-base-300/60"
+    >
+      <span
+        class="text-xs font-semibold text-base-content/70 uppercase tracking-wide"
+      >
         Nodes
       </span>
 
@@ -94,22 +97,30 @@ function onNodeDragStart(nodeId: string): void {
         >
           <li>
             <button class="text-xs" role="option" @click="createFolder">
-              <i class="iconify mdi--folder-plus-outline size-3.5" aria-hidden="true" />
+              <i
+                class="iconify mdi--folder-plus-outline size-3.5"
+                aria-hidden="true"
+              />
               Folder
             </button>
           </li>
           <li>
             <button class="text-xs" role="option" @click="createRecorded">
-              <i class="iconify mdi--microphone-outline size-3.5" aria-hidden="true" />
+              <i
+                class="iconify mdi--microphone-outline size-3.5"
+                aria-hidden="true"
+              />
               Rec
             </button>
           </li>
-          <li role="separator" aria-hidden="true" class="pointer-events-none"><div class="border-t border-base-content/10 my-0.5 -mx-1" /></li>
-          <li v-for="instr in instruments" :key="instr.id">
+          <li role="separator" aria-hidden="true" class="pointer-events-none">
+            <div class="border-t border-base-content/10 my-0.5 -mx-1" />
+          </li>
+          <li v-for="instr in instruments" :key="instr.type">
             <button
               class="text-xs"
               role="option"
-              @click="createInstrument(instr.id as MusicInstrumentId)"
+              @click="createInstrument(instr.type as MusicInstrumentType)"
             >
               <i class="iconify mdi--music-note size-3.5" aria-hidden="true" />
               {{ instr.label }}

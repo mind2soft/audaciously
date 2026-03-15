@@ -12,6 +12,7 @@ import { createTrack } from "../features/sequence/track";
 import type { Segment } from "../features/sequence/segment";
 import { createSegment } from "../features/sequence/segment";
 import type { AudioEffect, AudioEffectType } from "../features/effects";
+import type { RecordedNode, InstrumentNode } from "../features/nodes";
 import {
   createGainEffect,
   createBalanceEffect,
@@ -49,8 +50,8 @@ export const useSequenceStore = defineStore("sequence", () => {
       for (const seg of track.segments) {
         const node = nodesStore.nodesById.get(seg.nodeId);
         const bufferDuration =
-          node && node.kind !== "folder" && (node as any).buffer
-            ? (node as any).buffer.duration
+          node && node.kind !== "folder"
+            ? ((node as RecordedNode | InstrumentNode).targetBuffer?.duration ?? 0)
             : 0;
         const end = seg.time + Math.max(0, bufferDuration - seg.trimStart - seg.trimEnd);
         if (end > max) max = end;

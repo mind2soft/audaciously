@@ -3,16 +3,15 @@
 // See: .opencode/context/refactor/01-terminology.md
 
 import { nanoid } from "nanoid";
-import type { ProjectNodeBase } from "../node";
+import type { ProjectNodeBase, ProjectNodeID } from "../node";
 
-export interface FolderNode extends ProjectNodeBase {
-  readonly kind: "folder";
+export interface FolderNode extends ProjectNodeBase<"folder"> {
   /** Ordered IDs of child nodes (folders, recorded, instruments). */
-  childIds: string[];
+  childIds: ProjectNodeID[];
 }
 
 /** Create a new FolderNode with a unique id. */
-export function createFolderNode(name: string, id?: string): FolderNode {
+export function createFolderNode(name: string, id?: ProjectNodeID): FolderNode {
   return {
     id: id ?? nanoid(),
     name,

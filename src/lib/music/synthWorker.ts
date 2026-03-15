@@ -21,7 +21,9 @@ import type {
   SynthError,
   SynthNote,
 } from "../../workers/synth-processor";
-import type { MusicInstrumentId } from "./instruments";
+import type { MusicInstrumentType, InstrumentPitchKey } from "./instruments";
+import type { AudioTrackID } from "../audio/track/track";
+import type { PlacedNoteID } from "../../features/nodes/instrument/instrument-node";
 
 // ─── Minimal render options ───────────────────────────────────────────────────
 
@@ -30,12 +32,12 @@ import type { MusicInstrumentId } from "./instruments";
  * Keeping this minimal avoids coupling synthWorker to the full track type.
  */
 export interface SynthRenderOptions {
-  id: string;
-  instrumentId: MusicInstrumentId;
+  trackId: AudioTrackID;
+  instrumentType: MusicInstrumentType;
   bpm: number;
   notes: ReadonlyArray<{
-    id: string;
-    pitchId: string;
+    id: PlacedNoteID;
+    pitchKey: InstrumentPitchKey;
     startBeat: number;
     durationBeats: number;
   }>;
@@ -57,7 +59,7 @@ type PendingRender = {
 };
 
 /** trackId → latest pending promise */
-const pending = new Map<string, PendingRender>();
+const pending = new Map<AudioTrackID, PendingRender>();
 
 // ─── Response handler ─────────────────────────────────────────────────────────
 
@@ -134,9 +136,9 @@ export interface SynthWorkerClient {
 }
 
 /** Per-client seqNum counters, keyed by trackId. */
-const seqNums = new Map<string, number>();
+const seqNums = new Map<AudioTrackID, number>();
 
-function nextSeqNum(trackId: string): number {
+function nextSeqNum(trackId: AudioTrackID): number {
   const n = (seqNums.get(trackId) ?? 0) + 1;
   seqNums.set(trackId, n);
   return n;
@@ -151,7 +153,7 @@ function nextSeqNum(trackId: string): number {
 export function createSynthWorkerClient(): SynthWorkerClient {
   return {
     render(options: SynthRenderOptions): Promise<AudioBuffer> {
-      const trackId = options.id;
+      const trackId = options.trackId;
       const seqNum = nextSeqNum(trackId);
 
       // Cancel (reject) any in-flight render for this track.
@@ -166,7 +168,7 @@ export function createSynthWorkerClient(): SynthWorkerClient {
 
         const notes: SynthNote[] = options.notes.map((n) => ({
           id: n.id,
-          pitchId: n.pitchId,
+          pitchKey: n.pitchKey,
           startBeat: n.startBeat,
           durationBeats: n.durationBeats,
         }));
@@ -174,7 +176,7 @@ export function createSynthWorkerClient(): SynthWorkerClient {
         const request: SynthRequest = {
           trackId,
           seqNum,
-          instrumentId: options.instrumentId,
+          instrumentType: options.instrumentType,
           bpm: options.bpm,
           sampleRate: options.sampleRate ?? DEFAULT_SAMPLE_RATE,
           notes,

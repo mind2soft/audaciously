@@ -15,7 +15,7 @@
 import { watchEffect, shallowReactive, effectScope, ref, watch } from "vue";
 import {
   type NoteDuration,
-  type MusicInstrumentId,
+  type MusicInstrumentType,
   type OctaveRange,
   PIANO_DEFAULT_OCTAVE_RANGE,
 } from "../../../music/instruments";
@@ -53,7 +53,7 @@ const synthClient = createSynthWorkerClient();
  */
 export function createInstrumentTrack(
   name: string,
-  instrumentId: MusicInstrumentId,
+  instrumentId: MusicInstrumentType,
   id?: string,
 ): InstrumentAudioTrack {
   return createAudioTrack<InstrumentTrackKind, InstrumentAudioTrack>(
@@ -76,8 +76,8 @@ export function createInstrumentTrack(
 
         try {
           buffer = await synthClient.render({
-            id: base.id,
-            instrumentId,
+            trackId: base.id,
+            instrumentType: instrumentId,
             bpm: bpmRef.value,
             notes,
           });

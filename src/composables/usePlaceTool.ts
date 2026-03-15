@@ -45,12 +45,13 @@ export function usePlaceTool(ctx: PlaceToolContext) {
   // ── Hover preview ──────────────────────────────────────────────────────────
 
   const hoverPreviewNote = computed<PlacedNote | null>(() => {
-    if (hoverStartBeat.value === null || hoverPitchId.value === null) return null;
+    if (hoverStartBeat.value === null || hoverPitchId.value === null)
+      return null;
     return {
       id: "hover-preview",
       startBeat: hoverStartBeat.value,
       durationBeats: ctx.noteDurationBeats.value,
-      pitchId: hoverPitchId.value,
+      pitchKey: hoverPitchId.value,
     };
   });
 
@@ -83,7 +84,7 @@ export function usePlaceTool(ctx: PlaceToolContext) {
     const rawBeat = getRawBeat(evt.clientX);
     const pitchIdx = getPitchIdx(evt.clientY);
     hoverStartBeat.value = snapBeatFloor(rawBeat, ctx.snapBeats.value);
-    hoverPitchId.value = ctx.pitches.value[pitchIdx]?.id ?? null;
+    hoverPitchId.value = ctx.pitches.value[pitchIdx]?.key ?? null;
   }
 
   function onMouseleave(): void {
@@ -97,7 +98,7 @@ export function usePlaceTool(ctx: PlaceToolContext) {
 
     const rawBeat = getRawBeat(evt.clientX);
     const pitchIdx = getPitchIdx(evt.clientY);
-    const pitchId = ctx.pitches.value[pitchIdx]?.id;
+    const pitchId = ctx.pitches.value[pitchIdx]?.key;
     if (!pitchId) return;
 
     const existing = hitTestNote(ctx.notes.value, rawBeat, pitchId);
@@ -111,7 +112,7 @@ export function usePlaceTool(ctx: PlaceToolContext) {
         id: nanoid(),
         startBeat,
         durationBeats: ctx.noteDurationBeats.value,
-        pitchId,
+        pitchKey: pitchId,
       };
       const filtered = ctx.notes.value.filter((n) => !notesOverlap(n, newNote));
       ctx.emitNotes([...filtered, newNote]);

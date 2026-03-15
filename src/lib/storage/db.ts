@@ -1,11 +1,14 @@
 import Dexie, { type Table } from "dexie";
 import type {
-  MusicInstrumentId,
+  MusicInstrumentType,
   NoteDuration,
   OctaveRange,
 } from "../music/instruments";
 import type { AudioEffect } from "../../features/effects/types";
-import type { PlacedNote, TimeSignature } from "../../features/nodes/instrument/instrument-node";
+import type {
+  PlacedNote,
+  TimeSignature,
+} from "../../features/nodes/instrument/instrument-node";
 
 // ─── Record interfaces (v2 schema) ───────────────────────────────────────────
 
@@ -58,7 +61,7 @@ export interface NodeRecord {
   isRecording?: boolean;
 
   // ── Instrument-specific ──────────────────────────────────────────────────
-  instrumentId?: MusicInstrumentId;
+  instrumentId?: MusicInstrumentType;
   bpm?: number;
   timeSignature?: TimeSignature;
   notes?: PlacedNote[];

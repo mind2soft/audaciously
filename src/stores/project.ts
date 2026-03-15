@@ -14,6 +14,7 @@ import { nanoid } from "nanoid";
 import { useNodesStore } from "./nodes";
 import { useSequenceStore } from "./sequence";
 import { usePlayerStore } from "./player";
+import type { RecordedNode, InstrumentNode } from "../features/nodes";
 
 // ── Store ─────────────────────────────────────────────────────────────────────
 
@@ -55,17 +56,20 @@ export const useProjectStore = defineStore("project", () => {
   /**
    * Rough estimate of project size in human-readable form.
    * Sums AudioBuffer samples from recorded / instrument nodes (uncompressed).
+   * For RecordedNode, uses sourceBuffer (what is actually persisted to IndexedDB).
+   * For InstrumentNode, uses targetBuffer (synthesized; notes are persisted instead).
    * The storage layer can provide the precise compressed size via getProjectSize().
    */
   const estimatedSize = computed((): string => {
     const nodesStore = useNodesStore();
     let totalSamples = 0;
     nodesStore.nodesById.forEach((node) => {
-      if (node.kind === "recorded" || node.kind === "instrument") {
-        const buf = (node as any).buffer as AudioBuffer | null;
-        if (buf) {
-          totalSamples += buf.length * buf.numberOfChannels;
-        }
+      if (node.kind === "recorded") {
+        const buf = (node as RecordedNode).sourceBuffer;
+        if (buf) totalSamples += buf.length * buf.numberOfChannels;
+      } else if (node.kind === "instrument") {
+        const buf = (node as InstrumentNode).targetBuffer;
+        if (buf) totalSamples += buf.length * buf.numberOfChannels;
       }
     });
     // Float32 = 4 bytes per sample
@@ -82,8 +86,27 @@ export const useProjectStore = defineStore("project", () => {
     const nodesStore = useNodesStore();
     const sequenceStore = useSequenceStore();
 
+    // Watch a projection of node data that EXCLUDES transient runtime fields
+    // (targetBuffer, isRecording) so buffer recomputes don't mark the project dirty.
     watch(
-      () => nodesStore.nodesById,
+      () => {
+        const snap: Record<string, unknown> = {};
+        nodesStore.nodesById.forEach((node, id) => {
+          if (node.kind === "recorded") {
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { targetBuffer: _tb, isRecording: _ir, ...rest } =
+              node as RecordedNode;
+            snap[id] = rest;
+          } else if (node.kind === "instrument") {
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { targetBuffer: _tb, ...rest } = node as InstrumentNode;
+            snap[id] = rest;
+          } else {
+            snap[id] = node;
+          }
+        });
+        return snap;
+      },
       () => notifyDirty(),
       { deep: true },
     );

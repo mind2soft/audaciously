@@ -3,12 +3,13 @@
 // Every function here is a pure function: same inputs → same output, no side effects.
 
 import type { PlacedNote } from "../../features/nodes";
+import type { InstrumentPitchKey } from "../music/instruments";
 
 // ── Overlap detection ─────────────────────────────────────────────────────────
 
 /** True when two notes occupy overlapping time on the same pitch. */
 export function notesOverlap(a: PlacedNote, b: PlacedNote): boolean {
-  if (a.pitchId !== b.pitchId) return false;
+  if (a.pitchKey !== b.pitchKey) return false;
   return (
     a.startBeat < b.startBeat + b.durationBeats &&
     b.startBeat < a.startBeat + a.durationBeats
@@ -21,11 +22,11 @@ export function notesOverlap(a: PlacedNote, b: PlacedNote): boolean {
 export function hitTestNote(
   notes: PlacedNote[],
   rawBeat: number,
-  pitchId: string,
+  pitchKey: InstrumentPitchKey,
 ): PlacedNote | null {
   for (const note of notes) {
     if (
-      note.pitchId === pitchId &&
+      note.pitchKey === pitchKey &&
       rawBeat >= note.startBeat &&
       rawBeat < note.startBeat + note.durationBeats
     ) {
@@ -136,7 +137,9 @@ export function shiftNotesFrom(
  * Algorithm: sort descending by startBeat, then greedily add each note
  * only when it doesn't conflict with an already-kept note.
  */
-export function resolveOverlapsKeepRightmost(notes: PlacedNote[]): PlacedNote[] {
+export function resolveOverlapsKeepRightmost(
+  notes: PlacedNote[],
+): PlacedNote[] {
   const sorted = [...notes].sort((a, b) => b.startBeat - a.startBeat);
   const kept: PlacedNote[] = [];
   for (const note of sorted) {
@@ -177,9 +180,7 @@ export function notesInRange(
   rangeEnd: number,
 ): PlacedNote[] {
   return notes.filter(
-    (n) =>
-      n.startBeat < rangeEnd &&
-      n.startBeat + n.durationBeats > rangeStart,
+    (n) => n.startBeat < rangeEnd && n.startBeat + n.durationBeats > rangeStart,
   );
 }
 

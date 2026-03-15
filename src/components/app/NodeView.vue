@@ -38,23 +38,20 @@ const selectedInstrument = computed((): InstrumentNode | null => {
 
     <!-- Piano instrument -->
     <PianoNodeView
-      v-else-if="selectedInstrument?.instrumentId === 'piano'"
+      v-else-if="selectedInstrument?.instrumentType === 'piano'"
       :node="selectedInstrument"
       class="w-full h-full"
     />
 
     <!-- Drum instrument -->
     <DrumNodeView
-      v-else-if="selectedInstrument?.instrumentId === 'drums'"
+      v-else-if="selectedInstrument?.instrumentType === 'drums'"
       :node="selectedInstrument"
       class="w-full h-full"
     />
 
     <!-- Nothing selected -->
-    <div
-      v-else
-      class="flex-1 flex items-center justify-center"
-    >
+    <div v-else class="flex-1 flex items-center justify-center">
       <EmptyNodeView />
     </div>
   </div>

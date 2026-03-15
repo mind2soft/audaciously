@@ -15,6 +15,7 @@ import RecordedNodeProperties from "./node-properties/RecordedNodeProperties.vue
 import InstrumentNodeProperties from "./node-properties/InstrumentNodeProperties.vue";
 import PianoNodeProperties from "./node-properties/PianoNodeProperties.vue";
 import EffectsPanel from "../controls/EffectsPanel.vue";
+import type { MusicInstrumentType } from "../../lib/music/instruments";
 
 const nodes = useNodesStore();
 
@@ -25,16 +26,20 @@ const selectedRecorded = computed((): RecordedNode | null => {
   return n?.kind === "recorded" ? (n as RecordedNode) : null;
 });
 
-const selectedInstrument = computed((): InstrumentNode | null => {
-  const n = selectedNode.value;
-  return n?.kind === "instrument" ? (n as InstrumentNode) : null;
-});
+const selectedInstrument = computed(
+  (): InstrumentNode<MusicInstrumentType> | null => {
+    const n = selectedNode.value;
+    return n?.kind === "instrument"
+      ? (n as InstrumentNode<MusicInstrumentType>)
+      : null;
+  },
+);
 
 /** The instrument-specific sub-panel: Piano or Drum (null = no sub-panel). */
 const instrumentSubPanel = computed(() => {
   const inst = selectedInstrument.value;
   if (!inst) return null;
-  return inst.instrumentId === "piano" ? PianoNodeProperties : null;
+  return inst.instrumentType === "piano" ? PianoNodeProperties : null;
 });
 
 /** Icon class per node kind. */
@@ -43,7 +48,7 @@ const nodeIcon = computed((): string => {
   if (!n) return "";
   if (n.kind === "folder") return "mdi--folder-outline";
   if (n.kind === "recorded") return "mdi--microphone-outline";
-  const inst = (n as InstrumentNode).instrumentId;
+  const inst = (n as InstrumentNode<MusicInstrumentType>).instrumentType;
   return inst === "drums" ? "mdi--drum" : "mdi--piano";
 });
 
@@ -55,7 +60,9 @@ function onRename(name: string): void {
 
 // ── Instrument effects (owned here, not in InstrumentNodeProperties) ──────────
 
-const bufferDuration = computed(() => selectedInstrument.value?.buffer?.duration);
+const bufferDuration = computed(
+  () => selectedInstrument.value?.targetBuffer?.duration,
+);
 
 function onUpdateEffects(effects: AudioEffect[]): void {
   if (selectedInstrument.value) {
@@ -68,7 +75,11 @@ function onUpdateEffects(effects: AudioEffect[]): void {
 const confirmDelete = ref(false);
 const deleteCancelBtnRef = ref<HTMLButtonElement | null>(null);
 
-const deleteTarget = ref<{ id: string; name: string; isFolder: boolean } | null>(null);
+const deleteTarget = ref<{
+  id: string;
+  name: string;
+  isFolder: boolean;
+} | null>(null);
 
 function requestDelete(): void {
   const n = selectedNode.value;
@@ -103,7 +114,6 @@ watch(confirmDelete, async (val) => {
 
 <template>
   <div class="flex flex-col h-full w-full overflow-hidden bg-base-200">
-
     <!-- Empty state -->
     <div
       v-if="!selectedNode"
@@ -114,8 +124,14 @@ watch(confirmDelete, async (val) => {
 
     <template v-else>
       <!-- Name row -->
-      <div class="flex items-center gap-2 px-3 py-2 border-b border-base-300/60 shrink-0">
-        <i class="iconify size-4 shrink-0 text-base-content/60" :class="nodeIcon" aria-hidden="true" />
+      <div
+        class="flex items-center gap-2 px-3 py-2 border-b border-base-300/60 shrink-0"
+      >
+        <i
+          class="iconify size-4 shrink-0 text-base-content/60"
+          :class="nodeIcon"
+          aria-hidden="true"
+        />
         <input
           type="text"
           class="input input-xs flex-1 min-w-0 bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-primary/50 rounded"
@@ -143,7 +159,10 @@ watch(confirmDelete, async (val) => {
       />
 
       <!-- InstrumentNode: common → specific → effects -->
-      <div v-else-if="selectedInstrument" class="flex flex-col flex-1 min-h-0 overflow-hidden">
+      <div
+        v-else-if="selectedInstrument"
+        class="flex flex-col flex-1 min-h-0 overflow-hidden"
+      >
         <!-- 1. Common: Tempo & Meter -->
         <InstrumentNodeProperties :node="selectedInstrument" />
         <!-- 2. Specific: Piano (octave range + note duration) or Drum (step size) -->
@@ -169,16 +188,24 @@ watch(confirmDelete, async (val) => {
         <h3 class="mb-2 text-lg font-bold">Delete Node?</h3>
         <p class="py-3 text-sm text-base-content/70">
           <template v-if="deleteTarget?.isFolder">
-            Delete folder <strong class="text-base-content">{{ deleteTarget?.name }}</strong>
+            Delete folder
+            <strong class="text-base-content">{{ deleteTarget?.name }}</strong>
             and all its contents? This action cannot be undone.
           </template>
           <template v-else>
-            Delete <strong class="text-base-content">{{ deleteTarget?.name }}</strong>?
-            This action cannot be undone.
+            Delete
+            <strong class="text-base-content">{{ deleteTarget?.name }}</strong
+            >? This action cannot be undone.
           </template>
         </p>
         <div class="modal-action">
-          <button class="btn btn-ghost" ref="deleteCancelBtnRef" @click="cancelDelete">Cancel</button>
+          <button
+            class="btn btn-ghost"
+            ref="deleteCancelBtnRef"
+            @click="cancelDelete"
+          >
+            Cancel
+          </button>
           <button class="btn btn-error" @click="doDelete">Delete</button>
         </div>
       </div>
@@ -186,6 +213,5 @@ watch(confirmDelete, async (val) => {
         <button>close</button>
       </form>
     </dialog>
-
   </div>
 </template>

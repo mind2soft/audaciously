@@ -52,13 +52,13 @@ export function buildTracksFromStore(
       if (!node || node.kind === "folder") continue;
 
       const audioNode = node as RecordedNode | InstrumentNode;
-      const buffer = audioNode.buffer;
+      const buffer = audioNode.targetBuffer;
       if (!buffer) continue; // no buffer yet (e.g. instrument still rendering)
 
       const effectSequence = createEffectSequence(
         buffer,
         segment.time,
-        audioNode.effects,
+        [], // effects are pre-baked into targetBuffer — no runtime chain needed
         segment.trimStart,
         segment.trimEnd,
         segment.id, // use segment id for stable identity

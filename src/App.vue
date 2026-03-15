@@ -12,6 +12,7 @@
 
 import { ref, computed, watch, onMounted, onUnmounted } from "vue";
 import { useProjectStore } from "./stores/project";
+import { useAllNodes } from "./composables/useAllNodes";
 import AppShell from "./components/layout/AppShell.vue";
 import SplitPanel from "./components/layout/SplitPanel.vue";
 import AppHeader from "./components/app/AppHeader.vue";
@@ -28,6 +29,10 @@ import type { ProjectMetadata } from "./lib/storage/project-metadata";
 import { createDefaultMetadata } from "./lib/storage/project-metadata";
 
 const project = useProjectStore();
+
+// Wire reactive buffer-recompute loops for ALL nodes in the tree so every
+// node maintains a live targetBuffer regardless of which node is selected.
+useAllNodes();
 
 // ── Metadata dialog state ─────────────────────────────────────────────────────
 // stagedMetadata is a local copy so edits don't mutate the store until confirmed.

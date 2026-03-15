@@ -79,7 +79,7 @@ export function filterPitchesByOctaveRange(
   range: OctaveRange,
 ): InstrumentPitch[] {
   return pitches.filter((p) => {
-    const match = p.id.match(/(\d+)$/);
+    const match = p.key.match(/(\d+)$/);
     const oct = match ? Number(match[1]) : -1;
     return oct >= range.low && oct <= range.high;
   });
@@ -87,9 +87,11 @@ export function filterPitchesByOctaveRange(
 
 // ─── Instrument pitches ───────────────────────────────────────────────────────
 
+export type InstrumentPitchKey = string;
+
 export interface InstrumentPitch {
   /** Unique identifier within the instrument (e.g. "C4", "snare"). */
-  id: string;
+  key: InstrumentPitchKey;
   /** Human-readable label shown in the pitch column. */
   label: string;
   /** Optional short abbreviation (≤ 4 chars) for narrow columns. */
@@ -98,10 +100,10 @@ export interface InstrumentPitch {
 
 // ─── Instruments ─────────────────────────────────────────────────────────────
 
-export type MusicInstrumentId = "piano" | "drums";
+export type MusicInstrumentType = "piano" | "drums";
 
-export interface MusicInstrument {
-  id: MusicInstrumentId;
+export interface MusicInstrument<Type extends MusicInstrumentType> {
+  type: Type;
   label: string;
   icon: string;
   /** Ordered from top (highest pitch) to bottom (lowest pitch). */
@@ -130,45 +132,42 @@ function buildPianoPitches(): InstrumentPitch[] {
   for (let octave = 8; octave >= 1; octave--) {
     for (let n = 11; n >= 0; n--) {
       const name = noteNames[n];
-      const id = `${name}${octave}`;
-      pitches.push({ id, label: id, short: id });
+      const key = `${name}${octave}`;
+      pitches.push({ key, label: key, short: key });
     }
   }
   return pitches; // 96 entries: B8 … C1
 }
 
-export const PIANO_INSTRUMENT: MusicInstrument = {
-  id: "piano",
+export const PIANO_INSTRUMENT: MusicInstrument<"piano"> = {
+  type: "piano",
   label: "Piano",
   icon: "mdi--piano",
   pitches: buildPianoPitches(),
   rowHeight: 14,
 };
 
-export const DRUMS_INSTRUMENT: MusicInstrument = {
-  id: "drums",
+export const DRUMS_INSTRUMENT: MusicInstrument<"drums"> = {
+  type: "drums",
   label: "Drums",
   icon: "mdi--drum",
   pitches: [
-    { id: "crash", label: "Crash", short: "Csh" },
-    { id: "ride", label: "Ride", short: "Ride" },
-    { id: "hihat-open", label: "Hi-Hat Open", short: "HHO" },
-    { id: "hihat-closed", label: "Hi-Hat Cls.", short: "HHC" },
-    { id: "snare", label: "Snare", short: "Snr" },
-    { id: "tom-hi", label: "Tom Hi", short: "TmH" },
-    { id: "tom-mid", label: "Tom Mid", short: "TmM" },
-    { id: "tom-lo", label: "Tom Lo", short: "TmL" },
-    { id: "kick", label: "Kick", short: "Kck" },
+    { key: "crash", label: "Crash", short: "Csh" },
+    { key: "ride", label: "Ride", short: "Ride" },
+    { key: "hihat-open", label: "Hi-Hat Open", short: "HHO" },
+    { key: "hihat-closed", label: "Hi-Hat Cls.", short: "HHC" },
+    { key: "snare", label: "Snare", short: "Snr" },
+    { key: "tom-hi", label: "Tom Hi", short: "TmH" },
+    { key: "tom-mid", label: "Tom Mid", short: "TmM" },
+    { key: "tom-lo", label: "Tom Lo", short: "TmL" },
+    { key: "kick", label: "Kick", short: "Kck" },
   ],
   rowHeight: 16,
 };
 
-export const MUSIC_INSTRUMENTS: Record<MusicInstrumentId, MusicInstrument> = {
+export const MUSIC_INSTRUMENTS = {
   piano: PIANO_INSTRUMENT,
   drums: DRUMS_INSTRUMENT,
-};
+} satisfies { [K in MusicInstrumentType]: MusicInstrument<K> };
 
-export const INSTRUMENT_LIST: MusicInstrument[] = [
-  PIANO_INSTRUMENT,
-  DRUMS_INSTRUMENT,
-];
+export const INSTRUMENT_LIST = [PIANO_INSTRUMENT, DRUMS_INSTRUMENT];

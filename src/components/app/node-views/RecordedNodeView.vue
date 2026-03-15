@@ -12,8 +12,9 @@
  * node   The RecordedNode to display / record into.
  */
 
-import { ref, computed, onUnmounted, watch, nextTick } from "vue";
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from "vue";
 import { recorder } from "../../../lib/audio/recorder-singleton";
+import type { RecorderBufferUpdateEvent } from "../../../lib/audio/recorder";
 import { useNodesStore } from "../../../stores/nodes";
 import { usePlayerStore } from "../../../stores/player";
 import { useNodePlayback } from "../../../composables/useNodePlayback";
@@ -34,11 +35,12 @@ const player = usePlayerStore();
 // ── Zoom (ruler only — waveform always shows full buffer) ─────────────────────
 
 const zoomRatio = ref(4);
-const totalDurationSeconds = computed(() => props.node.buffer?.duration ?? 0);
+const totalDurationSeconds = computed(() => props.node.sourceBuffer?.duration ?? 0);
 
 // ── Node playback ─────────────────────────────────────────────────────────────
 
 const nodeRef = computed(() => props.node);
+// targetBuffer recompute is handled app-wide by useAllNodes() in App.vue.
 const {
   state: previewState,
   currentTime: previewTime,
@@ -63,16 +65,23 @@ const recordingDurationLabel = computed(() => {
 
 let recorderDurationTimer: ReturnType<typeof setInterval> | null = null;
 
-if (recorder) {
-  recorder.addEventListener("record", () => {
+const liveBuffer = ref<AudioBuffer | null>(null);
+
+// Cleanup function set in onMounted and called in onUnmounted.
+let _removeRecorderListeners: (() => void) | undefined;
+
+onMounted(() => {
+  if (!recorder) return;
+
+  const onRecord = () => {
     isRecording.value = true;
     recordingDuration.value = 0;
     recorderDurationTimer = setInterval(() => {
       recordingDuration.value += 0.1;
     }, 100);
-  });
+  };
 
-  recorder.addEventListener("stop", async () => {
+  const onStop = async () => {
     isRecording.value = false;
     if (recorderDurationTimer) {
       clearInterval(recorderDurationTimer);
@@ -80,26 +89,34 @@ if (recorder) {
     }
     const nodeId = props.node.id;
     try {
-      const buf = await recorder.getAudioBuffer();
-      nodes.setRecordedBuffer(nodeId, buf);
+      const buf = await recorder!.getAudioBuffer();
+      nodes.setRecordedSourceBuffer(nodeId, buf);
       nodes.setRecordingState(nodeId, false);
     } catch {
       // ignore decode errors
     }
-  });
+  };
 
-  recorder.addEventListener("timeupdate", (event) => {
-    void event; // live analyser handled via bufferupdate below
-  });
-}
+  const onTimeUpdate = () => {
+    // live analyser handled via bufferupdate below
+  };
 
-const liveBuffer = ref<AudioBuffer | null>(null);
-
-if (recorder) {
-  recorder.addEventListener("bufferupdate", (event) => {
+  const onBufferUpdate = (event: RecorderBufferUpdateEvent) => {
     liveBuffer.value = event.buffer;
-  });
-}
+  };
+
+  recorder.addEventListener("record", onRecord);
+  recorder.addEventListener("stop", onStop);
+  recorder.addEventListener("timeupdate", onTimeUpdate);
+  recorder.addEventListener("bufferupdate", onBufferUpdate);
+
+  _removeRecorderListeners = () => {
+    recorder!.removeEventListener("record", onRecord);
+    recorder!.removeEventListener("stop", onStop);
+    recorder!.removeEventListener("timeupdate", onTimeUpdate);
+    recorder!.removeEventListener("bufferupdate", onBufferUpdate);
+  };
+});
 
 // Stop recording and clear live state when the node changes
 watch(
@@ -151,7 +168,7 @@ function cancelReset(): void {
 
 function doReset(): void {
   confirmReset.value = false;
-  nodes.setRecordedBuffer(props.node.id, null);
+  nodes.setRecordedSourceBuffer(props.node.id, null);
 }
 
 watch(confirmReset, async (val) => {
@@ -164,7 +181,7 @@ watch(confirmReset, async (val) => {
 // ── Playback label ────────────────────────────────────────────────────────────
 
 const playbackLabel = computed(() => {
-  const dur = props.node.buffer?.duration ?? 0;
+  const dur = props.node.sourceBuffer?.duration ?? 0;
   const cur = previewTime.value;
   const fmt = (s: number) => {
     const m = Math.floor(s / 60);
@@ -179,6 +196,7 @@ const playbackLabel = computed(() => {
 onUnmounted(() => {
   previewStop();
   if (recorderDurationTimer) clearInterval(recorderDurationTimer);
+  _removeRecorderListeners?.();
 });
 </script>
 
@@ -234,9 +252,9 @@ onUnmounted(() => {
       </template>
 
       <!-- Has buffer → interactive waveform -->
-      <template v-else-if="node.buffer">
+      <template v-else-if="node.sourceBuffer">
         <WaveformView
-          :buffer="node.buffer"
+          :buffer="node.sourceBuffer"
           :currentTime="previewTime"
           class="w-full h-full"
           @seek="previewSeek"
@@ -255,7 +273,7 @@ onUnmounted(() => {
     <!-- ── Player Controls ─────────────────────────────────────────────── -->
     <div class="shrink-0 flex items-center gap-2 px-3 py-1.5 bg-base-200 border-t border-base-300/60 min-h-10">
       <!-- No buffer, not recording -->
-      <template v-if="!node.buffer && !isRecording">
+      <template v-if="!node.sourceBuffer && !isRecording">
         <button class="btn btn-sm btn-error gap-1" title="Start recording" @click="startRecording">
           <i class="iconify mdi--record size-4" aria-hidden="true" />
           Record
@@ -282,15 +300,16 @@ onUnmounted(() => {
       </template>
 
       <!-- Has buffer -->
-      <template v-else-if="node.buffer">
+      <template v-else-if="node.sourceBuffer">
         <button
           class="btn btn-sm btn-ghost btn-square"
-          :title="previewState === 'playing' ? 'Pause' : 'Play'"
+          :title="!node.targetBuffer ? 'Preparing audio…' : previewState === 'playing' ? 'Pause' : 'Play'"
+          :disabled="!node.targetBuffer"
           @click="previewState === 'playing' ? previewPause() : previewPlay()"
         >
           <i
             class="iconify size-4"
-            :class="previewState === 'playing' ? 'mdi--pause' : 'mdi--play'"
+            :class="!node.targetBuffer ? 'mdi--loading animate-spin' : previewState === 'playing' ? 'mdi--pause' : 'mdi--play'"
             aria-hidden="true"
           />
         </button>

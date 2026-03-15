@@ -30,8 +30,8 @@ const pressedId = ref<string | null>(null);
 
 function onPadDown(pitch: InstrumentPitch): void {
   if (props.disabled) return;
-  pressedId.value = pitch.id;
-  playHit(pitch.id);
+  pressedId.value = pitch.key;
+  playHit(pitch.key);
 }
 
 function onPadUp(): void {
@@ -46,16 +46,17 @@ function onPadUp(): void {
   >
     <div
       v-for="pitch in props.pitches"
-      :key="pitch.id"
+      :key="pitch.key"
       class="shrink-0 flex items-center px-2 text-xs leading-none select-none"
       :class="{
         // Disabled state (during playback)
         'cursor-not-allowed opacity-50 text-base-content/70': props.disabled,
         // Idle
         'cursor-pointer text-base-content/70 hover:bg-secondary/20 hover:text-secondary':
-          !props.disabled && pressedId !== pitch.id,
+          !props.disabled && pressedId !== pitch.key,
         // Pressed
-        'bg-secondary/30 text-secondary': !props.disabled && pressedId === pitch.id,
+        'bg-secondary/30 text-secondary':
+          !props.disabled && pressedId === pitch.key,
       }"
       :style="{ height: `${props.rowHeightPx}px` }"
       @mousedown="onPadDown(pitch)"

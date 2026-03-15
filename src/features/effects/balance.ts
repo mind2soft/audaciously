@@ -27,7 +27,7 @@ export function createBalanceEffect(id?: string): BalanceEffect {
  * Returns the created StereoBalanceNode for later cleanup.
  */
 export function applyBalanceEffect(
-  context: AudioContext,
+  context: BaseAudioContext,
   effect: BalanceEffect,
   inputNode: AudioNode,
   outputNode: AudioNode,

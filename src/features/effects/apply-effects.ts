@@ -24,7 +24,7 @@ import { applyFadeOutEffect } from "./fade-out";
  * @returns             All created WebAudio nodes (disconnect + null them on stop).
  */
 export function applyEffectChain(
-  context: AudioContext,
+  context: BaseAudioContext,
   inputNode: AudioNode,
   outputNode: AudioNode,
   effects: AudioEffect[],

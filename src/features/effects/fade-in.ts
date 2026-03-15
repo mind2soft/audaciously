@@ -24,7 +24,7 @@ export function createFadeInEffect(id?: string): FadeInEffect {
  * Returns the created GainNode for later cleanup.
  */
 export function applyFadeInEffect(
-  context: AudioContext,
+  context: BaseAudioContext,
   effect: FadeInEffect,
   inputNode: AudioNode,
   outputNode: AudioNode,

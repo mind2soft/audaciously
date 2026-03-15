@@ -96,8 +96,8 @@ const pitches = computed(() =>
 const totalGridHeight = computed(() => pitches.value.length * NOTE_HEIGHT_PX);
 
 const visibleNotes = computed(() => {
-  const ids = new Set(pitches.value.map((p) => p.id));
-  return props.node.notes.filter((n) => ids.has(n.pitchId));
+  const ids = new Set(pitches.value.map((p) => p.key));
+  return props.node.notes.filter((n) => ids.has(n.pitchKey));
 });
 
 // ── Snap (current note type in beats) ─────────────────────────────────────────
@@ -239,8 +239,8 @@ const activeCursor = computed(() => {
  */
 const displayNotes = computed(() => {
   if (props.activeTool === "pan" && panTool.previewNotes.value) {
-    const ids = new Set(pitches.value.map((p) => p.id));
-    return panTool.previewNotes.value.filter((n) => ids.has(n.pitchId));
+    const ids = new Set(pitches.value.map((p) => p.key));
+    return panTool.previewNotes.value.filter((n) => ids.has(n.pitchKey));
   }
   return visibleNotes.value;
 });
@@ -254,7 +254,7 @@ function noteWidth(note: PlacedNote): number {
   return Math.max(2, note.durationBeats * pxPerBeat.value);
 }
 function noteTop(note: PlacedNote): number {
-  const idx = pitches.value.findIndex((p) => p.id === note.pitchId);
+  const idx = pitches.value.findIndex((p) => p.key === note.pitchKey);
   return idx >= 0 ? idx * NOTE_HEIGHT_PX : 0;
 }
 
@@ -371,9 +371,9 @@ const playheadLeft = computed(
         <!-- Black-key row tints -->
         <div
           v-for="(pitch, idx) in pitches"
-          :key="`bg-${pitch.id}`"
+          :key="`bg-${pitch.key}`"
           class="absolute left-0 right-0 pointer-events-none"
-          :class="pitch.id.includes('#') ? 'bg-base-300/20' : ''"
+          :class="pitch.key.includes('#') ? 'bg-base-300/20' : ''"
           :style="{
             top: `${idx * NOTE_HEIGHT_PX}px`,
             height: `${NOTE_HEIGHT_PX}px`,

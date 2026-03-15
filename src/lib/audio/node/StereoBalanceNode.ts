@@ -6,7 +6,7 @@ export interface StereoBalanceNode extends AudioNode {
   readonly balance: AudioParam;
 }
 
-function clampBalanace(value: number) {
+function clampBalance(value: number) {
   return Math.max(Math.min(value, 1), -1);
 }
 function toLeft(value: number): number {
@@ -29,10 +29,10 @@ function toBalance(left: number, right: number): number {
 // control. This is an attempt to fill that void, using an API similar to
 // [StereoPannerNode](https://developer.mozilla.org/en-US/docs/Web/API/StereoPannerNode)
 export default function createStereoBalanceNode(
-  context: AudioContext,
+  context: BaseAudioContext,
   options?: StereoBalanceOptions,
 ): StereoBalanceNode {
-  const defaultBalance = clampBalanace(options?.balance ?? 0);
+  const defaultBalance = clampBalance(options?.balance ?? 0);
 
   // ChannelSplitterNode cannot be told to use a `channelInterperatation` of
   // "speakers". This means that if we get a mono file, we will end up only
@@ -85,7 +85,7 @@ export default function createStereoBalanceNode(
       return toBalance(leftGain.gain.value, rightGain.gain.value);
     },
     set value(value) {
-      value = clampBalanace(value);
+      value = clampBalance(value);
       leftGain.gain.value = toLeft(value);
       rightGain.gain.value = toRight(value);
     },
@@ -106,13 +106,13 @@ export default function createStereoBalanceNode(
       return audioParam;
     },
     setTargetAtTime(target, startTime, timeConstant) {
-      target = clampBalanace(target);
+      target = clampBalance(target);
       leftGain.gain.setTargetAtTime(toLeft(target), startTime, timeConstant);
       rightGain.gain.setTargetAtTime(toRight(target), startTime, timeConstant);
       return audioParam;
     },
     setValueAtTime(value, startTime) {
-      value = clampBalanace(value);
+      value = clampBalance(value);
       leftGain.gain.setValueAtTime(toLeft(value), startTime);
       rightGain.gain.setValueAtTime(toRight(value), startTime);
       return audioParam;
@@ -121,7 +121,7 @@ export default function createStereoBalanceNode(
       const leftValues: number[] = [];
       const rightValues: number[] = [];
       for (let value of values) {
-        value = clampBalanace(value);
+        value = clampBalance(value);
         leftValues.push(toLeft(value));
         rightValues.push(toRight(value));
       }
@@ -131,13 +131,13 @@ export default function createStereoBalanceNode(
       return audioParam;
     },
     exponentialRampToValueAtTime(value, endTime) {
-      value = clampBalanace(value);
+      value = clampBalance(value);
       leftGain.gain.exponentialRampToValueAtTime(toLeft(value), endTime);
       rightGain.gain.exponentialRampToValueAtTime(toRight(value), endTime);
       return audioParam;
     },
     linearRampToValueAtTime(value, endTime) {
-      value = clampBalanace(value);
+      value = clampBalance(value);
       leftGain.gain.linearRampToValueAtTime(toLeft(value), endTime);
       rightGain.gain.linearRampToValueAtTime(toRight(value), endTime);
       return audioParam;

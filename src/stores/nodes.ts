@@ -4,7 +4,12 @@
 
 import { defineStore } from "pinia";
 import { ref, computed } from "vue";
-import type { ProjectNode, FolderNode, RecordedNode, InstrumentNode } from "../features/nodes";
+import type {
+  ProjectNode,
+  FolderNode,
+  RecordedNode,
+  InstrumentNode,
+} from "../features/nodes";
 import {
   createFolderNode,
   createRecordedNode,
@@ -17,8 +22,15 @@ import {
   createFadeInEffect,
   createFadeOutEffect,
 } from "../features/effects";
-import type { PlacedNote, TimeSignature } from "../features/nodes/instrument/instrument-node";
-import type { MusicInstrumentId, NoteDuration, OctaveRange } from "../lib/music/instruments";
+import type {
+  PlacedNote,
+  TimeSignature,
+} from "../features/nodes/instrument/instrument-node";
+import type {
+  MusicInstrumentType,
+  NoteDuration,
+  OctaveRange,
+} from "../lib/music/instruments";
 
 // ── Serialization types ────────────────────────────────────────────────────────
 
@@ -42,7 +54,9 @@ export const useNodesStore = defineStore("nodes", () => {
   // ── Computed ──────────────────────────────────────────────────────────────
 
   const selectedNode = computed((): ProjectNode | null =>
-    selectedNodeId.value ? (nodesById.value.get(selectedNodeId.value) ?? null) : null,
+    selectedNodeId.value
+      ? (nodesById.value.get(selectedNodeId.value) ?? null)
+      : null,
   );
 
   const rootNodes = computed((): ProjectNode[] =>
@@ -113,7 +127,7 @@ export const useNodesStore = defineStore("nodes", () => {
 
   function addInstrumentNode(
     name: string,
-    instrumentId: MusicInstrumentId,
+    instrumentId: MusicInstrumentType,
     parentId?: string,
   ): InstrumentNode {
     const node = createInstrumentNode(name, instrumentId);
@@ -149,7 +163,11 @@ export const useNodesStore = defineStore("nodes", () => {
     }
   }
 
-  function moveNode(id: string, newParentId: string | null, insertIndex?: number): void {
+  function moveNode(
+    id: string,
+    newParentId: string | null,
+    insertIndex?: number,
+  ): void {
     const node = nodesById.value.get(id);
     if (!node) return;
 
@@ -180,10 +198,17 @@ export const useNodesStore = defineStore("nodes", () => {
 
   // ── Node content updates ──────────────────────────────────────────────────
 
-  function setRecordedBuffer(id: string, buffer: AudioBuffer | null): void {
+  function setRecordedSourceBuffer(id: string, buffer: AudioBuffer | null): void {
     const node = nodesById.value.get(id);
     if (node && node.kind === "recorded") {
-      (node as RecordedNode).buffer = buffer;
+      (node as RecordedNode).sourceBuffer = buffer;
+    }
+  }
+
+  function _setRecordedTargetBuffer(id: string, buffer: AudioBuffer | null): void {
+    const node = nodesById.value.get(id);
+    if (node && node.kind === "recorded") {
+      (node as RecordedNode).targetBuffer = buffer;
     }
   }
 
@@ -203,7 +228,8 @@ export const useNodesStore = defineStore("nodes", () => {
 
   function addEffect(id: string, type: AudioEffectType): void {
     const node = nodesById.value.get(id);
-    if (!node || (node.kind !== "recorded" && node.kind !== "instrument")) return;
+    if (!node || (node.kind !== "recorded" && node.kind !== "instrument"))
+      return;
     const target = node as RecordedNode | InstrumentNode;
 
     // Enforce one instance per type
@@ -229,7 +255,8 @@ export const useNodesStore = defineStore("nodes", () => {
 
   function removeEffect(id: string, effectId: string): void {
     const node = nodesById.value.get(id);
-    if (!node || (node.kind !== "recorded" && node.kind !== "instrument")) return;
+    if (!node || (node.kind !== "recorded" && node.kind !== "instrument"))
+      return;
     const target = node as RecordedNode | InstrumentNode;
     const idx = target.effects.findIndex((e) => e.id === effectId);
     if (idx !== -1) {
@@ -237,9 +264,14 @@ export const useNodesStore = defineStore("nodes", () => {
     }
   }
 
-  function reorderEffects(id: string, fromIndex: number, toIndex: number): void {
+  function reorderEffects(
+    id: string,
+    fromIndex: number,
+    toIndex: number,
+  ): void {
     const node = nodesById.value.get(id);
-    if (!node || (node.kind !== "recorded" && node.kind !== "instrument")) return;
+    if (!node || (node.kind !== "recorded" && node.kind !== "instrument"))
+      return;
     const target = node as RecordedNode | InstrumentNode;
     if (
       fromIndex < 0 ||
@@ -254,10 +286,10 @@ export const useNodesStore = defineStore("nodes", () => {
 
   // ── Instrument node specific ──────────────────────────────────────────────
 
-  function setInstrumentBuffer(id: string, buffer: AudioBuffer | null): void {
+  function _setInstrumentTargetBuffer(id: string, buffer: AudioBuffer | null): void {
     const node = nodesById.value.get(id);
     if (node && node.kind === "instrument") {
-      (node as InstrumentNode).buffer = buffer;
+      (node as InstrumentNode).targetBuffer = buffer;
     }
   }
 
@@ -282,7 +314,10 @@ export const useNodesStore = defineStore("nodes", () => {
     }
   }
 
-  function setInstrumentSelectedNoteType(id: string, noteType: NoteDuration): void {
+  function setInstrumentSelectedNoteType(
+    id: string,
+    noteType: NoteDuration,
+  ): void {
     const node = nodesById.value.get(id);
     if (node && node.kind === "instrument") {
       (node as InstrumentNode).selectedNoteType = noteType;
@@ -308,7 +343,7 @@ export const useNodesStore = defineStore("nodes", () => {
     return `New Recording ${n + 1}`;
   }
 
-  function nextInstrumentName(instrumentId: MusicInstrumentId): string {
+  function nextInstrumentName(instrumentId: MusicInstrumentType): string {
     const label = instrumentId === "piano" ? "Piano" : "Drums";
     const prefix = `New ${label}`;
     const n = _countByPrefix(prefix);
@@ -320,9 +355,12 @@ export const useNodesStore = defineStore("nodes", () => {
   function toJSON(): NodeTreeJSON {
     const obj: Record<string, ProjectNode> = {};
     nodesById.value.forEach((node, id) => {
-      // Deep-copy to strip Vue reactive proxy; AudioBuffer is not serializable
-      // here — the storage layer (Phase 3) handles binary data separately.
-      obj[id] = { ...node } as ProjectNode;
+      // Shallow-copy to strip Vue reactive proxy.
+      // Explicitly null targetBuffer — it is never persisted (recomputed on load)
+      // and AudioBuffer is not JSON-serialisable.
+      const copy: any = { ...node };
+      if ("targetBuffer" in copy) copy.targetBuffer = null;
+      obj[id] = copy as ProjectNode;
     });
     return {
       nodesById: obj,
@@ -363,14 +401,15 @@ export const useNodesStore = defineStore("nodes", () => {
     moveNode,
     selectNode,
     // node content updates
-    setRecordedBuffer,
+    setRecordedSourceBuffer,
+    _setRecordedTargetBuffer,
     setRecordingState,
     setNodeEffects,
     addEffect,
     removeEffect,
     reorderEffects,
     // instrument specific
-    setInstrumentBuffer,
+    _setInstrumentTargetBuffer,
     setInstrumentNotes,
     setInstrumentBpm,
     setInstrumentTimeSignature,

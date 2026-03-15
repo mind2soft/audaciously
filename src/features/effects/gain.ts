@@ -21,7 +21,7 @@ export function createGainEffect(id?: string): GainEffect {
  * Returns the created GainNode for later cleanup.
  */
 export function applyGainEffect(
-  context: AudioContext,
+  context: BaseAudioContext,
   effect: GainEffect,
   inputNode: AudioNode,
   outputNode: AudioNode,

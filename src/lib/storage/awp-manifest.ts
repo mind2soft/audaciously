@@ -1,5 +1,8 @@
-import type { MusicInstrumentId, NoteDuration } from "../music/instruments";
-import type { PlacedNote, TimeSignature } from "../../features/nodes/instrument/instrument-node";
+import type { MusicInstrumentType, NoteDuration } from "../music/instruments";
+import type {
+  PlacedNote,
+  TimeSignature,
+} from "../../features/nodes/instrument/instrument-node";
 import type { AudioEffect } from "../../features/effects/types";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -57,7 +60,7 @@ export interface AwpTrackEntry {
   locked: boolean;
   sortOrder: number;
   // ── Instrument-specific ───────────────────────────────────────────────────
-  instrumentId?: MusicInstrumentId;
+  instrumentId?: MusicInstrumentType;
   bpm?: number;
   timeSignature?: TimeSignature;
   notes?: PlacedNote[];

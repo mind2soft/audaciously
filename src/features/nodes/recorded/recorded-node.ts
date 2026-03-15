@@ -6,10 +6,19 @@ import { nanoid } from "nanoid";
 import type { ProjectNodeBase } from "../node";
 import type { AudioEffect } from "../../effects/types";
 
-export interface RecordedNode extends ProjectNodeBase {
-  readonly kind: "recorded";
-  /** The captured audio buffer. Null = not yet recorded. */
-  buffer: AudioBuffer | null;
+export interface RecordedNode extends ProjectNodeBase<"recorded"> {
+  /**
+   * The original captured audio buffer. Null = not yet recorded.
+   * Persisted to IndexedDB. Never modified after recording completes.
+   */
+  sourceBuffer: AudioBuffer | null;
+  /**
+   * The source buffer with effects pre-baked, ready for playback.
+   * Never persisted — recomputed on demand by useRecordedNode.
+   * Equals `sourceBuffer` (same reference) when no effects are enabled
+   * (zero-copy optimisation).  Null when sourceBuffer is null.
+   */
+  targetBuffer: AudioBuffer | null;
   /** True while actively recording. */
   isRecording: boolean;
   /** Effects applied during playback of this node's buffer. */
@@ -22,7 +31,8 @@ export function createRecordedNode(name: string, id?: string): RecordedNode {
     id: id ?? nanoid(),
     name,
     kind: "recorded",
-    buffer: null,
+    sourceBuffer: null,
+    targetBuffer: null,
     isRecording: false,
     effects: [],
   };

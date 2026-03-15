@@ -8,9 +8,12 @@ import type {
   AudioTrackJSON,
 } from "./index";
 import { trackPropertySymbol, type AudioSequence } from "../sequence/index";
+import type { ProjectNodeID } from "../../../features/nodes/node";
+
+export type AudioTrackID = string;
 
 interface AudioTrackInternal {
-  id: string;
+  id: ProjectNodeID;
   locked: boolean;
   muted: boolean;
   volume: number;
@@ -29,7 +32,7 @@ export const createAudioTrack = <Kind, Track extends AudioTrack<Kind>>(
   kind: Kind,
   initialName: string,
   supplmental?: AudioTrackSupplemental<Kind, Track>,
-  id?: string,
+  id?: AudioTrackID,
 ): Track => {
   let name = initialName;
   const internal: AudioTrackInternal = {

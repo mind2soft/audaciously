@@ -71,7 +71,10 @@ const emit = defineEmits<{
 // ── Derived pixel constants ───────────────────────────────────────────────────
 
 const pxPerBeat = computed(
-  () => getSecondsPerBeat(props.node.bpm) * props.zoomRatio * baseSecondWidthInPixels,
+  () =>
+    getSecondsPerBeat(props.node.bpm) *
+    props.zoomRatio *
+    baseSecondWidthInPixels,
 );
 const pxPerMeasure = computed(
   () => pxPerBeat.value * props.node.timeSignature.beatsPerMeasure,
@@ -204,13 +207,16 @@ function clientYToPitchIdx(clientY: number): number {
   if (!gridRef.value) return 0;
   const rect = gridRef.value.getBoundingClientRect();
   const py = clientY - rect.top;
-  return Math.max(0, Math.min(pitches.length - 1, Math.floor(py / ROW_HEIGHT_PX)));
+  return Math.max(
+    0,
+    Math.min(pitches.length - 1, Math.floor(py / ROW_HEIGHT_PX)),
+  );
 }
 
-function hitTestNote(rawBeat: number, pitchId: string): PlacedNote | null {
+function hitTestNote(rawBeat: number, pitchKey: string): PlacedNote | null {
   for (const note of props.node.notes) {
     if (
-      note.pitchId === pitchId &&
+      note.pitchKey === pitchKey &&
       rawBeat >= note.startBeat &&
       rawBeat < note.startBeat + note.durationBeats
     ) {
@@ -252,20 +258,23 @@ const onMousedown = (evt: MouseEvent) => {
 
   if (activeTool === "place") {
     const rawBeat = clientXToRawBeat(evt.clientX);
-    const pitchId = pitches[clientYToPitchIdx(evt.clientY)]?.id;
+    const pitchId = pitches[clientYToPitchIdx(evt.clientY)]?.key;
     if (!pitchId) return;
 
     // Hit-test uses raw beat (not centered start beat)
     const existing = hitTestNote(rawBeat, pitchId);
     if (existing) {
-      emit("update:notes", props.node.notes.filter((n) => n.id !== existing.id));
+      emit(
+        "update:notes",
+        props.node.notes.filter((n) => n.id !== existing.id),
+      );
     } else {
       const startBeat = rawBeatToStartBeat(rawBeat);
       const newNote: PlacedNote = {
         id: nanoid(),
         startBeat,
         durationBeats: noteDurationBeats.value,
-        pitchId,
+        pitchKey: pitchId,
       };
       emit("update:notes", [...props.node.notes, newNote]);
       playHit(pitchId);
@@ -284,7 +293,7 @@ const onMousemove = (evt: MouseEvent) => {
 
   if (activeTool === "place") {
     hoverStartBeat.value = rawBeatToStartBeat(clientXToRawBeat(evt.clientX));
-    hoverPitchId.value = pitches[clientYToPitchIdx(evt.clientY)]?.id ?? null;
+    hoverPitchId.value = pitches[clientYToPitchIdx(evt.clientY)]?.key ?? null;
   } else {
     hoverStartBeat.value = null;
     hoverPitchId.value = null;
@@ -322,10 +331,11 @@ const onScrollBody = () => {
  * Pixel offset from the left edge of the outer container to the playhead.
  * = label column width + (currentTime in px) - scroll offset
  */
-const playheadLeft = computed(() =>
-  LABEL_WIDTH_PX +
-  (props.currentTime ?? 0) * props.zoomRatio * baseSecondWidthInPixels -
-  scrollLeftPx.value,
+const playheadLeft = computed(
+  () =>
+    LABEL_WIDTH_PX +
+    (props.currentTime ?? 0) * props.zoomRatio * baseSecondWidthInPixels -
+    scrollLeftPx.value,
 );
 
 // ── Active cursor ─────────────────────────────────────────────────────────────
@@ -352,9 +362,10 @@ const displayNotes = computed(() => {
 // ── Note style helpers ────────────────────────────────────────────────────────
 
 const noteLeft = (note: PlacedNote) => note.startBeat * pxPerBeat.value;
-const noteWidth = (note: PlacedNote) => Math.max(4, note.durationBeats * pxPerBeat.value);
+const noteWidth = (note: PlacedNote) =>
+  Math.max(4, note.durationBeats * pxPerBeat.value);
 const noteTop = (note: PlacedNote) => {
-  const idx = pitches.findIndex((p) => p.id === note.pitchId);
+  const idx = pitches.findIndex((p) => p.key === note.pitchKey);
   return idx >= 0 ? idx * ROW_HEIGHT_PX : 0;
 };
 
@@ -417,9 +428,15 @@ const selectionOverlay = computed(() => {
 </script>
 
 <template>
-  <div class="relative flex flex-col h-full w-full overflow-hidden bg-base-100 select-none">
+  <div
+    class="relative flex flex-col h-full w-full overflow-hidden bg-base-100 select-none"
+  >
     <!-- Roll body -->
-    <div ref="scrollRef" class="flex-1 flex overflow-auto" @scroll="onScrollBody">
+    <div
+      ref="scrollRef"
+      class="flex-1 flex overflow-auto"
+      @scroll="onScrollBody"
+    >
       <!-- Row labels — sticky so they don't scroll horizontally -->
       <DrumRollKeys
         :pitches="pitches"
@@ -459,12 +476,16 @@ const selectionOverlay = computed(() => {
 
         <!-- Place tool: hover preview -->
         <div
-          v-if="(activeTool === 'place' || !activeTool) && hoverStartBeat !== null && hoverPitchId !== null"
+          v-if="
+            (activeTool === 'place' || !activeTool) &&
+            hoverStartBeat !== null &&
+            hoverPitchId !== null
+          "
           class="absolute rounded-sm pointer-events-none border border-dashed"
           :style="{
             left: `${hoverStartBeat * pxPerBeat}px`,
-            width: `${noteWidth({ id: '', startBeat: 0, durationBeats: noteDurationBeats, pitchId: '' })}px`,
-            top: `${(pitches.findIndex(p => p.id === hoverPitchId)) * ROW_HEIGHT_PX}px`,
+            width: `${noteWidth({ id: '', startBeat: 0, durationBeats: noteDurationBeats, pitchKey: '' })}px`,
+            top: `${pitches.findIndex((p) => p.key === hoverPitchId) * ROW_HEIGHT_PX}px`,
             height: `${ROW_HEIGHT_PX - 2}px`,
             borderColor: 'var(--color-secondary)',
             opacity: 0.5,
@@ -500,7 +521,8 @@ const selectionOverlay = computed(() => {
               width: `${noteWidth(ghost)}px`,
               top: `${noteTop(ghost)}px`,
               height: `${ROW_HEIGHT_PX - 2}px`,
-              backgroundColor: 'color-mix(in oklab, var(--color-secondary) 40%, transparent)',
+              backgroundColor:
+                'color-mix(in oklab, var(--color-secondary) 40%, transparent)',
               borderColor: 'var(--color-secondary)',
               opacity: 0.75,
             }"
@@ -509,7 +531,9 @@ const selectionOverlay = computed(() => {
 
         <!-- Copy / Cut tool: selection rectangle -->
         <div
-          v-if="(activeTool === 'copy' || activeTool === 'cut') && selectionOverlay"
+          v-if="
+            (activeTool === 'copy' || activeTool === 'cut') && selectionOverlay
+          "
           class="absolute top-0 bottom-0 pointer-events-none z-10"
           :style="{
             left: `${selectionOverlay.left}px`,

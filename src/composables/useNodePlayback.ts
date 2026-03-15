@@ -6,12 +6,14 @@
 // player engine. This guarantees that previewing a node in the node panel
 // never interferes with main timeline playback.
 //
+// Effects are NOT applied here — they are pre-baked into `targetBuffer` by
+// useInstrumentNode / useRecordedNode. This composable simply plays targetBuffer.
+//
 // Usage:
 //   const { state, currentTime, play, pause, stop, seek } = useNodePlayback(nodeRef)
 
 import { ref, watch, onUnmounted, type Ref } from "vue";
 import type { RecordedNode, InstrumentNode } from "../features/nodes";
-import { applyEffectChain } from "../features/effects";
 
 // ── Public types ───────────────────────────────────────────────────────────────
 
@@ -39,6 +41,9 @@ export interface UseNodePlaybackReturn {
  * InstrumentNode. The audio graph is entirely isolated — a new AudioContext is
  * created on each play() call and closed on stop/pause.
  *
+ * Effects are pre-baked into `targetBuffer` — this composable plays targetBuffer
+ * directly with no runtime effect chain.
+ *
  * @param nodeRef - Reactive ref to the node to preview. When the ref changes
  *                  (e.g. the user selects a different node), playback stops
  *                  automatically.
@@ -55,8 +60,6 @@ export function useNodePlayback(
   let ctx: AudioContext | null = null;
   /** The source node currently scheduled. */
   let source: AudioBufferSourceNode | null = null;
-  /** Effect nodes created by applyEffectChain (kept for disposal logging). */
-  let effectNodes: AudioNode[] = [];
   /** Buffer-relative offset at which playback started (for pause-resume). */
   let resumeFrom = 0;
   /** ctx.currentTime captured at the moment source.start() was called. */
@@ -84,14 +87,8 @@ export function useNodePlayback(
       source = null;
     }
 
-    // AudioContext.close() disconnects all nodes automatically.
-    // Explicitly disconnect effect nodes first to free memory sooner.
-    for (const node of effectNodes) {
-      try { node.disconnect(); } catch { /* ignore */ }
-    }
     ctx?.close();
     ctx = null;
-    effectNodes = [];
   }
 
   /** rAF loop: advance the cursor ref and detect natural end-of-buffer. */
@@ -99,7 +96,7 @@ export function useNodePlayback(
     if (ctx && state.value === "playing") {
       const elapsed = ctx.currentTime - startCtxTime;
       const node = nodeRef.value;
-      const duration = node?.buffer?.duration ?? 0;
+      const duration = node?.targetBuffer?.duration ?? 0;
       const t = resumeFrom + elapsed;
 
       currentTime.value = Math.min(t, duration);
@@ -123,25 +120,17 @@ export function useNodePlayback(
     if (state.value === "playing") return;
 
     const node = nodeRef.value;
-    if (!node || !node.buffer) return;
+    if (!node || !node.targetBuffer) return;
 
     // Create an isolated AudioContext for this preview session.
     ctx = new AudioContext();
     source = ctx.createBufferSource();
-    source.buffer = node.buffer;
+    // Effects are pre-baked — play targetBuffer directly into destination.
+    source.buffer = node.targetBuffer;
+    source.connect(ctx.destination);
 
     const contextTime = ctx.currentTime;
     startCtxTime = contextTime;
-
-    // Wire effects between the source and the context destination.
-    effectNodes = applyEffectChain(
-      ctx,
-      source,
-      ctx.destination,
-      node.effects,
-      { offset: 0, duration: node.buffer.duration },
-      contextTime,
-    );
 
     // Start from the saved resume position (0 if coming from idle).
     source.start(0, resumeFrom);
@@ -167,7 +156,7 @@ export function useNodePlayback(
     if (ctx) {
       const elapsed = ctx.currentTime - startCtxTime;
       const node = nodeRef.value;
-      const duration = node?.buffer?.duration ?? 0;
+      const duration = node?.targetBuffer?.duration ?? 0;
       resumeFrom = Math.min(resumeFrom + elapsed, duration);
       currentTime.value = resumeFrom;
     }
@@ -198,7 +187,7 @@ export function useNodePlayback(
    */
   async function seek(time: number): Promise<void> {
     const node = nodeRef.value;
-    const duration = node?.buffer?.duration ?? 0;
+    const duration = node?.targetBuffer?.duration ?? 0;
     const clampedTime = Math.max(0, Math.min(time, duration));
 
     const wasPlaying = state.value === "playing";

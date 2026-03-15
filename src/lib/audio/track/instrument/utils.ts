@@ -3,7 +3,7 @@
 import {
   MUSIC_INSTRUMENTS,
   NOTE_BEATS,
-  type MusicInstrumentId,
+  type MusicInstrumentType,
   type NoteDuration,
 } from "../../../music/instruments";
 import { baseSecondWidthInPixels } from "../../../util/formatTime";
@@ -68,19 +68,21 @@ export function pixelToBeatSnapped(
 }
 
 /** How many total pitch rows exist for a given instrument. */
-export function getInstrumentRowCount(instrumentId: MusicInstrumentId): number {
+export function getInstrumentRowCount(
+  instrumentId: MusicInstrumentType,
+): number {
   return MUSIC_INSTRUMENTS[instrumentId].pitches.length;
 }
 
 /** Row height (px) for a given instrument. */
 export function getInstrumentRowHeight(
-  instrumentId: MusicInstrumentId,
+  instrumentId: MusicInstrumentType,
 ): number {
   return MUSIC_INSTRUMENTS[instrumentId].rowHeight;
 }
 
 /** Total pitch area height in pixels (all rows stacked). */
-export function getPitchAreaHeight(instrumentId: MusicInstrumentId): number {
+export function getPitchAreaHeight(instrumentId: MusicInstrumentType): number {
   const inst = MUSIC_INSTRUMENTS[instrumentId];
   return inst.pitches.length * inst.rowHeight;
 }

@@ -11,7 +11,6 @@
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useNodesStore } from "../../../stores/nodes";
 import { useNodePlayback } from "../../../composables/useNodePlayback";
-import { useInstrumentNode } from "../../../composables/useInstrumentNode";
 import { usePianoClipboard } from "../../../composables/usePianoClipboard";
 import { NOTE_TYPE_LIST } from "../../../lib/music/instruments";
 import { baseSecondWidthInPixels } from "../../../lib/util/formatTime";
@@ -35,8 +34,7 @@ const props = defineProps<{ node: InstrumentNode }>();
 
 const nodes = useNodesStore();
 const nodeRef = computed(() => props.node);
-
-useInstrumentNode(nodeRef);
+// targetBuffer recompute is handled app-wide by useAllNodes() in App.vue.
 
 const {
   state: previewState,
@@ -233,12 +231,13 @@ function onCut(noteCount: number): void {
       <!-- Play/Pause -->
       <button
         class="btn btn-sm btn-ghost btn-square"
-        :title="previewState === 'playing' ? 'Pause' : 'Play'"
+        :title="!node.targetBuffer && node.notes.length > 0 ? 'Preparing audio…' : previewState === 'playing' ? 'Pause' : 'Play'"
+        :disabled="!node.targetBuffer && node.notes.length > 0"
         @click="previewState === 'playing' ? previewPause() : previewPlay()"
       >
         <i
           class="iconify size-4"
-          :class="previewState === 'playing' ? 'mdi--pause' : 'mdi--play'"
+          :class="!node.targetBuffer && node.notes.length > 0 ? 'mdi--loading animate-spin' : previewState === 'playing' ? 'mdi--pause' : 'mdi--play'"
           aria-hidden="true"
         />
       </button>

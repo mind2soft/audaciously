@@ -8,7 +8,7 @@ import type { AudioEffect } from "../../../features/effects";
 const props = defineProps<{ node: RecordedNode }>();
 const nodes = useNodesStore();
 
-const bufferDuration = computed(() => props.node.buffer?.duration);
+const bufferDuration = computed(() => props.node.sourceBuffer?.duration);
 
 function onUpdateEffects(effects: AudioEffect[]): void {
   nodes.setNodeEffects(props.node.id, effects);

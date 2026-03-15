@@ -49,10 +49,10 @@ const emit = defineEmits<{
 /** Duration of the underlying audio buffer (or 0 if no buffer). */
 const rawDuration = computed((): number => {
   if (props.node.kind === "recorded") {
-    return (props.node as RecordedNode).buffer?.duration ?? 0;
+    return (props.node as RecordedNode).targetBuffer?.duration ?? 0;
   }
   if (props.node.kind === "instrument") {
-    return (props.node as InstrumentNode).buffer?.duration ?? 0;
+    return (props.node as InstrumentNode).targetBuffer?.duration ?? 0;
   }
   return 0;
 });
@@ -76,7 +76,7 @@ const waveform = createWaveformProcessor();
 
 const updateWaveform = () => {
   if (props.node.kind !== "recorded") return;
-  const buffer = (props.node as RecordedNode).buffer;
+  const buffer = (props.node as RecordedNode).sourceBuffer;
   if (!buffer || !svgRef.value) return;
   const rect = svgRef.value.getBoundingClientRect();
   if (!rect.width || !rect.height) return;
@@ -133,13 +133,13 @@ const noteBars = computed(() => {
   const h = 100; // SVG viewBox height
 
   // Collect unique pitches and assign y positions
-  const pitchIds = [...new Set(instrNode.notes.map((n) => n.pitchId))].sort();
+  const pitchIds = [...new Set(instrNode.notes.map((n) => n.pitchKey))].sort();
   const pitchCount = Math.max(pitchIds.length, 1);
 
   return instrNode.notes.map((note) => {
     const x = (note.startBeat / totalBeats) * w;
     const noteW = Math.max(1, (note.durationBeats / totalBeats) * w);
-    const pitchIdx = pitchIds.indexOf(note.pitchId);
+    const pitchIdx = pitchIds.indexOf(note.pitchKey);
     const y = h - ((pitchIdx + 1) / pitchCount) * h;
     return { x, y, w: noteW, h: noteBarHeight };
   });

@@ -1,7 +1,8 @@
 import type {
   NoteDuration,
-  MusicInstrumentId,
+  MusicInstrumentType,
   OctaveRange,
+  InstrumentPitchKey,
 } from "../../../music/instruments";
 import type { AudioTrack, AudioTrackJSON } from "../index";
 
@@ -17,7 +18,7 @@ export const instrumentTrackKind = "instrument" as const;
  */
 export interface InstrumentTrackJSON extends AudioTrackJSON {
   kind: "instrument";
-  instrumentId: MusicInstrumentId;
+  instrumentId: MusicInstrumentType;
   bpm: number;
   timeSignature: TimeSignature;
   notes: PlacedNote[];
@@ -49,15 +50,15 @@ export interface PlacedNote {
   startBeat: number;
   /** Duration in beats. */
   durationBeats: number;
-  /** Pitch ID matching one of the instrument's pitches[].id values. */
-  pitchId: string;
+  /** Pitch key matching one of the instrument's pitches[].key values. */
+  pitchKey: InstrumentPitchKey;
 }
 
 // ─── Interface ────────────────────────────────────────────────────────────────
 
 export interface InstrumentAudioTrack extends AudioTrack<InstrumentTrackKind> {
   readonly kind: InstrumentTrackKind;
-  readonly instrumentId: MusicInstrumentId;
+  readonly instrumentId: MusicInstrumentType;
   timeSignature: TimeSignature;
   bpm: number;
   notes: PlacedNote[];

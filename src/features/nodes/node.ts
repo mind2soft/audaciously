@@ -8,16 +8,22 @@
 import type { FolderNode } from "./folder/folder-node";
 import type { RecordedNode } from "./recorded/recorded-node";
 import type { InstrumentNode } from "./instrument/instrument-node";
+import type { MusicInstrumentType } from "../../lib/music/instruments";
 
 export type { FolderNode, RecordedNode, InstrumentNode };
 
 export type ProjectNodeKind = "folder" | "recorded" | "instrument";
 
-export interface ProjectNodeBase {
-  readonly id: string;
+export type ProjectNodeID = string;
+
+export interface ProjectNodeBase<NodeKind extends ProjectNodeKind> {
+  readonly id: ProjectNodeID;
   name: string;
-  readonly kind: ProjectNodeKind;
+  readonly kind: NodeKind;
 }
 
 /** Union of all concrete node types. */
-export type ProjectNode = FolderNode | RecordedNode | InstrumentNode;
+export type ProjectNode =
+  | FolderNode
+  | RecordedNode
+  | InstrumentNode<MusicInstrumentType>;

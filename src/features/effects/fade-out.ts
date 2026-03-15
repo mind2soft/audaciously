@@ -24,7 +24,7 @@ export function createFadeOutEffect(id?: string): FadeOutEffect {
  * Returns the created GainNode for later cleanup.
  */
 export function applyFadeOutEffect(
-  context: AudioContext,
+  context: BaseAudioContext,
   effect: FadeOutEffect,
   inputNode: AudioNode,
   outputNode: AudioNode,
