@@ -9,12 +9,11 @@
 //  • Mouseup: finalises positions, resolves pitch conflicts (rightmost wins).
 
 import { ref, computed, onUnmounted } from "vue";
-import type { Ref, ComputedRef } from "vue";
+import type { ComputedRef } from "vue";
 import type { PlacedNote } from "../features/nodes";
 import type { InstrumentPitch } from "../lib/music/instruments";
 import {
   snapBeatRound,
-  clientXToRawBeat,
   resolveOverlapsKeepRightmost,
   computeSnapBeats,
 } from "../lib/piano-roll/note-utils";
@@ -28,7 +27,8 @@ export interface PanToolContext {
   snapBeats: ComputedRef<number>;
   beatsPerMeasure: ComputedRef<number>;
   rowHeightPx: number;
-  gridRef: Ref<HTMLDivElement | undefined>;
+  /** Converts a viewport clientX to an unsnapped beat position. */
+  clientXToBeat: (clientX: number) => number;
   emitNotes: (notes: PlacedNote[]) => void;
 }
 
@@ -72,8 +72,7 @@ export function usePanTool(ctx: PanToolContext) {
   // ── Helpers ────────────────────────────────────────────────────────────────
 
   function getRawBeat(clientX: number): number {
-    const rect = ctx.gridRef.value?.getBoundingClientRect();
-    return rect ? clientXToRawBeat(clientX, rect, ctx.pxPerBeat.value) : 0;
+    return ctx.clientXToBeat(clientX);
   }
 
   function computeDelta(clientX: number): number {

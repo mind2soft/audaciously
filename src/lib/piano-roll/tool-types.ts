@@ -7,7 +7,7 @@ import type { PlacedNote } from "../../features/nodes";
 
 // ── Tool identifiers ──────────────────────────────────────────────────────────
 
-export type PianoRollToolId = "place" | "pan" | "copy" | "cut" | "paste";
+export type PianoRollToolId = "place" | "pan" | "copy" | "cut" | "paste" | "zoom-select";
 
 // ── Clipboard payload types ───────────────────────────────────────────────────
 

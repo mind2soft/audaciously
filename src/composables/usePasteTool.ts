@@ -13,12 +13,11 @@
 
 import { ref, computed } from "vue";
 import { nanoid } from "nanoid";
-import type { Ref, ComputedRef } from "vue";
+import type { ComputedRef } from "vue";
 import type { PlacedNote } from "../features/nodes";
 import type { InstrumentPitch } from "../lib/music/instruments";
 import {
   snapBeatRound,
-  clientXToRawBeat,
   insertNotesAt,
 } from "../lib/piano-roll/note-utils";
 import { usePianoClipboard } from "./usePianoClipboard";
@@ -28,10 +27,10 @@ import { usePianoClipboard } from "./usePianoClipboard";
 export interface PasteToolContext {
   notes: ComputedRef<PlacedNote[]>;
   pitches: ComputedRef<InstrumentPitch[]>;
-  pxPerBeat: ComputedRef<number>;
   snapBeats: ComputedRef<number>;
   rowHeightPx: number;
-  gridRef: Ref<HTMLDivElement | undefined>;
+  /** Converts a viewport clientX to an unsnapped beat position. */
+  clientXToBeat: (clientX: number) => number;
   emitNotes: (notes: PlacedNote[]) => void;
 }
 
@@ -61,8 +60,7 @@ export function usePasteTool(ctx: PasteToolContext) {
   // ── Coordinate helper ──────────────────────────────────────────────────────
 
   function getRawBeat(clientX: number): number {
-    const rect = ctx.gridRef.value?.getBoundingClientRect();
-    return rect ? clientXToRawBeat(clientX, rect, ctx.pxPerBeat.value) : 0;
+    return ctx.clientXToBeat(clientX);
   }
 
   // ── Mouse handlers ─────────────────────────────────────────────────────────

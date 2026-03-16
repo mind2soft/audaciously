@@ -5,14 +5,13 @@
 
 import { ref, computed, onUnmounted } from "vue";
 import { nanoid } from "nanoid";
-import type { Ref, ComputedRef } from "vue";
+import type { ComputedRef } from "vue";
 import type { PlacedNote } from "../features/nodes";
 import type { InstrumentPitch } from "../lib/music/instruments";
 import {
   hitTestNote,
   notesOverlap,
   snapBeatFloor,
-  clientXToRawBeat,
 } from "../lib/piano-roll/note-utils";
 
 // ── Context ───────────────────────────────────────────────────────────────────
@@ -20,11 +19,13 @@ import {
 export interface PlaceToolContext {
   notes: ComputedRef<PlacedNote[]>;
   pitches: ComputedRef<InstrumentPitch[]>;
-  pxPerBeat: ComputedRef<number>;
   snapBeats: ComputedRef<number>;
   noteDurationBeats: ComputedRef<number>;
   rowHeightPx: number;
-  gridRef: Ref<HTMLDivElement | undefined>;
+  /** Converts a viewport clientX to an unsnapped beat position. */
+  clientXToBeat: (clientX: number) => number;
+  /** Converts a viewport clientY to a pitch row index (clamped). */
+  clientYToPitchIdx: (clientY: number) => number;
   emitNotes: (notes: PlacedNote[]) => void;
   /** Called with the placed note's pitchId whenever a new note is successfully placed. */
   onPlace?: (pitchId: string) => void;
@@ -64,18 +65,11 @@ export function usePlaceTool(ctx: PlaceToolContext) {
   // ── Coordinate helpers ─────────────────────────────────────────────────────
 
   function getRawBeat(clientX: number): number {
-    const rect = ctx.gridRef.value?.getBoundingClientRect();
-    return rect ? clientXToRawBeat(clientX, rect, ctx.pxPerBeat.value) : 0;
+    return ctx.clientXToBeat(clientX);
   }
 
   function getPitchIdx(clientY: number): number {
-    const rect = ctx.gridRef.value?.getBoundingClientRect();
-    if (!rect) return 0;
-    const py = clientY - rect.top;
-    return Math.max(
-      0,
-      Math.min(ctx.pitches.value.length - 1, Math.floor(py / ctx.rowHeightPx)),
-    );
+    return ctx.clientYToPitchIdx(clientY);
   }
 
   // ── Mouse handlers ─────────────────────────────────────────────────────────

@@ -40,18 +40,24 @@ const getFramesData = (
   channel: number,
   animation: boolean,
   animationframes: number,
+  start?: number,
+  end?: number,
 ) => {
   const rawData = audioBuffer.getChannelData(channel);
+  const slicedData =
+    start !== undefined || end !== undefined
+      ? rawData.slice(start ?? 0, end ?? rawData.length)
+      : rawData;
 
   const framesData = [];
   if (animation) {
     const frames = audioBuffer.sampleRate / animationframes;
-    for (let index = 0; index < rawData.length; index += frames) {
-      const partraw = rawData.slice(index, index + frames);
+    for (let index = 0; index < slicedData.length; index += frames) {
+      const partraw = slicedData.slice(index, index + frames);
       framesData.push(partraw);
     }
   } else {
-    framesData.push(rawData);
+    framesData.push(slicedData);
   }
 
   return framesData;
@@ -63,7 +69,13 @@ export function createWaveformProcessor(): WaveformProcessor {
 
   return {
     async getLinearPath(audioBuffer, options) {
-      const { channel = 0, animation = false, animationframes = 10 } = options;
+      const {
+        channel = 0,
+        animation = false,
+        animationframes = 10,
+        start,
+        end,
+      } = options;
 
       promises.get(id)?.reject();
       promises.delete(id);
@@ -76,6 +88,8 @@ export function createWaveformProcessor(): WaveformProcessor {
           channel,
           animation,
           animationframes,
+          start,
+          end,
         );
 
         promises.set(id, { seqNum, resolve, reject });

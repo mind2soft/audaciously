@@ -2,19 +2,27 @@
 /**
  * WaveformView — seekable audio buffer peak graph.
  *
- * Replaces Waveform.vue. Adds click/drag seek support.
+ * Replaces Waveform.vue. Adds click/drag seek support, zoom, and scroll.
  *
  * Props
  * ─────
- * buffer       AudioBuffer to visualise.
- * currentTime  Current playback position in seconds.
+ * buffer            AudioBuffer to visualise.
+ * currentTime       Current playback position in seconds.
+ * ratio             Zoom ratio (1 = full buffer, 4 = 4× zoom). Default 1.
+ * offsetTime        Scroll offset in seconds (start of visible window). Default 0.
+ * zoomSelectActive  When true, mousedown starts a rubber-band zoom-select drag
+ *                   instead of seeking.
  *
  * Emits
  * ─────
- * seek(time)   User clicked or dragged to seek to a time position.
+ * seek(time)              User clicked or dragged to seek to a time position.
+ * zoom-select(start, end) User completed a rubber-band drag while in zoom-select
+ *                         mode; start/end are times in seconds.
  */
 
 import {
+  computed,
+  inject,
   onBeforeUnmount,
   onMounted,
   ref,
@@ -23,15 +31,22 @@ import {
   watchEffect,
 } from "vue";
 import { createWaveformProcessor } from "../../lib/audio/waveform";
+import { scrollableTimelineKey } from "../../lib/scrollable-timeline";
 
 const props = defineProps<{
   buffer: AudioBuffer;
   currentTime: number;
+  ratio?: number;
+  offsetTime?: number;
+  zoomSelectActive?: boolean;
 }>();
 
 const emit = defineEmits<{
   seek: [time: number];
+  "zoom-select": [startTime: number, endTime: number];
 }>();
+
+const ctx = inject(scrollableTimelineKey, null);
 
 const waveform = createWaveformProcessor();
 
@@ -39,14 +54,29 @@ const id = useId();
 const svgRef = ref<SVGSVGElement>();
 const path = ref<string>();
 const positionPct = ref<number>(0);
+/** True when the playhead is within the visible window. */
+const positionVisible = ref(false);
 
 const isSeeking = ref(false);
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+const effectiveOffsetTime = computed(() => ctx?.offsetTime.value ?? props.offsetTime ?? 0);
+const effectiveVisibleDuration = computed(() => {
+  if (ctx) return ctx.visibleDuration.value;
+  const totalDuration = props.buffer?.duration || 1;
+  return totalDuration / (props.ratio ?? 1);
+});
 
 // ── Playback cursor ─────────────────────────────────────────────────────────
 
 const updatePosition = () => {
-  const duration = props.buffer?.duration || 1;
-  positionPct.value = Math.min(Math.max(props.currentTime / duration, 0), 1) * 100;
+  const visibleDuration = effectiveVisibleDuration.value;
+  const offsetTime = effectiveOffsetTime.value;
+  const relativeTime = props.currentTime - offsetTime;
+  const pct = relativeTime / visibleDuration;
+  positionVisible.value = pct >= 0 && pct <= 1;
+  positionPct.value = Math.min(Math.max(pct, 0), 1) * 100;
 };
 
 watchEffect(updatePosition);
@@ -56,9 +86,21 @@ watchEffect(updatePosition);
 const updatePath = () => {
   if (!svgRef.value || !props.buffer?.length) return;
   const rect = svgRef.value.getBoundingClientRect();
-  if (!rect.width || !rect.height) return;
+  // Guard against degenerate frames (e.g. during resize or before layout)
+  if (rect.width < 10 || !rect.height) return;
 
   updatePosition();
+
+  const offsetTime = effectiveOffsetTime.value;
+  const visibleDuration = effectiveVisibleDuration.value;
+  const sampleRate = props.buffer.sampleRate;
+  const totalSamples = props.buffer.length;
+
+  const startSample = Math.floor(offsetTime * sampleRate);
+  const endSample = Math.min(
+    Math.ceil((offsetTime + visibleDuration) * sampleRate),
+    totalSamples,
+  );
 
   waveform
     .getLinearPath(props.buffer, {
@@ -74,16 +116,31 @@ const updatePath = () => {
       ],
       animation: false,
       normalize: false,
+      start: startSample,
+      end: endSample,
     })
     .then(
-      (nextPath) => { path.value = nextPath; },
+      (nextPath) => {
+        path.value = nextPath;
+      },
       () => {},
     );
 };
 
-const resizeObserver = new ResizeObserver(updatePath);
+// Debounced variant used by ResizeObserver to avoid thrashing on resize drag.
+let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+const debouncedUpdatePath = () => {
+  if (debounceTimer) clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(updatePath, 50);
+};
 
-watch(() => props.buffer, updatePath);
+const resizeObserver = new ResizeObserver(debouncedUpdatePath);
+
+// Re-render immediately when props that affect the visible window change.
+watch(
+  () => [props.buffer, props.ratio, props.offsetTime, effectiveOffsetTime.value, effectiveVisibleDuration.value] as const,
+  updatePath,
+);
 
 onMounted(() => {
   if (!svgRef.value) return;
@@ -93,6 +150,12 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   if (svgRef.value) resizeObserver.unobserve(svgRef.value);
+  if (debounceTimer) clearTimeout(debounceTimer);
+  waveform.dispose();
+  document.removeEventListener("mousemove", onDocMousemove);
+  document.removeEventListener("mouseup", onDocMouseup);
+  document.removeEventListener("mousemove", onZoomDocMousemove);
+  document.removeEventListener("mouseup", onZoomDocMouseup);
 });
 
 // ── Hover ghost cursor ──────────────────────────────────────────────────────
@@ -108,11 +171,12 @@ const formatTime = (s: number): string => {
 };
 
 const onHoverMove = (evt: MouseEvent) => {
+  if (isZoomSelecting.value) return; // suppress hover during zoom-select drag
   if (!svgRef.value) return;
   const rect = svgRef.value.getBoundingClientRect();
   const pct = Math.min(Math.max((evt.clientX - rect.left) / rect.width, 0), 1);
   hoverPct.value = pct * 100;
-  hoverTime.value = pct * (props.buffer?.duration ?? 0);
+  hoverTime.value = effectiveOffsetTime.value + pct * effectiveVisibleDuration.value;
 };
 
 const onHoverLeave = () => {
@@ -122,18 +186,11 @@ const onHoverLeave = () => {
 const clientXToTime = (clientX: number): number => {
   if (!svgRef.value) return 0;
   const rect = svgRef.value.getBoundingClientRect();
-  const ratio = Math.min(Math.max((clientX - rect.left) / rect.width, 0), 1);
-  return ratio * (props.buffer?.duration ?? 0);
+  const pct = Math.min(Math.max((clientX - rect.left) / rect.width, 0), 1);
+  return effectiveOffsetTime.value + pct * effectiveVisibleDuration.value;
 };
 
 // ── Seek interaction ────────────────────────────────────────────────────────
-
-const onMousedown = (evt: MouseEvent) => {
-  isSeeking.value = true;
-  emit("seek", clientXToTime(evt.clientX));
-  document.addEventListener("mousemove", onDocMousemove);
-  document.addEventListener("mouseup", onDocMouseup);
-};
 
 const onDocMousemove = (evt: MouseEvent) => {
   if (isSeeking.value) emit("seek", clientXToTime(evt.clientX));
@@ -144,12 +201,79 @@ const onDocMouseup = () => {
   document.removeEventListener("mousemove", onDocMousemove);
   document.removeEventListener("mouseup", onDocMouseup);
 };
+
+// ── Zoom-select rubber-band ─────────────────────────────────────────────────
+
+const isZoomSelecting = ref(false);
+const zoomBandStartPct = ref(0);
+const zoomBandEndPct = ref(0);
+
+const onZoomDocMousemove = (evt: MouseEvent) => {
+  if (!svgRef.value) return;
+  const rect = svgRef.value.getBoundingClientRect();
+  zoomBandEndPct.value = Math.min(
+    Math.max((evt.clientX - rect.left) / rect.width, 0),
+    1,
+  );
+};
+
+const onZoomDocMouseup = () => {
+  document.removeEventListener("mousemove", onZoomDocMousemove);
+  document.removeEventListener("mouseup", onZoomDocMouseup);
+  isZoomSelecting.value = false;
+  hoverPct.value = null;
+
+  const start = Math.min(zoomBandStartPct.value, zoomBandEndPct.value);
+  const end = Math.max(zoomBandStartPct.value, zoomBandEndPct.value);
+  // Ignore tiny drags (< 0.5% of visible width)
+  if (end - start < 0.005) {
+    zoomBandStartPct.value = 0;
+    zoomBandEndPct.value = 0;
+    return;
+  }
+
+  const visibleDuration = effectiveVisibleDuration.value;
+  const startTime = effectiveOffsetTime.value + start * visibleDuration;
+  const endTime = effectiveOffsetTime.value + end * visibleDuration;
+  emit("zoom-select", startTime, endTime);
+
+  zoomBandStartPct.value = 0;
+  zoomBandEndPct.value = 0;
+};
+
+// ── Unified mousedown ───────────────────────────────────────────────────────
+
+const onMousedown = (evt: MouseEvent) => {
+  if (props.zoomSelectActive) {
+    // Start rubber-band zoom-select drag
+    if (!svgRef.value) return;
+    const rect = svgRef.value.getBoundingClientRect();
+    const pct = Math.min(
+      Math.max((evt.clientX - rect.left) / rect.width, 0),
+      1,
+    );
+    zoomBandStartPct.value = pct;
+    zoomBandEndPct.value = pct;
+    isZoomSelecting.value = true;
+    hoverPct.value = null;
+    document.addEventListener("mousemove", onZoomDocMousemove);
+    document.addEventListener("mouseup", onZoomDocMouseup);
+    return;
+  }
+
+  // Normal seek drag
+  isSeeking.value = true;
+  emit("seek", clientXToTime(evt.clientX));
+  document.addEventListener("mousemove", onDocMousemove);
+  document.addEventListener("mouseup", onDocMouseup);
+};
 </script>
 
 <template>
   <svg
     ref="svgRef"
-    class="w-full h-full cursor-pointer"
+    class="w-full h-full"
+    :style="{ cursor: zoomSelectActive ? 'crosshair' : 'pointer' }"
     @mousedown="onMousedown"
     @mousemove="onHoverMove"
     @mouseleave="onHoverLeave"
@@ -163,12 +287,19 @@ const onDocMouseup = () => {
         y2="0"
         gradientUnits="objectBoundingBox"
       >
-        <!-- Played portion: accent colour -->
-        <stop offset="0%" stop-color="var(--color-accent)" />
-        <stop :offset="`${positionPct}%`" stop-color="var(--color-accent)" />
-        <!-- Unplayed portion: muted -->
-        <stop :offset="`${positionPct}%`" stop-color="var(--color-base-content)" stop-opacity="0.3" />
-        <stop offset="100%" stop-color="var(--color-base-content)" stop-opacity="0.3" />
+        <template v-if="positionVisible">
+          <!-- Played portion: accent colour -->
+          <stop offset="0%" stop-color="var(--color-accent)" />
+          <stop :offset="`${positionPct}%`" stop-color="var(--color-accent)" />
+          <!-- Unplayed portion: muted -->
+          <stop :offset="`${positionPct}%`" stop-color="var(--color-base-content)" stop-opacity="0.3" />
+          <stop offset="100%" stop-color="var(--color-base-content)" stop-opacity="0.3" />
+        </template>
+        <!-- Playhead outside visible window: uniform muted colour -->
+        <template v-else>
+          <stop offset="0%" stop-color="var(--color-base-content)" stop-opacity="0.3" />
+          <stop offset="100%" stop-color="var(--color-base-content)" stop-opacity="0.3" />
+        </template>
       </linearGradient>
     </defs>
     <path
@@ -176,8 +307,9 @@ const onDocMouseup = () => {
       :stroke="`url(#wfGrad_${id})`"
       :d="path"
     />
-    <!-- Playhead cursor line -->
+    <!-- Playhead cursor line (only when within the visible window) -->
     <line
+      v-if="positionVisible"
       :x1="`${positionPct}%`"
       y1="0"
       :x2="`${positionPct}%`"
@@ -187,8 +319,8 @@ const onDocMouseup = () => {
       stroke-dasharray="3 2"
       opacity="0.8"
     />
-    <!-- Hover ghost cursor line + time label (hidden while actively seeking) -->
-    <template v-if="hoverPct !== null && !isSeeking">
+    <!-- Hover ghost cursor line + time label (hidden while actively seeking or zoom-selecting) -->
+    <template v-if="hoverPct !== null && !isSeeking && !isZoomSelecting">
       <line
         :x1="`${hoverPct}%`"
         y1="0"
@@ -209,5 +341,19 @@ const onDocMouseup = () => {
         pointer-events="none"
       >{{ formatTime(hoverTime) }}</text>
     </template>
+    <!-- Zoom-select rubber-band rectangle -->
+    <rect
+      v-if="isZoomSelecting"
+      :x="`${Math.min(zoomBandStartPct, zoomBandEndPct) * 100}%`"
+      :width="`${Math.abs(zoomBandEndPct - zoomBandStartPct) * 100}%`"
+      y="0"
+      height="100%"
+      fill="var(--color-primary)"
+      fill-opacity="0.15"
+      stroke="var(--color-primary)"
+      stroke-opacity="0.6"
+      stroke-width="1"
+      pointer-events="none"
+    />
   </svg>
 </template>

@@ -3,9 +3,9 @@
  * DrumNodeView — complete view for an InstrumentNode with instrumentId "drums".
  *
  * Layout (top-to-bottom):
- *   Row 1  Header: [80px label | TimelineRuler flex-1 | ZoomControl w-40]
+ *   Row 1  Header: [DRUM_ROLL_LABEL_WIDTH spacer | TimelineRuler flex-1]
  *   Row 2  DrumRoll (flex-1, owns scroll)
- *   Row 3  Player controls: [play] [separator] [note-size buttons] [flex-1] [tools]
+ *   Row 3  Player controls: [play] [separator] [note-size buttons] [flex-1] [tools] [divider] [ZoomToolbar]
  */
 
 import { ref, computed, onMounted, onUnmounted } from "vue";
@@ -17,12 +17,16 @@ import { NOTE_TYPE_LIST } from "../../../lib/music/instruments";
 import type { InstrumentNode } from "../../../features/nodes";
 import type { NoteDuration } from "../../../lib/music/instruments";
 import type { PianoRollToolId } from "../../../lib/piano-roll/tool-types";
-import DrumRoll, { DRUM_ROLL_LABEL_WIDTH } from "../../controls/DrumRoll.vue";
-import TimelineRuler from "../../controls/TimelineRuler.vue";
-import ZoomControl from "../../controls/ZoomControl.vue";
+import DrumRoll, { DRUM_ROLL_LABEL_WIDTH } from "../../controls/DrumRollCanvas.vue";
+import ScrollableTimeline from "../../controls/ScrollableTimeline.vue";
+import ZoomToolbar from "../../controls/ZoomToolbar.vue";
 import ButtonGroup, {
   type ButtonGroupItem,
 } from "../../controls/ButtonGroup.vue";
+import {
+  ZOOM_MIN_INSTRUMENT_DURATION,
+  ZOOM_MAX_INSTRUMENT_RATIO,
+} from "../../../lib/zoom-constants";
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -44,12 +48,52 @@ const {
 
 // ── Zoom & scroll ─────────────────────────────────────────────────────────────
 
-const zoomRatio = ref(4);
-const scrollLeft = ref(0);
+const scaleFactor = ref(4);
 
-const GRID_WIDTH = 6000; // px — must match DrumRoll's constant
-const offsetTime = computed(() => scrollLeft.value / (zoomRatio.value * baseSecondWidthInPixels));
-const totalDurationSeconds = computed(() => GRID_WIDTH / (zoomRatio.value * baseSecondWidthInPixels));
+// Container width (minus label column) drives minScaleFactor and totalDuration.
+const viewRef = ref<HTMLElement | null>(null);
+const rollContainerWidth = ref(0);
+
+const totalDuration = computed(() =>
+  rollContainerWidth.value > 0
+    ? rollContainerWidth.value / baseSecondWidthInPixels
+    : 1,
+);
+
+const minScaleFactor = computed(() => {
+  const w = rollContainerWidth.value;
+  if (!w) return 1;
+  return w / (ZOOM_MIN_INSTRUMENT_DURATION * baseSecondWidthInPixels);
+});
+
+const maxScaleFactor = ZOOM_MAX_INSTRUMENT_RATIO;
+
+let _viewObserver: ResizeObserver | null = null;
+
+const zoomSelectActive = ref(false);
+
+function zoomOut(): void {
+  scaleFactor.value = Math.max(minScaleFactor.value, scaleFactor.value / 2);
+}
+
+function zoomIn(): void {
+  scaleFactor.value = Math.min(maxScaleFactor, scaleFactor.value * 2);
+}
+
+function onZoomSelect(startTime: number, endTime: number): void {
+  const duration = endTime - startTime;
+  if (duration <= 0) return;
+  const w = rollContainerWidth.value;
+  const newSF = Math.min(
+    Math.max(w / (duration * baseSecondWidthInPixels), minScaleFactor.value),
+    maxScaleFactor,
+  );
+  // Set currentTime to midpoint FIRST, then scaleFactor so watcher reads updated time.
+  previewSeek((startTime + endTime) / 2);
+  scaleFactor.value = newSF;
+  activeTool.value = "place";
+  zoomSelectActive.value = false;
+}
 
 // ── Note-type selection ───────────────────────────────────────────────────────
 
@@ -132,6 +176,15 @@ const row3Compact = ref(false);
 let _row3Observer: ResizeObserver | null = null;
 
 onMounted(() => {
+  // ResizeObserver for roll container width (drives minRatio).
+  if (viewRef.value) {
+    _viewObserver = new ResizeObserver(([entry]) => {
+      rollContainerWidth.value =
+        Math.max(0, (entry?.contentRect.width ?? 0) - DRUM_ROLL_LABEL_WIDTH);
+    });
+    _viewObserver.observe(viewRef.value);
+  }
+
   if (!row3Ref.value) return;
   _row3Observer = new ResizeObserver(([entry]) => {
     row3Compact.value =
@@ -143,6 +196,8 @@ onMounted(() => {
 onUnmounted(() => {
   _row3Observer?.disconnect();
   _row3Observer = null;
+  _viewObserver?.disconnect();
+  _viewObserver = null;
 });
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
@@ -169,50 +224,32 @@ function onCut(noteCount: number): void {
 </script>
 
 <template>
-  <div class="flex flex-col h-full w-full overflow-hidden bg-base-100 select-none">
-    <!-- ── Row 1: Header (label | ruler | zoom) ───────────────────────────── -->
-    <div class="shrink-0 flex items-stretch h-10 border-b border-base-300/60 bg-base-200">
-      <!-- Track label — same width as the drum row label column in DrumRoll -->
-      <div
-        class="shrink-0 flex items-center gap-1.5 px-2 border-r border-base-300/60 text-xs text-base-content/60"
-        :style="{ width: `${DRUM_ROLL_LABEL_WIDTH}px` }"
-      >
-        <i class="iconify mdi--drum text-sm" aria-hidden="true" />
-        <span class="truncate">Drums</span>
-      </div>
-
-      <!-- Timeline ruler (synced with roll scroll) -->
-      <TimelineRuler
-        class="flex-1 min-w-0"
-        :durationSeconds="totalDurationSeconds"
-        :offsetTime="offsetTime"
-        :ratio="zoomRatio"
-        :currentTime="previewCurrentTime"
-        @seek="previewSeek"
-      />
-
-      <!-- Zoom control -->
-      <ZoomControl
-        v-model="zoomRatio"
-        :min="1"
-        :max="20"
-        class="w-40 shrink-0 border-l border-base-300/60"
-      />
-    </div>
-
-    <!-- ── Row 2: Drum roll (flex-1) ──────────────────────────────────────── -->
-    <DrumRoll
-      :node="node"
-      :zoom-ratio="zoomRatio"
-      :active-tool="activeTool"
-      :current-time="previewCurrentTime"
-      :readonly="previewState === 'playing'"
+  <div class="flex flex-col h-full w-full overflow-hidden bg-base-100 select-none" ref="viewRef">
+    <!-- ── Row 2: Drum roll wrapped in ScrollableTimeline ────────────────── -->
+    <ScrollableTimeline
       class="flex-1 min-h-0"
-      @update:notes="onUpdateNotes"
-      @scroll="scrollLeft = $event"
-      @copied="onCopied"
-      @cut="onCut"
-    />
+      :gutter-width="DRUM_ROLL_LABEL_WIDTH"
+      :total-duration="totalDuration"
+      :min-scale-factor="minScaleFactor"
+      :max-scale-factor="maxScaleFactor"
+      :current-time="previewCurrentTime"
+      :scale-factor="scaleFactor"
+      :playing="previewState === 'playing'"
+      @update:current-time="previewSeek"
+      @update:scale-factor="scaleFactor = $event"
+    >
+      <DrumRoll
+        :node="node"
+        :active-tool="activeTool"
+        :current-time="previewCurrentTime"
+        :readonly="previewState === 'playing'"
+        class="h-full"
+        @update:notes="onUpdateNotes"
+        @copied="onCopied"
+        @cut="onCut"
+        @zoom-select="onZoomSelect"
+      />
+    </ScrollableTimeline>
 
     <!-- ── Row 3: Player controls ─────────────────────────────────────────── -->
     <div ref="row3Ref" class="shrink-0 flex items-center gap-2 px-3 py-1.5 bg-base-200 border-t border-base-300/60 min-h-10">
@@ -250,6 +287,20 @@ function onCut(noteCount: number): void {
         :compact="row3Compact"
         dropdown-align="end"
         @update:model-value="onToolSelected"
+      />
+
+      <div class="w-px h-5 bg-base-300/60 mx-1" aria-hidden="true" />
+
+      <!-- Zoom toolbar -->
+      <ZoomToolbar
+        :zoom-ratio="scaleFactor"
+        :min-ratio="minScaleFactor"
+        :max-ratio="maxScaleFactor"
+        :zoom-select-active="zoomSelectActive"
+        :disabled="previewState === 'playing'"
+        @zoom-out="zoomOut"
+        @zoom-in="zoomIn"
+        @update:zoom-select-active="zoomSelectActive = $event; if ($event) activeTool = 'zoom-select'; else activeTool = 'place'"
       />
     </div>
 

@@ -24,7 +24,7 @@ export const PIANO_ROLL_LABEL_WIDTH = 44;
  * copied         Number of notes copied to the clipboard (> 0 guaranteed).
  */
 
-import { computed, ref } from "vue";
+import { computed, ref, onUnmounted, inject } from "vue";
 import {
   PIANO_INSTRUMENT,
   filterPitchesByOctaveRange,
@@ -36,6 +36,7 @@ import {
 import { baseSecondWidthInPixels } from "../../lib/util/formatTime";
 import type { InstrumentNode, PlacedNote } from "../../features/nodes";
 import type { PianoRollToolId } from "../../lib/piano-roll/tool-types";
+import { scrollableTimelineKey } from "../../lib/scrollable-timeline";
 
 import { usePlaceTool } from "../../composables/usePlaceTool";
 import { usePanTool } from "../../composables/usePanTool";
@@ -53,7 +54,7 @@ const LABEL_WIDTH_PX = PIANO_ROLL_LABEL_WIDTH;
 
 const props = defineProps<{
   node: InstrumentNode;
-  zoomRatio: number;
+  zoomRatio?: number;
   activeTool: PianoRollToolId;
   currentTime?: number;
   /** When true, all editing interactions are suppressed (e.g. during playback). */
@@ -62,30 +63,52 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   "update:notes": [notes: PlacedNote[]];
-  scroll: [scrollLeft: number];
   copied: [noteCount: number];
   cut: [noteCount: number];
-}>();
+  "zoom-select": [startTime: number, endTime: number];
+}>(); 
 
 // ── Refs ──────────────────────────────────────────────────────────────────────
 
 const gridRef = ref<HTMLDivElement>();
-const scrollRef = ref<HTMLDivElement>();
-const scrollLeftPx = ref(0);
+
+// ── Context from ScrollableTimeline ──────────────────────────────────────────
+
+const timelineCtx = inject(scrollableTimelineKey, null);
 
 // ── Derived pixel / beat constants ────────────────────────────────────────────
 
+const pxPerSec = computed(() =>
+  timelineCtx
+    ? timelineCtx.pixelsPerSecond.value
+    : (props.zoomRatio ?? 1) * baseSecondWidthInPixels,
+);
+
 const pxPerBeat = computed(
-  () =>
-    getSecondsPerBeat(props.node.bpm) *
-    props.zoomRatio *
-    baseSecondWidthInPixels,
+  () => getSecondsPerBeat(props.node.bpm) * pxPerSec.value,
 );
 const pxPerMeasure = computed(
   () => pxPerBeat.value * props.node.timeSignature.beatsPerMeasure,
 );
 
-const GRID_WIDTH = 6000; // px
+// ── Render-only integer-snapped values ────────────────────────────────────────
+// Used for CSS gradients and note pixel positions so gradient tile boundaries
+// and note edges always land on whole CSS pixels, eliminating sub-pixel aliasing.
+// Hit-testing (clientXToGridBeat) keeps using raw pxPerBeat for accuracy.
+const pxPerBeatRender = computed(() => Math.round(pxPerBeat.value));
+const pxPerMeasureRender = computed(() => Math.round(pxPerMeasure.value));
+
+const GRID_WIDTH = computed(() => {
+  const cw = timelineCtx?.contentWidth.value ?? 0;
+  const sf = timelineCtx?.scaleFactor.value ?? 1;
+  return Math.max(6000, cw * sf);
+});
+
+// ── Offset time (from context or zero) ───────────────────────────────────────
+
+const offsetTimePx = computed(() =>
+  (timelineCtx?.offsetTime.value ?? 0) * pxPerSec.value,
+);
 
 // ── Pitches ───────────────────────────────────────────────────────────────────
 
@@ -120,8 +143,8 @@ const snapBeats = computed(() =>
 // ── Grid background ───────────────────────────────────────────────────────────
 
 const gridBackground = computed(() => {
-  const mpx = pxPerMeasure.value;
-  const bpx = pxPerBeat.value;
+  const mpx = pxPerMeasureRender.value;
+  const bpx = pxPerBeatRender.value;
   const rh = NOTE_HEIGHT_PX;
 
   const measureLine = "rgba(255,255,255,0.12)";
@@ -160,6 +183,25 @@ const notePreview = useNotePreview();
 
 const allNotes = computed(() => props.node.notes);
 
+/** Converts viewport clientX → raw (unsnapped) beat, accounting for translateX scroll. */
+function clientXToBeat(clientX: number): number {
+  const rect = gridRef.value?.getBoundingClientRect();
+  if (!rect) return 0;
+  // gridRef has translateX applied, so getBoundingClientRect().left already accounts for scroll
+  return Math.max(0, clientX - rect.left) / pxPerBeat.value;
+}
+
+/** Converts viewport clientY → pitch row index (clamped). */
+function clientYToPitchIdx(clientY: number): number {
+  const rect = gridRef.value?.getBoundingClientRect();
+  if (!rect) return 0;
+  const py = clientY - rect.top;
+  return Math.max(
+    0,
+    Math.min(pitches.value.length - 1, Math.floor(py / NOTE_HEIGHT_PX)),
+  );
+}
+
 const toolCtxBase = {
   notes: allNotes,
   pitches,
@@ -168,8 +210,9 @@ const toolCtxBase = {
   noteDurationBeats,
   beatsPerMeasure,
   rowHeightPx: NOTE_HEIGHT_PX,
-  gridRef,
-  scrollRef,
+  clientXToBeat,
+  clientYToPitchIdx,
+  scrollRef: timelineCtx?.scrollEl ?? ref<HTMLDivElement | undefined>(undefined),
   emitNotes: (notes: PlacedNote[]) => emit("update:notes", notes),
   onPlace: (pitchId: string) => notePreview.playNote(pitchId),
 };
@@ -210,13 +253,19 @@ function dispatch<K extends "onMousedown" | "onMousemove" | "onMouseleave">(
 
 function onMousedown(evt: MouseEvent): void {
   if (props.readonly) return;
+  if (props.activeTool === "zoom-select") {
+    onZoomMousedown(evt);
+    return;
+  }
   dispatch("onMousedown", evt);
 }
 function onMousemove(evt: MouseEvent): void {
   if (props.readonly) return;
+  if (props.activeTool === "zoom-select") return;
   dispatch("onMousemove", evt);
 }
 function onMouseleave(): void {
+  if (props.activeTool === "zoom-select") return;
   dispatch("onMouseleave");
 }
 
@@ -224,6 +273,7 @@ function onMouseleave(): void {
 
 const activeCursor = computed(() => {
   if (props.readonly) return "not-allowed";
+  if (props.activeTool === "zoom-select") return "crosshair";
   if (props.activeTool === "place") return placeTool.cursor;
   if (props.activeTool === "pan") return panTool.cursor;
   if (props.activeTool === "copy") return copyTool.cursor;
@@ -248,10 +298,10 @@ const displayNotes = computed(() => {
 // ── Note style helpers ────────────────────────────────────────────────────────
 
 function noteLeft(note: PlacedNote): number {
-  return note.startBeat * pxPerBeat.value;
+  return Math.round(note.startBeat * pxPerBeatRender.value);
 }
 function noteWidth(note: PlacedNote): number {
-  return Math.max(2, note.durationBeats * pxPerBeat.value);
+  return Math.max(2, Math.round(note.durationBeats * pxPerBeatRender.value));
 }
 function noteTop(note: PlacedNote): number {
   const idx = pitches.value.findIndex((p) => p.key === note.pitchKey);
@@ -296,7 +346,7 @@ const beatLinePx = computed<number | null>(() => {
   } else if (props.activeTool === "paste") {
     beat = pasteTool.beatLine.value;
   }
-  return beat !== null ? beat * pxPerBeat.value : null;
+  return beat !== null ? Math.round(beat * pxPerBeatRender.value) : null;
 });
 
 // ── Copy / Cut selection overlay ──────────────────────────────────────────────
@@ -310,29 +360,74 @@ const selectionOverlay = computed(() => {
         : null;
   if (!range) return null;
   return {
-    left: range.start * pxPerBeat.value,
-    width: (range.end - range.start) * pxPerBeat.value,
+    left: Math.round(range.start * pxPerBeatRender.value),
+    width: Math.round((range.end - range.start) * pxPerBeatRender.value),
     color:
       props.activeTool === "cut" ? "var(--color-warning)" : "var(--color-info)",
   };
 });
 
-// ── Scroll ────────────────────────────────────────────────────────────────────
+// ── Zoom-select tool ──────────────────────────────────────────────────────────
 
-function onScrollBody(): void {
-  const sl = scrollRef.value?.scrollLeft ?? 0;
-  scrollLeftPx.value = sl;
-  emit("scroll", sl);
+const isZoomSelecting = ref(false);
+const zoomDragStartBeat = ref(0);
+const zoomDragEndBeat = ref(0);
+
+/** Convert viewport clientX to a beat in full-grid space (accounts for scroll). */
+function clientXToGridBeat(clientX: number): number {
+  if (!gridRef.value) return 0;
+  const rect = gridRef.value.getBoundingClientRect();
+  return Math.max(0, clientX - rect.left) / pxPerBeat.value;
 }
+
+const onZoomDocMousemove = (evt: MouseEvent) => {
+  zoomDragEndBeat.value = clientXToGridBeat(evt.clientX);
+};
+
+const onZoomDocMouseup = () => {
+  document.removeEventListener("mousemove", onZoomDocMousemove);
+  isZoomSelecting.value = false;
+
+  const start = Math.min(zoomDragStartBeat.value, zoomDragEndBeat.value);
+  const end = Math.max(zoomDragStartBeat.value, zoomDragEndBeat.value);
+  const secPerBeat = getSecondsPerBeat(props.node.bpm);
+  // Ignore tiny drags (< 10ms)
+  if ((end - start) * secPerBeat < 0.01) {
+    zoomDragStartBeat.value = 0;
+    zoomDragEndBeat.value = 0;
+    return;
+  }
+
+  emit("zoom-select", start * secPerBeat, end * secPerBeat);
+  zoomDragStartBeat.value = 0;
+  zoomDragEndBeat.value = 0;
+};
+
+function onZoomMousedown(evt: MouseEvent): void {
+  if (evt.button !== 0) return;
+  evt.preventDefault();
+  const beat = clientXToGridBeat(evt.clientX);
+  zoomDragStartBeat.value = beat;
+  zoomDragEndBeat.value = beat;
+  isZoomSelecting.value = true;
+  document.addEventListener("mousemove", onZoomDocMousemove);
+  document.addEventListener("mouseup", onZoomDocMouseup, { once: true });
+}
+
+onUnmounted(() => {
+  document.removeEventListener("mousemove", onZoomDocMousemove);
+  document.removeEventListener("mouseup", onZoomDocMouseup);
+});
 
 // ── Playhead ──────────────────────────────────────────────────────────────────
 
 const playheadLeft = computed(
   () =>
     LABEL_WIDTH_PX +
-    (props.currentTime ?? 0) * props.zoomRatio * baseSecondWidthInPixels -
-    scrollLeftPx.value,
+    ((props.currentTime ?? 0) - (timelineCtx?.offsetTime.value ?? 0)) * pxPerSec.value,
 );
+
+// ── Programmatic scroll (for zoom-in / zoom-select from parent) ────────────────
 </script>
 
 <template>
@@ -341,9 +436,7 @@ const playheadLeft = computed(
   >
     <!-- ── Roll body ──────────────────────────────────────────────────────── -->
     <div
-      ref="scrollRef"
-      class="flex-1 flex overflow-auto"
-      @scroll="onScrollBody"
+      class="flex-1 flex overflow-y-auto overflow-x-hidden"
     >
       <!-- Left pitch labels — sticky so they don't scroll horizontally -->
       <PianoRollKeys
@@ -362,6 +455,7 @@ const playheadLeft = computed(
           height: `${totalGridHeight}px`,
           background: gridBackground,
           cursor: activeCursor,
+          transform: `translateX(${-Math.round(offsetTimePx)}px)`,
         }"
         @mousemove="onMousemove"
         @mouseleave="onMouseleave"
@@ -462,6 +556,19 @@ const playheadLeft = computed(
             backgroundColor: `color-mix(in oklab, ${selectionOverlay.color} 15%, transparent)`,
             borderLeft: `1px solid color-mix(in oklab, ${selectionOverlay.color} 60%, transparent)`,
             borderRight: `1px solid color-mix(in oklab, ${selectionOverlay.color} 60%, transparent)`,
+          }"
+        />
+
+        <!-- ── Zoom-select: rubber-band overlay ───────────────────────────── -->
+        <div
+          v-if="activeTool === 'zoom-select' && isZoomSelecting"
+          class="absolute top-0 bottom-0 pointer-events-none z-20"
+          :style="{
+            left: `${Math.min(zoomDragStartBeat, zoomDragEndBeat) * pxPerBeatRender}px`,
+            width: `${Math.abs(zoomDragEndBeat - zoomDragStartBeat) * pxPerBeatRender}px`,
+            backgroundColor: 'color-mix(in oklab, var(--color-primary) 15%, transparent)',
+            borderLeft: '1px solid color-mix(in oklab, var(--color-primary) 60%, transparent)',
+            borderRight: '1px solid color-mix(in oklab, var(--color-primary) 60%, transparent)',
           }"
         />
       </div>

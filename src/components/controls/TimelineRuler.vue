@@ -10,6 +10,10 @@
  * offsetTime       Timeline scroll offset in seconds (from useTimelineStore).
  * ratio            Zoom ratio (from useTimelineStore).
  * currentTime      Current playback position in seconds.
+ * visibleDuration  Optional. When provided, overrides the ratio-based pixel-per-second
+ *                  calculation so the ruler always shows exactly this many seconds
+ *                  across its full width. Used by RecordedNodeView where the waveform
+ *                  is window-fit rather than pixel-scaled. Default: derived from ratio.
  *
  * Emits
  * ─────
@@ -24,6 +28,8 @@ const props = defineProps<{
   offsetTime: number;
   ratio: number;
   currentTime: number;
+  /** When set, the ruler spans exactly this many seconds across its canvas width. */
+  visibleDuration?: number;
 }>();
 
 const emit = defineEmits<{
@@ -71,8 +77,12 @@ const render = () => {
 
   // ── Draw tick marks ───────────────────────────────────────────────────────
 
-  // Determine a tick interval that isn't too dense or too sparse
-  const pixelsPerSecond = props.ratio * 16; // baseSecondWidthInPixels = 16
+  // When visibleDuration is provided (window-fit mode), derive px/sec from the
+  // canvas width so the ruler spans exactly the visible window. Otherwise fall
+  // back to the DAW-style fixed pixel-per-second scale (ratio * 16).
+  const pixelsPerSecond = props.visibleDuration
+    ? w / props.visibleDuration
+    : props.ratio * 16; // baseSecondWidthInPixels = 16
   const minTickSpacing = 40; // px
   const rawInterval = minTickSpacing / pixelsPerSecond;
 
@@ -149,6 +159,7 @@ watch(
     props.ratio,
     props.offsetTime,
     props.durationSeconds,
+    props.visibleDuration,
   ],
   render,
 );
@@ -171,7 +182,12 @@ const xToTime = (clientX: number): number => {
   if (!canvasRef.value) return 0;
   const rect = canvasRef.value.getBoundingClientRect();
   const px = clientX - rect.left;
-  return formatPixelToTime(props.ratio, px) + props.offsetTime;
+  // In window-fit mode, derive seconds-per-pixel from visibleDuration.
+  // In DAW mode, use the ratio * baseSecondWidthInPixels scale.
+  const secondsPerPixel = props.visibleDuration
+    ? props.visibleDuration / rect.width
+    : formatPixelToTime(props.ratio, 1);
+  return px * secondsPerPixel + props.offsetTime;
 };
 
 const onMousedown = (evt: MouseEvent) => {

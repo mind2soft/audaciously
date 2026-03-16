@@ -20,7 +20,6 @@ import type { PlacedNote } from "../features/nodes";
 import type { InstrumentPitch } from "../lib/music/instruments";
 import {
   snapBeatRound,
-  clientXToRawBeat,
   notesInRange,
   cutNotesInRange,
 } from "../lib/piano-roll/note-utils";
@@ -34,10 +33,10 @@ const SCROLL_SPEED_PX = 5; // px per animation frame
 export interface CutToolContext {
   notes: ComputedRef<PlacedNote[]>;
   pitches: ComputedRef<InstrumentPitch[]>;
-  pxPerBeat: ComputedRef<number>;
   snapBeats: ComputedRef<number>;
   rowHeightPx: number;
-  gridRef: Ref<HTMLDivElement | undefined>;
+  /** Converts a viewport clientX to an unsnapped beat position. */
+  clientXToBeat: (clientX: number) => number;
   scrollRef: Ref<HTMLDivElement | undefined>;
   emitNotes: (notes: PlacedNote[]) => void;
   /** Called with the number of notes actually cut (> 0 guaranteed). */
@@ -78,8 +77,7 @@ export function useCutTool(ctx: CutToolContext) {
   // ── Coordinate helpers ─────────────────────────────────────────────────────
 
   function getRawBeat(clientX: number): number {
-    const rect = ctx.gridRef.value?.getBoundingClientRect();
-    return rect ? clientXToRawBeat(clientX, rect, ctx.pxPerBeat.value) : 0;
+    return ctx.clientXToBeat(clientX);
   }
 
   // ── Auto-scroll ────────────────────────────────────────────────────────────

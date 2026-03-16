@@ -2,10 +2,14 @@
 /**
  * RecordedNodeView — visualizer + controls for a RecordedNode.
  *
- * Layout (top-to-bottom):
- *   Row 1  Header: [80px label | TimelineRuler flex-1 | ZoomControl w-40]
- *   Row 2  Waveform / recording visualizer (flex-1)
- *   Row 3  Player controls
+ * Layout when buffer exists (top-to-bottom):
+ *   Row 1  Header: [TimelineRuler flex-1]
+ *   Row 2  Waveform (flex-1)
+ *   Row 3  Player controls … [divider] [ZoomToolbar]
+ *
+ * Layout when no buffer (idle / recording):
+ *   Row 1  AudioAnalyzerView (flex-1)
+ *   Row 2  Record controls
  *
  * Props
  * ─────
@@ -14,14 +18,15 @@
 
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from "vue";
 import { recorder } from "../../../lib/audio/recorder-singleton";
-import type { RecorderBufferUpdateEvent } from "../../../lib/audio/recorder";
 import { useNodesStore } from "../../../stores/nodes";
 import { usePlayerStore } from "../../../stores/player";
 import { useNodePlayback } from "../../../composables/useNodePlayback";
 import type { RecordedNode } from "../../../features/nodes";
 import WaveformView from "../../controls/WaveformView.vue";
-import TimelineRuler from "../../controls/TimelineRuler.vue";
-import ZoomControl from "../../controls/ZoomControl.vue";
+import ZoomToolbar from "../../controls/ZoomToolbar.vue";
+import AudioAnalyzerView from "../../controls/AudioAnalyzerView.vue";
+import ScrollableTimeline from "../../controls/ScrollableTimeline.vue";
+import { ZOOM_PX_PER_MIN_MS } from "../../../lib/zoom-constants";
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -32,10 +37,46 @@ const props = defineProps<{ node: RecordedNode }>();
 const nodes = useNodesStore();
 const player = usePlayerStore();
 
-// ── Zoom (ruler only — waveform always shows full buffer) ─────────────────────
+// ── Zoom + scroll ─────────────────────────────────────────────────────────────
 
-const zoomRatio = ref(4);
+// scaleFactor = 1 means full buffer visible.
+const scaleFactor = ref(1);
 const totalDurationSeconds = computed(() => props.node.sourceBuffer?.duration ?? 0);
+
+// Container width (measured via ResizeObserver) drives maxRatio for ZoomToolbar.
+const viewRef = ref<HTMLElement | null>(null);
+const waveformContainerWidth = ref(0);
+
+// maxRatio: at this ratio, 1ms of audio occupies ZOOM_PX_PER_MIN_MS pixels.
+const maxRatio = computed(() => {
+  const total = totalDurationSeconds.value;
+  const w = waveformContainerWidth.value;
+  if (!total || !w) return 1;
+  return Math.max(1, (total * ZOOM_PX_PER_MIN_MS * 1000) / w);
+});
+
+let _viewObserver: ResizeObserver | null = null;
+
+const zoomSelectActive = ref(false);
+
+function zoomOut(): void {
+  scaleFactor.value = Math.max(1, scaleFactor.value / 2);
+}
+
+function zoomIn(): void {
+  scaleFactor.value = Math.min(maxRatio.value, scaleFactor.value * 2);
+}
+
+function onZoomSelect(startTime: number, endTime: number): void {
+  const total = totalDurationSeconds.value;
+  const duration = endTime - startTime;
+  if (duration <= 0 || !total) return;
+  const newSF = Math.min(Math.max(total / duration, 1), maxRatio.value);
+  // Set currentTime to midpoint FIRST, then scaleFactor so watcher reads updated time.
+  previewSeek((startTime + endTime) / 2);
+  scaleFactor.value = newSF;
+  zoomSelectActive.value = false;
+}
 
 // ── Node playback ─────────────────────────────────────────────────────────────
 
@@ -65,12 +106,20 @@ const recordingDurationLabel = computed(() => {
 
 let recorderDurationTimer: ReturnType<typeof setInterval> | null = null;
 
-const liveBuffer = ref<AudioBuffer | null>(null);
+const analyserBuffer = ref<AudioBuffer | null>(null);
 
 // Cleanup function set in onMounted and called in onUnmounted.
 let _removeRecorderListeners: (() => void) | undefined;
 
 onMounted(() => {
+  // ResizeObserver to track the waveform container width for maxRatio.
+  if (viewRef.value) {
+    _viewObserver = new ResizeObserver(([entry]) => {
+      waveformContainerWidth.value = entry?.contentRect.width ?? 0;
+    });
+    _viewObserver.observe(viewRef.value);
+  }
+
   if (!recorder) return;
 
   const onRecord = () => {
@@ -83,6 +132,7 @@ onMounted(() => {
 
   const onStop = async () => {
     isRecording.value = false;
+    analyserBuffer.value = null;
     if (recorderDurationTimer) {
       clearInterval(recorderDurationTimer);
       recorderDurationTimer = null;
@@ -97,24 +147,18 @@ onMounted(() => {
     }
   };
 
-  const onTimeUpdate = () => {
-    // live analyser handled via bufferupdate below
-  };
-
-  const onBufferUpdate = (event: RecorderBufferUpdateEvent) => {
-    liveBuffer.value = event.buffer;
+  const onTimeUpdate = (event: { analyserBuffer: AudioBuffer }) => {
+    analyserBuffer.value = event.analyserBuffer;
   };
 
   recorder.addEventListener("record", onRecord);
   recorder.addEventListener("stop", onStop);
   recorder.addEventListener("timeupdate", onTimeUpdate);
-  recorder.addEventListener("bufferupdate", onBufferUpdate);
 
   _removeRecorderListeners = () => {
     recorder!.removeEventListener("record", onRecord);
     recorder!.removeEventListener("stop", onStop);
     recorder!.removeEventListener("timeupdate", onTimeUpdate);
-    recorder!.removeEventListener("bufferupdate", onBufferUpdate);
   };
 });
 
@@ -123,7 +167,7 @@ watch(
   () => props.node,
   (next, prev) => {
     if (next?.id !== prev?.id) {
-      liveBuffer.value = null;
+      analyserBuffer.value = null;
       if (isRecording.value) {
         recorder?.stop();
       }
@@ -197,110 +241,40 @@ onUnmounted(() => {
   previewStop();
   if (recorderDurationTimer) clearInterval(recorderDurationTimer);
   _removeRecorderListeners?.();
+  _viewObserver?.disconnect();
+  _viewObserver = null;
 });
 </script>
 
 <template>
-  <div class="flex flex-col h-full w-full overflow-hidden bg-base-100">
-    <!-- ── Row 1: Header (label | ruler | zoom) ───────────────────────────── -->
-    <div class="shrink-0 flex items-stretch h-10 border-b border-base-300/60 bg-base-200">
-      <!-- Track label -->
-      <div
-        class="shrink-0 flex items-center gap-1.5 px-2 border-r border-base-300/60 text-xs text-base-content/60"
-        style="width: 80px"
+  <div ref="viewRef" class="flex flex-col h-full w-full overflow-hidden bg-base-100">
+
+    <!-- ── Has buffer: 3-row layout ──────────────────────────────────────── -->
+    <template v-if="node.sourceBuffer">
+      <!-- Row 1+2: ScrollableTimeline wraps ruler + waveform -->
+      <ScrollableTimeline
+        class="flex-1 min-h-0"
+        :total-duration="totalDurationSeconds"
+        :min-scale-factor="1"
+        :max-pixels-per-second="ZOOM_PX_PER_MIN_MS * 1000"
+        :current-time="previewTime"
+        :scale-factor="scaleFactor"
+        :playing="previewState === 'playing'"
+        @update:current-time="previewSeek"
+        @update:scale-factor="scaleFactor = $event"
       >
-        <i class="iconify mdi--microphone text-sm" aria-hidden="true" />
-        <span class="truncate">Audio</span>
-      </div>
-
-      <!-- Timeline ruler (shows playback position, allows seeking) -->
-      <TimelineRuler
-        class="flex-1 min-w-0"
-        :durationSeconds="totalDurationSeconds"
-        :offsetTime="0"
-        :ratio="zoomRatio"
-        :currentTime="previewTime"
-        @seek="previewSeek"
-      />
-
-      <!-- Zoom control -->
-      <ZoomControl
-        v-model="zoomRatio"
-        :min="1"
-        :max="20"
-        class="w-40 shrink-0 border-l border-base-300/60"
-      />
-    </div>
-
-    <!-- ── Row 2: Visualizer (flex-1) ──────────────────────────────────────── -->
-    <div class="flex-1 min-h-0 flex items-center justify-center overflow-hidden">
-      <!-- Recording in progress → live waveform or spinner -->
-      <template v-if="isRecording">
-        <div class="w-full h-full flex items-center justify-center p-2">
-          <WaveformView
-            v-if="liveBuffer"
-            :buffer="liveBuffer"
-            :currentTime="previewTime"
-            class="w-full h-full"
-            @seek="() => {}"
-          />
-          <div v-else class="text-sm text-base-content/40 flex items-center gap-2">
-            <i class="iconify mdi--loading animate-spin size-5" />
-            Recording… {{ recordingDurationLabel }}
-          </div>
-        </div>
-      </template>
-
-      <!-- Has buffer → interactive waveform -->
-      <template v-else-if="node.sourceBuffer">
         <WaveformView
           :buffer="node.sourceBuffer"
           :currentTime="previewTime"
+          :zoom-select-active="zoomSelectActive"
           class="w-full h-full"
           @seek="previewSeek"
+          @zoom-select="onZoomSelect"
         />
-      </template>
+      </ScrollableTimeline>
 
-      <!-- No buffer yet (empty state handled in this block too) -->
-      <template v-else>
-        <div class="flex flex-col items-center gap-2 text-base-content/30 text-sm">
-          <i class="iconify mdi--microphone-outline size-10 mb-1" aria-hidden="true" />
-          <p>No recording yet</p>
-        </div>
-      </template>
-    </div>
-
-    <!-- ── Player Controls ─────────────────────────────────────────────── -->
-    <div class="shrink-0 flex items-center gap-2 px-3 py-1.5 bg-base-200 border-t border-base-300/60 min-h-10">
-      <!-- No buffer, not recording -->
-      <template v-if="!node.sourceBuffer && !isRecording">
-        <button class="btn btn-sm btn-error gap-1" title="Start recording" @click="startRecording">
-          <i class="iconify mdi--record size-4" aria-hidden="true" />
-          Record
-        </button>
-        <span class="text-xs text-base-content/50">0:00</span>
-        <label class="flex items-center gap-1.5 text-xs text-base-content/60 ml-2 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            class="checkbox checkbox-xs"
-            v-model="includeTimeline"
-            :disabled="player.totalDuration === 0"
-          />
-          Include timeline playback
-        </label>
-      </template>
-
-      <!-- Recording in progress -->
-      <template v-else-if="isRecording">
-        <button class="btn btn-sm btn-warning gap-1" title="Stop recording" @click="stopRecording">
-          <i class="iconify mdi--stop size-4" aria-hidden="true" />
-          Stop
-        </button>
-        <span class="text-xs text-base-content/50 tabular-nums">{{ recordingDurationLabel }}</span>
-      </template>
-
-      <!-- Has buffer -->
-      <template v-else-if="node.sourceBuffer">
+      <!-- Row 3: Player controls -->
+      <div class="shrink-0 flex items-center gap-2 px-3 py-1.5 bg-base-200 border-t border-base-300/60 min-h-10">
         <button
           class="btn btn-sm btn-ghost btn-square"
           :title="!node.targetBuffer ? 'Preparing audio…' : previewState === 'playing' ? 'Pause' : 'Play'"
@@ -336,10 +310,61 @@ onUnmounted(() => {
           <i class="iconify mdi--trash-can-outline size-3.5" aria-hidden="true" />
           Reset
         </button>
-      </template>
-    </div>
 
-    <!-- ── Reset confirmation dialog ─────────────────────────────────────── -->
+        <div class="w-px h-5 bg-base-300/60 mx-1" aria-hidden="true" />
+
+        <ZoomToolbar
+          :zoom-ratio="scaleFactor"
+          :min-ratio="1"
+          :max-ratio="maxRatio"
+          :zoom-select-active="zoomSelectActive"
+          :disabled="previewState === 'playing'"
+          @zoom-out="zoomOut"
+          @zoom-in="zoomIn"
+          @update:zoom-select-active="zoomSelectActive = $event"
+        />
+      </div>
+    </template>
+
+    <!-- ── No buffer: 2-row layout (idle / recording) ────────────────────── -->
+    <template v-else>
+      <!-- Row 1: Audio analyzer (flex-1) -->
+      <div class="flex-1 min-h-0 overflow-hidden">
+        <AudioAnalyzerView :analyser-buffer="analyserBuffer" class="w-full h-full" />
+      </div>
+
+      <!-- Row 2: Record controls -->
+      <div class="shrink-0 flex items-center gap-2 px-3 py-1.5 bg-base-200 border-t border-base-300/60 min-h-10">
+        <!-- Not recording -->
+        <template v-if="!isRecording">
+          <button class="btn btn-sm btn-error gap-1" title="Start recording" @click="startRecording">
+            <i class="iconify mdi--record size-4" aria-hidden="true" />
+            Record
+          </button>
+          <span class="text-xs text-base-content/50">0:00</span>
+          <label class="flex items-center gap-1.5 text-xs text-base-content/60 ml-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              class="checkbox checkbox-xs"
+              v-model="includeTimeline"
+              :disabled="player.totalDuration === 0"
+            />
+            Include timeline playback
+          </label>
+        </template>
+
+        <!-- Recording in progress -->
+        <template v-else>
+          <button class="btn btn-sm btn-warning gap-1" title="Stop recording" @click="stopRecording">
+            <i class="iconify mdi--stop size-4" aria-hidden="true" />
+            Stop
+          </button>
+          <span class="text-xs text-base-content/50 tabular-nums">{{ recordingDurationLabel }}</span>
+        </template>
+      </div>
+    </template>
+
+    <!-- ── Reset confirmation dialog (always present) ─────────────────────── -->
     <dialog class="modal" :class="{ 'modal-open': confirmReset }">
       <div class="modal-box bg-base-300 max-w-sm">
         <h3 class="mb-2 text-lg font-bold">Delete Recording?</h3>
