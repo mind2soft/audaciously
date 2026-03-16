@@ -22,6 +22,7 @@
 
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { formatPixelToTime, formatTimeScale } from "../../lib/util/formatTime";
+import { generateTicks } from "../../lib/util/tickMarks";
 
 const props = defineProps<{
   durationSeconds: number;
@@ -83,48 +84,32 @@ const render = () => {
   const pixelsPerSecond = props.visibleDuration
     ? w / props.visibleDuration
     : props.ratio * 16; // baseSecondWidthInPixels = 16
-  const minTickSpacing = 40; // px
-  const rawInterval = minTickSpacing / pixelsPerSecond;
-
-  // Round to a "nice" interval
-  const magnitude = Math.pow(10, Math.floor(Math.log10(rawInterval)));
-  const niceFactor = rawInterval / magnitude;
-  let tickInterval: number;
-  if (niceFactor < 1.5) tickInterval = magnitude;
-  else if (niceFactor < 3.5) tickInterval = 2 * magnitude;
-  else if (niceFactor < 7.5) tickInterval = 5 * magnitude;
-  else tickInterval = 10 * magnitude;
-
-  tickInterval = Math.max(tickInterval, 0.001);
 
   const startTime = props.offsetTime;
   const endTime = startTime + w / pixelsPerSecond;
 
-  // First tick at or after startTime
-  const firstTick = Math.ceil(startTime / tickInterval) * tickInterval;
+  // generateTicks selects human-readable step intervals from a predefined table
+  // (whole seconds, musical fractions, whole minutes) and computes positions via
+  // index multiplication — no floating-point accumulation across iterations.
+  const ticks = generateTicks(startTime, endTime, pixelsPerSecond);
 
-  ctx.font = `10px monospace`;
-  ctx.fillStyle = textColor;
-  ctx.strokeStyle = tickColor;
+  ctx.font = "10px monospace";
   ctx.lineWidth = 1;
 
-  for (let t = firstTick; t <= endTime + tickInterval; t += tickInterval) {
-    const x = (t - startTime) * pixelsPerSecond;
-    if (x < 0 || x > w + 1) continue;
+  for (const tick of ticks) {
+    const snapX = Math.round(tick.x) + 0.5;
 
-    const isMajor = Math.abs(Math.round(t / tickInterval) % 4) === 0;
-
-    // Tick line
+    // Tick line — major ticks run full height, minor ticks from midpoint down
     ctx.beginPath();
-    ctx.strokeStyle = isMajor ? "rgba(128,128,128,0.6)" : tickColor;
-    ctx.moveTo(Math.round(x) + 0.5, isMajor ? 0 : h / 2);
-    ctx.lineTo(Math.round(x) + 0.5, h);
+    ctx.strokeStyle = tick.isMajor ? "rgba(128,128,128,0.6)" : tickColor;
+    ctx.moveTo(snapX, tick.isMajor ? 0 : h / 2);
+    ctx.lineTo(snapX, h);
     ctx.stroke();
 
-    // Label (only on major ticks or every other if zoomed out)
-    if (isMajor) {
+    // Label on major ticks only (whole-value boundaries)
+    if (tick.isMajor) {
       ctx.fillStyle = textColor;
-      ctx.fillText(formatTimeScale(t), Math.round(x) + 3, h - 4);
+      ctx.fillText(formatTimeScale(tick.time), snapX + 3, h - 4);
     }
   }
 
