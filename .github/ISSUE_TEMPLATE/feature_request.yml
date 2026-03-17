@@ -1,0 +1,54 @@
+name: Feature Request
+description: Propose a new capability or behaviour.
+labels: [feature]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before opening a request, keep the project constraints in mind:
+        - **No server, no accounts, no cloud sync** — everything must run entirely client-side.
+        - **No plugin system** — features are built in, not loaded at runtime.
+        - **No audio libraries** — new audio primitives go through the raw Web Audio API.
+
+        If you're not sure whether an idea fits, open a [Discussion](https://github.com/mind2soft/audaciously/discussions) first.
+
+  - type: textarea
+    id: overview
+    attributes:
+      label: Overview
+      description: What do you want to add, and why does it belong in Audaciously?
+      placeholder: e.g. "A per-node compressor effect, so recordings with dynamic range problems can be levelled before export."
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / Motivation
+      description: What are you unable to do today? What workflow does this unblock?
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: How do you envision this working in the UI and under the hood?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Other approaches you thought of, and why you ruled them out.
+
+  - type: textarea
+    id: criteria
+    attributes:
+      label: Success Criteria
+      description: How will we know this is done and working correctly?
+      placeholder: |
+        - Compressor is available in the per-node effects chain
+        - Parameters (threshold, ratio, attack, release) are editable
+        - Changes take effect in real-time playback and offline export

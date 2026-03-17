@@ -1,0 +1,40 @@
+name: Improvement
+description: Something already exists but could work better.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template when you want to improve something that already works — performance, UX, code quality, accessibility, or anything in between.
+
+  - type: textarea
+    id: current
+    attributes:
+      label: Current State
+      description: What exists today, and what's the specific problem with it?
+      placeholder: e.g. "The timeline ruler redraws every animation frame even when nothing has changed, causing visible CPU usage during idle playback."
+    validations:
+      required: true
+
+  - type: textarea
+    id: improvement
+    attributes:
+      label: Proposed Improvement
+      description: What should it do instead? Be as concrete as possible.
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact
+      description: Who benefits, and how much? (e.g. "affects all users on low-end hardware during playback")
+
+  - type: textarea
+    id: criteria
+    attributes:
+      label: Success Criteria
+      description: How do we know the improvement is good enough?
+      placeholder: |
+        - Ruler redraws only when scroll position or zoom level changes
+        - CPU usage during idle playback drops measurably in DevTools
