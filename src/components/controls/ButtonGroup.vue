@@ -9,7 +9,7 @@ export interface ButtonGroupItem {
   label: string;
   /** Tooltip text shown on hover (may be longer / more descriptive than label). */
   title: string;
-  /** MDI icon name without the "mdi--" prefix, e.g. "pencil-outline". */
+  /** Iconify CSS class name, e.g. "mdi--pencil-outline". */
   icon?: string;
   /** Text/glyph shown when no MDI icon is available (e.g. note fractions). */
   glyph?: string;
@@ -115,9 +115,9 @@ function select(id: string): void {
     >
       <i
         v-if="item.icon"
-        :class="`iconify mdi--${item.icon} size-4`"
-        aria-hidden="true"
-      />
+        :class="`iconify ${item.icon} size-4`"
+          aria-hidden="true"
+        />
       <span v-else-if="item.glyph" class="text-lg">{{ item.glyph }}</span>
     </button>
   </div>
@@ -136,7 +136,7 @@ function select(id: string): void {
     >
       <i
         v-if="activeItem.icon"
-        :class="`iconify mdi--${activeItem.icon} size-4`"
+        :class="`iconify ${activeItem.icon} size-4`"
         aria-hidden="true"
       />
       <span v-else-if="activeItem.glyph" class="text-lg">{{
@@ -160,7 +160,7 @@ function select(id: string): void {
         >
           <i
             v-if="item.icon"
-            :class="`iconify mdi--${item.icon} size-4`"
+            :class="`iconify ${item.icon} size-4`"
             aria-hidden="true"
           />
           <span

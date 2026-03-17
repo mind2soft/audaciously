@@ -123,26 +123,26 @@ const noteTypeItems: ButtonGroupItem[] = NOTE_TYPE_LIST.map((nt) => ({
 
 /** Reactive — paste is disabled when the clipboard is empty. */
 const toolItems = computed<ButtonGroupItem[]>(() => [
-  { id: "place", label: "Place", title: "Place notes", icon: "pencil-outline" },
+  { id: "place", label: "Place", title: "Place notes", icon: "mdi--pencil-outline" },
   {
     id: "pan",
     label: "Pan",
     title: "Pan — drag notes in time",
-    icon: "hand-front-left-outline",
+    icon: "mdi--hand-front-left-outline",
   },
-  { id: "copy", label: "Copy", title: "Copy notes", icon: "content-copy" },
+  { id: "copy", label: "Copy", title: "Copy notes", icon: "mdi--content-copy" },
   {
     id: "cut",
     label: "Cut",
     title: "Cut — remove notes and close gap",
-    icon: "content-cut",
+    icon: "mdi--content-cut",
     activeClass: "btn-warning",
   },
   {
     id: "paste",
     label: "Paste",
     title: "Paste notes",
-    icon: "content-paste",
+    icon: "mdi--content-paste",
     disabled: !hasPianoNotes.value,
   },
 ]);
