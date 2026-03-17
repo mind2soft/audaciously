@@ -4,7 +4,7 @@
 
 **[🎙️ Open the live demo →](https://mind2soft.github.io/audaciously/)**
 
-*v0.0.3 — intentionally rough. Audaciously experimental.*
+_v0.1.0 — intentionally rough. Audaciously experimental._
 
 ---
 
@@ -39,25 +39,25 @@ Notes aren't organised in a flat track list — they live in a **node tree**: fo
 - Built-in instruments: **piano** and **drums**
 - Full **piano roll editor** with five dedicated tools:
 
-| Tool | What it does |
-|------|-------------|
-| **Place** | Draw notes directly onto the grid; click existing notes to erase |
-| **Pan** | Drag every note after a beat boundary in time (snaps to longest note duration) |
-| **Copy** | Drag-select a range, copy it to the internal clipboard |
-| **Cut** | Drag-select a range, remove notes and close the resulting gap |
-| **Paste** | Insert clipboard notes at the cursor, pushing existing notes right |
+| Tool      | What it does                                                                   |
+| --------- | ------------------------------------------------------------------------------ |
+| **Place** | Draw notes directly onto the grid; click existing notes to erase               |
+| **Pan**   | Drag every note after a beat boundary in time (snaps to longest note duration) |
+| **Copy**  | Drag-select a range, copy it to the internal clipboard                         |
+| **Cut**   | Drag-select a range, remove notes and close the resulting gap                  |
+| **Paste** | Insert clipboard notes at the cursor, pushing existing notes right             |
 
 - Internal clipboard backed by `localStorage` — paste across tabs
 - Piano roll zoom control
 
 ### ✂️ Timeline editing
 
-| Tool | What it does |
-|------|-------------|
-| **Select** | Click a sequence to select it |
-| **Split** | Cut a sequence at any point into two independent clips |
-| **Move** | Drag a sequence to any position on the timeline |
-| **Cut** | Remove a sequence from its track |
+| Tool       | What it does                                           |
+| ---------- | ------------------------------------------------------ |
+| **Select** | Click a sequence to select it                          |
+| **Split**  | Cut a sequence at any point into two independent clips |
+| **Move**   | Drag a sequence to any position on the timeline        |
+| **Cut**    | Remove a sequence from its track                       |
 
 ### 🎚️ Per-node effects chain
 
@@ -102,20 +102,20 @@ The interesting parts — the things that required working around the Web Audio 
 
 ## Tech stack
 
-| Layer | Technology |
-|-------|-----------|
-| Framework | [Vue 3](https://vuejs.org/) — `<script setup>` Composition API |
-| Language | [TypeScript 5](https://www.typescriptlang.org/) (strict) |
-| Styling | [Tailwind CSS 4](https://tailwindcss.com/) + [DaisyUI 5](https://v5.daisyui.com/) |
-| Build | [Vite 6](https://vite.dev/) |
-| State | [Pinia](https://pinia.vuejs.org/) |
-| Persistence | [Dexie](https://dexie.org/) (IndexedDB wrapper) |
-| Audio | Web Audio API — zero libraries |
-| MP3 encoding | [lamejs](https://github.com/zhuker/lamejs) |
-| Compression | [fflate](https://github.com/101arrowz/fflate) |
-| Icons | [Iconify / MDI](https://icon-sets.iconify.design/mdi/) |
-| CI / CD | GitHub Actions → GitHub Pages |
-| License | GPL-3.0 |
+| Layer        | Technology                                                                        |
+| ------------ | --------------------------------------------------------------------------------- |
+| Framework    | [Vue 3](https://vuejs.org/) — `<script setup>` Composition API                    |
+| Language     | [TypeScript 5](https://www.typescriptlang.org/) (strict)                          |
+| Styling      | [Tailwind CSS 4](https://tailwindcss.com/) + [DaisyUI 5](https://v5.daisyui.com/) |
+| Build        | [Vite 6](https://vite.dev/)                                                       |
+| State        | [Pinia](https://pinia.vuejs.org/)                                                 |
+| Persistence  | [Dexie](https://dexie.org/) (IndexedDB wrapper)                                   |
+| Audio        | Web Audio API — zero libraries                                                    |
+| MP3 encoding | [lamejs](https://github.com/zhuker/lamejs)                                        |
+| Compression  | [fflate](https://github.com/101arrowz/fflate)                                     |
+| Icons        | [Iconify / MDI](https://icon-sets.iconify.design/mdi/)                            |
+| CI / CD      | GitHub Actions → GitHub Pages                                                     |
+| License      | GPL-3.0                                                                           |
 
 ---
 
@@ -137,26 +137,13 @@ The project deploys automatically to GitHub Pages on every push to `main` via `.
 
 ## Browser compatibility
 
-| Feature | Chrome | Firefox | Safari |
-|---------|--------|---------|--------|
-| Playback & recording | ✅ | ✅ | ✅ |
-| Full feature set | ✅ | ✅ | ✅ |
-| Output device selection | ✅ 110+ | ❌ | ❌ |
+| Feature                 | Chrome  | Firefox | Safari |
+| ----------------------- | ------- | ------- | ------ |
+| Playback & recording    | ✅      | ✅      | ✅     |
+| Full feature set        | ✅      | ✅      | ✅     |
+| Output device selection | ✅ 110+ | ❌      | ❌     |
 
 > **Recording tip:** Use headphones when overdubbing with playback. With audio processing off by default, acoustic feedback is the only enemy.
-
----
-
-## Roadmap
-
-v0.0.3 is a working experiment, not a finished tool. Things on the table:
-
-- **Audio filters** — equaliser, normalise, pitch shift, noise reduction
-- **Paste modes** — splice, fill, overwrite (see [docs/NOTES.md](docs/NOTES.md))
-- **Timeline improvements** — better scrolling, zoom, snapping
-- **More instruments** — the node architecture is ready for them
-
-Pull requests, issues, and "what if you tried..." questions are all welcome.
 
 ---
 
@@ -171,7 +158,7 @@ The architecture is intentionally lean — factory functions over classes, raw W
 pnpm dev
 ```
 
-Report bugs, propose ideas, or open a PR. This is v0.0.3 — there's a lot of road ahead.
+Report bugs, propose ideas, or open a PR. This is v0.1.1 — there's a lot of road ahead.
 
 ---
 

@@ -2,7 +2,7 @@
 
 **[Open the app →](https://mind2soft.github.io/audaciously/)**
 
-v0.0.3 · browser-based · no install · no account
+v0.1.0 · browser-based · no install · no account
 
 ---
 
@@ -20,12 +20,12 @@ The UI has three main areas:
 └─────────────────┴────────────────────────────────────┘
 ```
 
-| Area | What it's for |
-|------|--------------|
-| **App Header** | Project name (click to rename), project browser, export, settings, play/pause/stop, status |
-| **Node Panel** (left) | Tree of all nodes in the project — add, rename, drag onto the timeline |
-| **Node View** (top-right) | Editor for the selected node: Piano Roll or Waveform editor |
-| **Sequence Panel** (bottom-right) | Multi-track timeline — arrange segments in time |
+| Area                              | What it's for                                                                              |
+| --------------------------------- | ------------------------------------------------------------------------------------------ |
+| **App Header**                    | Project name (click to rename), project browser, export, settings, play/pause/stop, status |
+| **Node Panel** (left)             | Tree of all nodes in the project — add, rename, drag onto the timeline                     |
+| **Node View** (top-right)         | Editor for the selected node: Piano Roll or Waveform editor                                |
+| **Sequence Panel** (bottom-right) | Multi-track timeline — arrange segments in time                                            |
 
 ---
 
@@ -35,11 +35,11 @@ Nodes are the building blocks of a project. They live in the **Node Panel** on t
 
 ### Node types
 
-| Type | What it holds | Can place on timeline? |
-|------|--------------|----------------------|
-| **Folder** | Groups other nodes | No |
-| **Recorded** | A captured audio buffer | Yes |
-| **Instrument** | Synthesised notes (piano or drums) | Yes |
+| Type           | What it holds                      | Can place on timeline? |
+| -------------- | ---------------------------------- | ---------------------- |
+| **Folder**     | Groups other nodes                 | No                     |
+| **Recorded**   | A captured audio buffer            | Yes                    |
+| **Instrument** | Synthesised notes (piano or drums) | Yes                    |
 
 ### Managing nodes
 
@@ -79,13 +79,13 @@ Sets the grid snap size for placing and selecting notes:
 
 ### Editing tools
 
-| Icon | Tool | What it does |
-|------|------|-------------|
-| ✏️ | **Place** | Click empty space to draw a note. Click an existing note to erase it. Default tool. |
-| ✋ | **Pan** | Click a beat line and drag left/right to shift all notes after that point. Snaps to the longest note duration in the moved set. |
-| 📋 | **Copy** | Drag to select a beat range. Notes overlapping the range are highlighted. Release to copy them to the clipboard. |
-| ✂️ | **Cut** | Drag to select a beat range. Release to remove those notes and close the gap — subsequent notes shift left. |
-| 📌 | **Paste** | Click to place the clipboard at the cursor beat. Existing notes shift right to make room. Disabled when clipboard is empty. |
+| Icon | Tool      | What it does                                                                                                                    |
+| ---- | --------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| ✏️   | **Place** | Click empty space to draw a note. Click an existing note to erase it. Default tool.                                             |
+| ✋   | **Pan**   | Click a beat line and drag left/right to shift all notes after that point. Snaps to the longest note duration in the moved set. |
+| 📋   | **Copy**  | Drag to select a beat range. Notes overlapping the range are highlighted. Release to copy them to the clipboard.                |
+| ✂️   | **Cut**   | Drag to select a beat range. Release to remove those notes and close the gap — subsequent notes shift left.                     |
+| 📌   | **Paste** | Click to place the clipboard at the cursor beat. Existing notes shift right to make room. Disabled when clipboard is empty.     |
 
 ### Clipboard
 
@@ -118,12 +118,12 @@ The same node can appear multiple times on the timeline as separate segments —
 
 ### Working with segments
 
-| Action | How |
-|--------|-----|
-| Select | Click the segment |
-| Move | Drag the center handle |
-| Trim start | Drag the left edge handle |
-| Trim end | Drag the right edge handle |
+| Action     | How                        |
+| ---------- | -------------------------- |
+| Select     | Click the segment          |
+| Move       | Drag the center handle     |
+| Trim start | Drag the left edge handle  |
+| Trim end   | Drag the right edge handle |
 
 ### Segment display
 
@@ -136,12 +136,12 @@ The same node can appear multiple times on the timeline as separate segments —
 
 Every Instrument and Recorded node has an effects chain, visible in the **Node Properties** panel when a node is selected.
 
-| Effect | What it does |
-|--------|-------------|
-| **Gain** | Volume multiplier. 1.0 = unity. Values above 1.0 amplify. |
-| **Balance** | Stereo pan. -1 = full left · 0 = centre · +1 = full right |
-| **Fade In** | Linear ramp from silence over N seconds at the start of playback |
-| **Fade Out** | Linear ramp to silence over N seconds at the end of playback |
+| Effect       | What it does                                                     |
+| ------------ | ---------------------------------------------------------------- |
+| **Gain**     | Volume multiplier. 1.0 = unity. Values above 1.0 amplify.        |
+| **Balance**  | Stereo pan. -1 = full left · 0 = centre · +1 = full right        |
+| **Fade In**  | Linear ramp from silence over N seconds at the start of playback |
+| **Fade Out** | Linear ramp to silence over N seconds at the end of playback     |
 
 Effects can be toggled on/off individually. They apply in order during playback.
 
@@ -187,13 +187,13 @@ MP3 encoding runs via lamejs, entirely in-browser.
 
 Open **Settings** from the App Header.
 
-| Setting | What it controls |
-|---------|-----------------|
-| **Input device** | Microphone used for recording |
-| **Output device** | Speakers or headphones for playback (device switch takes effect immediately in Chrome 110+) |
-| **Echo cancellation** | On/off — off by default |
-| **Noise suppression** | On/off — off by default |
-| **Auto gain control** | On/off — off by default |
+| Setting               | What it controls                                                                            |
+| --------------------- | ------------------------------------------------------------------------------------------- |
+| **Input device**      | Microphone used for recording                                                               |
+| **Output device**     | Speakers or headphones for playback (device switch takes effect immediately in Chrome 110+) |
+| **Echo cancellation** | On/off — off by default                                                                     |
+| **Noise suppression** | On/off — off by default                                                                     |
+| **Auto gain control** | On/off — off by default                                                                     |
 
 Audio processing is off by default to preserve clean recordings. Turn them on if you're recording in a noisy environment without headphones.
 
@@ -201,8 +201,8 @@ Audio processing is off by default to preserve clean recordings. Turn them on if
 
 ## Browser compatibility
 
-| Feature | Chrome | Firefox | Safari |
-|---------|--------|---------|--------|
-| Playback & recording | ✅ | ✅ | ✅ |
-| Full feature set | ✅ | ✅ | ✅ |
-| Output device selection | ✅ 110+ | ❌ | ❌ |
+| Feature                 | Chrome  | Firefox | Safari |
+| ----------------------- | ------- | ------- | ------ |
+| Playback & recording    | ✅      | ✅      | ✅     |
+| Full feature set        | ✅      | ✅      | ✅     |
+| Output device selection | ✅ 110+ | ❌      | ❌     |
