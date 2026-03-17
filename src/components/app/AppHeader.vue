@@ -51,7 +51,6 @@ function closeMenu(): void {
 
 <template>
   <div class="flex items-center gap-2 w-full h-full px-2">
-
     <!-- ── [≡] File menu dropdown ──────────────────────────────────────── -->
     <div class="relative">
       <button
@@ -73,17 +72,28 @@ function closeMenu(): void {
         class="absolute left-0 top-full mt-1 z-50 menu menu-sm bg-base-300 border border-base-300/60 rounded-md shadow-lg min-w-48"
       >
         <li role="none">
-          <button role="menuitem" @click="project.browserOpen = true; closeMenu()">
+          <button
+            role="menuitem"
+            @click="
+              project.browserOpen = true;
+              closeMenu();
+            "
+          >
             <i class="iconify mdi--folder-multiple-outline size-4" />
             Project Manager
           </button>
         </li>
-        <li role="separator" aria-hidden="true" class="pointer-events-none"><div class="border-t border-base-content/10 my-0.5 -mx-1" /></li>
+        <li role="separator" aria-hidden="true" class="pointer-events-none">
+          <div class="border-t border-base-content/10 my-0.5 -mx-1" />
+        </li>
         <li role="none">
           <button
             role="menuitem"
             :disabled="!project.hasProject"
-            @click="project.doSave(); closeMenu()"
+            @click="
+              project.doSave();
+              closeMenu();
+            "
           >
             <i class="iconify mdi--content-save-outline size-4" />
             Save
@@ -91,14 +101,30 @@ function closeMenu(): void {
           </button>
         </li>
         <li role="none">
-          <button role="menuitem" @click="project.metadataMode = 'save-as'; project.metadataOpen = true; closeMenu()">
+          <button
+            role="menuitem"
+            @click="
+              project.metadataMode = 'save-as';
+              project.metadataOpen = true;
+              closeMenu();
+            "
+          >
             <i class="iconify mdi--content-save-edit-outline size-4" />
             Save As
           </button>
         </li>
-        <li role="separator" aria-hidden="true" class="pointer-events-none"><div class="border-t border-base-content/10 my-0.5 -mx-1" /></li>
+        <li role="separator" aria-hidden="true" class="pointer-events-none">
+          <div class="border-t border-base-content/10 my-0.5 -mx-1" />
+        </li>
         <li role="none">
-          <button role="menuitem" @click="project.metadataMode = 'edit'; project.metadataOpen = true; closeMenu()">
+          <button
+            role="menuitem"
+            @click="
+              project.metadataMode = 'edit';
+              project.metadataOpen = true;
+              closeMenu();
+            "
+          >
             <i class="iconify mdi--tag-outline size-4" />
             Project Info
           </button>
@@ -107,15 +133,26 @@ function closeMenu(): void {
           <button
             role="menuitem"
             :disabled="!project.hasProject"
-            @click="project.exportOpen = true; closeMenu()"
+            @click="
+              project.exportOpen = true;
+              closeMenu();
+            "
           >
             <i class="iconify mdi--music-note-eighth size-4" />
             Export Audio
           </button>
         </li>
-        <li role="separator" aria-hidden="true" class="pointer-events-none"><div class="border-t border-base-content/10 my-0.5 -mx-1" /></li>
+        <li role="separator" aria-hidden="true" class="pointer-events-none">
+          <div class="border-t border-base-content/10 my-0.5 -mx-1" />
+        </li>
         <li role="none">
-          <button role="menuitem" @click="project.settingsOpen = true; closeMenu()">
+          <button
+            role="menuitem"
+            @click="
+              project.settingsOpen = true;
+              closeMenu();
+            "
+          >
             <i class="iconify mdi--cog-outline size-4" />
             Settings
           </button>
@@ -135,10 +172,7 @@ function closeMenu(): void {
     <div class="w-px h-6 bg-base-300/60 shrink-0" aria-hidden="true" />
 
     <!-- ── Project Name (editable) ──────────────────────────────────────── -->
-    <ProjectName
-      v-model="projectName"
-      class="min-w-0"
-    />
+    <ProjectName v-model="projectName" class="min-w-0" />
 
     <!-- ── Spacer ──────────────────────────────────────────────────────── -->
     <div class="flex-1" />
@@ -177,6 +211,5 @@ function closeMenu(): void {
     >
       <i class="iconify mdi--github size-5" aria-hidden="true" />
     </a>
-
   </div>
 </template>

@@ -17,8 +17,7 @@ export function useNotePreview() {
 
   function playNote(pitchId: string, durationSec = 0.4): void {
     const ctx = getContext();
-    const fire = () =>
-      playPianoNote(ctx, ctx.destination, pitchId, ctx.currentTime, durationSec);
+    const fire = () => playPianoNote(ctx, ctx.destination, pitchId, ctx.currentTime, durationSec);
 
     if (ctx.state === "suspended") {
       ctx.resume().then(fire);

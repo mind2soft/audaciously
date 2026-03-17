@@ -167,5 +167,5 @@ export default function createStereoBalanceNode(
     },
   });
 
-  return upMixer as any as StereoBalanceNode;
+  return upMixer as unknown as StereoBalanceNode;
 }

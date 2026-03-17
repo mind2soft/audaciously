@@ -329,11 +329,11 @@ function doRender(): void {
   ctx2d.scale(dpr, dpr);
   ctx2d.clearRect(0, 0, w, h);
 
-  const primaryColor   = resolveColor("--color-primary");
+  const primaryColor = resolveColor("--color-primary");
   const secondaryColor = resolveColor("--color-secondary");
-  const accentColor    = resolveColor("--color-accent");
-  const warningColor   = resolveColor("--color-warning");
-  const infoColor      = resolveColor("--color-info");
+  const accentColor = resolveColor("--color-accent");
+  const warningColor = resolveColor("--color-warning");
+  const infoColor = resolveColor("--color-info");
 
   const ob = offsetBeat.value;
   const ppb = pxPerBeat.value;

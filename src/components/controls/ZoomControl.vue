@@ -55,8 +55,7 @@ const sliderValue = computed(
 const sliderToRatio = (pos: number): number =>
   Math.exp(logMin.value + (pos / 100) * logRange.value);
 
-const clamp = (v: number): number =>
-  Math.min(Math.max(v, props.min), props.max);
+const clamp = (v: number): number => Math.min(Math.max(v, props.min), props.max);
 
 // ---------------------------------------------------------------------------
 // Interaction handlers

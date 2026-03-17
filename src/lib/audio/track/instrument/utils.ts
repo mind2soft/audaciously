@@ -2,8 +2,8 @@
 
 import {
   MUSIC_INSTRUMENTS,
-  NOTE_BEATS,
   type MusicInstrumentType,
+  NOTE_BEATS,
   type NoteDuration,
 } from "../../../music/instruments";
 import { baseSecondWidthInPixels } from "../../../util/formatTime";
@@ -15,18 +15,12 @@ export function getSecondsPerBeat(bpm: number): number {
 }
 
 /** Seconds per measure. */
-export function getSecondsPerMeasure(
-  bpm: number,
-  timeSignature: TimeSignature,
-): number {
+export function getSecondsPerMeasure(bpm: number, timeSignature: TimeSignature): number {
   return getSecondsPerBeat(bpm) * timeSignature.beatsPerMeasure;
 }
 
 /** Duration in beats of a note type (respects the track's beat unit). */
-export function getNoteDurationBeats(
-  duration: NoteDuration,
-  beatUnit: number = 4,
-): number {
+export function getNoteDurationBeats(duration: NoteDuration, beatUnit: number = 4): number {
   return NOTE_BEATS[duration] * (4 / beatUnit);
 }
 
@@ -62,22 +56,17 @@ export function pixelToBeatSnapped(
   ratio: number,
   snapBeats: number = 0.25,
 ): number {
-  const rawBeat =
-    px / (getSecondsPerBeat(bpm) * ratio * baseSecondWidthInPixels);
+  const rawBeat = px / (getSecondsPerBeat(bpm) * ratio * baseSecondWidthInPixels);
   return Math.max(0, Math.round(rawBeat / snapBeats) * snapBeats);
 }
 
 /** How many total pitch rows exist for a given instrument. */
-export function getInstrumentRowCount(
-  instrumentId: MusicInstrumentType,
-): number {
+export function getInstrumentRowCount(instrumentId: MusicInstrumentType): number {
   return MUSIC_INSTRUMENTS[instrumentId].pitches.length;
 }
 
 /** Row height (px) for a given instrument. */
-export function getInstrumentRowHeight(
-  instrumentId: MusicInstrumentType,
-): number {
+export function getInstrumentRowHeight(instrumentId: MusicInstrumentType): number {
   return MUSIC_INSTRUMENTS[instrumentId].rowHeight;
 }
 

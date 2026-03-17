@@ -1,8 +1,8 @@
 import type {
-  NoteDuration,
-  MusicInstrumentType,
-  OctaveRange,
   InstrumentPitchKey,
+  MusicInstrumentType,
+  NoteDuration,
+  OctaveRange,
 } from "../../../music/instruments";
 import type { AudioTrack, AudioTrackJSON } from "../index";
 

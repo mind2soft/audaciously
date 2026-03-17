@@ -1,20 +1,16 @@
 import { unzip } from "fflate";
 import { nanoid } from "nanoid";
-import {
-  db,
-  type ProjectRecord,
-  type NodeRecord,
-  type TrackRecord,
-  type SegmentRecord,
-  type AudioBlobRecord,
-} from "./db";
-import {
-  validateManifest,
-  type AwpManifest,
-  type AwpTrackEntry,
-} from "./awp-manifest";
-import { checkAvailableSpace } from "./storage-quota";
+import { type AwpManifest, type AwpTrackEntry, validateManifest } from "./awp-manifest";
 import { compressFloat32Array } from "./compression";
+import {
+  type AudioBlobRecord,
+  db,
+  type NodeRecord,
+  type ProjectRecord,
+  type SegmentRecord,
+  type TrackRecord,
+} from "./db";
+import { checkAvailableSpace } from "./storage-quota";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -116,9 +112,7 @@ function parseManifest(entries: Record<string, Uint8Array>): AwpManifest {
   return manifestData as AwpManifest;
 }
 
-async function estimateSizeAndCheckQuota(
-  entries: Record<string, Uint8Array>,
-): Promise<boolean> {
+async function estimateSizeAndCheckQuota(entries: Record<string, Uint8Array>): Promise<boolean> {
   let totalRawBytes = 0;
   for (const key of Object.keys(entries)) {
     if (key.startsWith("audio/")) {
@@ -197,23 +191,16 @@ async function buildRecordsWithFreshIds(
 
         const pcmBytes = entries[seqEntry.audioFile];
         if (!pcmBytes) {
-          throw new Error(
-            `Missing audio file "${seqEntry.audioFile}" referenced in manifest.`,
-          );
+          throw new Error(`Missing audio file "${seqEntry.audioFile}" referenced in manifest.`);
         }
 
-        const { numberOfChannels, lengthInFrames, sampleRate } =
-          seqEntry.audioMeta;
+        const { numberOfChannels, lengthInFrames, sampleRate } = seqEntry.audioMeta;
 
         if (sampleRate < 8000 || sampleRate > 384_000) {
           throw new Error(`Invalid sampleRate ${sampleRate}.`);
         }
 
-        const channelData = await compressChannels(
-          pcmBytes,
-          numberOfChannels,
-          lengthInFrames,
-        );
+        const channelData = await compressChannels(pcmBytes, numberOfChannels, lengthInFrames);
 
         audioBlobRecords.push({
           id: audioBlobId,
@@ -294,10 +281,8 @@ async function writeToDatabase(
         await db.projects.put(projectRecord);
         if (nodeRecords.length > 0) await db.nodes.bulkPut(nodeRecords);
         if (trackRecords.length > 0) await db.tracks.bulkPut(trackRecords);
-        if (segmentRecords.length > 0)
-          await db.segments.bulkPut(segmentRecords);
-        if (audioBlobRecords.length > 0)
-          await db.audioBlobs.bulkPut(audioBlobRecords);
+        if (segmentRecords.length > 0) await db.segments.bulkPut(segmentRecords);
+        if (audioBlobRecords.length > 0) await db.audioBlobs.bulkPut(audioBlobRecords);
       },
     );
   } catch (err) {
@@ -311,11 +296,7 @@ async function writeToDatabase(
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function buildTrackRecord(
-  projectId: string,
-  trackId: string,
-  entry: AwpTrackEntry,
-): TrackRecord {
+function buildTrackRecord(projectId: string, trackId: string, entry: AwpTrackEntry): TrackRecord {
   return {
     id: trackId,
     projectId,

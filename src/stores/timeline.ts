@@ -7,7 +7,7 @@
 
 import { defineStore } from "pinia";
 import { ref } from "vue";
-import { createTimeline, scaleRatio, ScaleDirection, type Timeline } from "../lib/timeline";
+import { createTimeline, ScaleDirection, scaleRatio, type Timeline } from "../lib/timeline";
 
 export const useTimelineStore = defineStore("timeline", () => {
   // ── Internal engine ───────────────────────────────────────────────────────

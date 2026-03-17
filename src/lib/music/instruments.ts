@@ -114,20 +114,7 @@ export interface MusicInstrument<Type extends MusicInstrumentType> {
 
 // Piano: C1 – B8 (96 chromatic semitones, top = B8, bottom = C1)
 function buildPianoPitches(): InstrumentPitch[] {
-  const noteNames = [
-    "C",
-    "C#",
-    "D",
-    "D#",
-    "E",
-    "F",
-    "F#",
-    "G",
-    "G#",
-    "A",
-    "A#",
-    "B",
-  ];
+  const noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
   const pitches: InstrumentPitch[] = [];
   for (let octave = 8; octave >= 1; octave--) {
     for (let n = 11; n >= 0; n--) {

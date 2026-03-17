@@ -1,14 +1,14 @@
 import { nanoid } from "nanoid";
-import type { NodeRecord, TrackRecord, SegmentRecord } from "./db";
-import type { NodeTreeJSON } from "../../stores/nodes";
-import type { SequenceJSON } from "../../stores/sequence";
-import type { RecordedNode, InstrumentNode } from "../../features/nodes";
+import type { InstrumentNode, RecordedNode } from "../../features/nodes";
 import type { FolderNode } from "../../features/nodes/folder/folder-node";
 import { createFolderNode } from "../../features/nodes/folder/folder-node";
-import { createRecordedNode } from "../../features/nodes/recorded/recorded-node";
 import { createInstrumentNode } from "../../features/nodes/instrument/instrument-node";
-import { createTrack } from "../../features/sequence/track";
+import { createRecordedNode } from "../../features/nodes/recorded/recorded-node";
 import { createSegment } from "../../features/sequence/segment";
+import { createTrack } from "../../features/sequence/track";
+import type { NodeTreeJSON } from "../../stores/nodes";
+import type { SequenceJSON } from "../../stores/sequence";
+import type { NodeRecord, SegmentRecord, TrackRecord } from "./db";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -75,8 +75,7 @@ export function serializeNodes(
         projectId,
         kind: "recorded",
         name: recorded.name,
-        effects:
-          recorded.effects.length > 0 ? [...recorded.effects] : undefined,
+        effects: recorded.effects.length > 0 ? [...recorded.effects] : undefined,
         audioBlobId,
         isRecording: recorded.isRecording || undefined,
       });
@@ -161,8 +160,7 @@ export function deserializeNodes(
   rootIds: string[],
   audioBuffers: Map<string, AudioBuffer>,
 ): Pick<NodeTreeJSON, "nodesById" | "rootIds"> {
-  const nodesById: Record<string, import("../../features/nodes").ProjectNode> =
-    {};
+  const nodesById: Record<string, import("../../features/nodes").ProjectNode> = {};
 
   for (const record of nodeRecords) {
     if (record.kind === "folder") {
@@ -181,22 +179,14 @@ export function deserializeNodes(
     } else if (record.kind === "instrument") {
       if (!record.instrumentId) continue; // Corrupt record — skip.
 
-      const node = createInstrumentNode(
-        record.name,
-        record.instrumentId,
-        record.id,
-      );
+      const node = createInstrumentNode(record.name, record.instrumentId, record.id);
       if (record.effects) node.effects = [...record.effects];
       if (record.bpm !== undefined) node.bpm = record.bpm;
-      if (record.timeSignature)
-        node.timeSignature = { ...record.timeSignature };
+      if (record.timeSignature) node.timeSignature = { ...record.timeSignature };
       if (record.notes) node.notes = [...record.notes];
-      if (record.selectedNoteType)
-        node.selectedNoteType = record.selectedNoteType;
-      if (record.pitchScrollTop !== undefined)
-        node.pitchScrollTop = record.pitchScrollTop;
-      if (record.showWaveform !== undefined)
-        node.showWaveform = record.showWaveform;
+      if (record.selectedNoteType) node.selectedNoteType = record.selectedNoteType;
+      if (record.pitchScrollTop !== undefined) node.pitchScrollTop = record.pitchScrollTop;
+      if (record.showWaveform !== undefined) node.showWaveform = record.showWaveform;
       if (record.octaveRange) node.octaveRange = { ...record.octaveRange };
       nodesById[record.id] = node;
     }

@@ -76,9 +76,7 @@ const iconClass = (): string => {
   if (props.node.kind === "folder") return "mdi--folder-outline";
   if (props.node.kind === "recorded") return "mdi--microphone-outline";
   // instrument
-  const inst = (
-    props.node as Extract<typeof props.node, { kind: "instrument" }>
-  ).instrumentType;
+  const inst = (props.node as Extract<typeof props.node, { kind: "instrument" }>).instrumentType;
   if (inst === "drums") return "mdi--drum";
   return "mdi--piano";
 };

@@ -3,16 +3,12 @@
 // Left-click on an empty cell places a note; left-click on an existing note
 // removes it.  The hover ghost note shows a preview before the click.
 
-import { ref, computed, onUnmounted } from "vue";
 import { nanoid } from "nanoid";
 import type { ComputedRef } from "vue";
+import { computed, onUnmounted, ref } from "vue";
 import type { PlacedNote } from "../features/nodes";
 import type { InstrumentPitch } from "../lib/music/instruments";
-import {
-  hitTestNote,
-  notesOverlap,
-  snapBeatFloor,
-} from "../lib/piano-roll/note-utils";
+import { hitTestNote, notesOverlap, snapBeatFloor } from "../lib/piano-roll/note-utils";
 
 // ── Context ───────────────────────────────────────────────────────────────────
 
@@ -37,17 +33,13 @@ export function usePlaceTool(ctx: PlaceToolContext) {
   const hoverStartBeat = ref<number | null>(null);
   const hoverPitchId = ref<string | null>(null);
 
-  type DragState =
-    | { type: "none" }
-    | { type: "placing" }
-    | { type: "removing"; noteId: string };
+  type DragState = { type: "none" } | { type: "placing" } | { type: "removing"; noteId: string };
   const dragState = ref<DragState>({ type: "none" });
 
   // ── Hover preview ──────────────────────────────────────────────────────────
 
   const hoverPreviewNote = computed<PlacedNote | null>(() => {
-    if (hoverStartBeat.value === null || hoverPitchId.value === null)
-      return null;
+    if (hoverStartBeat.value === null || hoverPitchId.value === null) return null;
     return {
       id: "hover-preview",
       startBeat: hoverStartBeat.value,
@@ -56,11 +48,10 @@ export function usePlaceTool(ctx: PlaceToolContext) {
     };
   });
 
-  const hoverHasOverlap = computed(
-    () =>
-      hoverPreviewNote.value !== null &&
-      ctx.notes.value.some((n) => notesOverlap(n, hoverPreviewNote.value!)),
-  );
+  const hoverHasOverlap = computed(() => {
+    const preview = hoverPreviewNote.value;
+    return !!preview && ctx.notes.value.some((n) => notesOverlap(n, preview));
+  });
 
   // ── Coordinate helpers ─────────────────────────────────────────────────────
 

@@ -66,7 +66,7 @@ const emit = defineEmits<{
   copied: [noteCount: number];
   cut: [noteCount: number];
   "zoom-select": [startTime: number, endTime: number];
-}>(); 
+}>();
 
 // ── Derived pixel constants ───────────────────────────────────────────────────
 
@@ -144,8 +144,8 @@ const gridRef = ref<HTMLDivElement>();
 
 // ── Offset time (from context or zero) ───────────────────────────────────────
 
-const offsetTimePx = computed(() =>
-  (timelineCtx?.offsetTime.value ?? 0) * pxPerSec.value,
+const offsetTimePx = computed(
+  () => (timelineCtx?.offsetTime.value ?? 0) * pxPerSec.value,
 );
 
 // ── Snap ──────────────────────────────────────────────────────────────────────
@@ -189,7 +189,8 @@ const toolCtxBase = {
   beatsPerMeasure,
   rowHeightPx: ROW_HEIGHT_PX,
   clientXToBeat,
-  scrollRef: timelineCtx?.scrollEl ?? ref<HTMLDivElement | undefined>(undefined),
+  scrollRef:
+    timelineCtx?.scrollEl ?? ref<HTMLDivElement | undefined>(undefined),
   emitNotes: (notes: PlacedNote[]) => emit("update:notes", notes),
 };
 
@@ -402,7 +403,8 @@ onUnmounted(() => {
 const playheadLeft = computed(
   () =>
     LABEL_WIDTH_PX +
-    ((props.currentTime ?? 0) - (timelineCtx?.offsetTime.value ?? 0)) * pxPerSec.value,
+    ((props.currentTime ?? 0) - (timelineCtx?.offsetTime.value ?? 0)) *
+      pxPerSec.value,
 );
 
 // ── Programmatic scroll (for zoom-in / zoom-select from parent) ────────────────
@@ -431,7 +433,8 @@ const displayNotes = computed(() => {
 
 // ── Note style helpers ────────────────────────────────────────────────────────
 
-const noteLeft = (note: PlacedNote) => Math.round(note.startBeat * pxPerBeatRender.value);
+const noteLeft = (note: PlacedNote) =>
+  Math.round(note.startBeat * pxPerBeatRender.value);
 const noteWidth = (note: PlacedNote) =>
   Math.max(4, Math.round(note.durationBeats * pxPerBeatRender.value));
 const noteTop = (note: PlacedNote) => {
@@ -502,9 +505,7 @@ const selectionOverlay = computed(() => {
     class="relative flex flex-col h-full w-full overflow-hidden bg-base-100 select-none"
   >
     <!-- Roll body -->
-    <div
-      class="flex-1 flex overflow-y-auto overflow-x-hidden"
-    >
+    <div class="flex-1 flex overflow-y-auto overflow-x-hidden">
       <!-- Row labels — sticky so they don't scroll horizontally -->
       <DrumRollKeys
         :pitches="pitches"
@@ -516,7 +517,7 @@ const selectionOverlay = computed(() => {
       <!-- Grid -->
       <div
         ref="gridRef"
-        class="relative flex-shrink-0"
+        class="relative shrink-0"
         :style="{
           width: `${GRID_WIDTH}px`,
           height: `${totalGridHeight}px`,
@@ -620,9 +621,12 @@ const selectionOverlay = computed(() => {
           :style="{
             left: `${Math.min(zoomDragStartBeat, zoomDragEndBeat) * pxPerBeatRender}px`,
             width: `${Math.abs(zoomDragEndBeat - zoomDragStartBeat) * pxPerBeatRender}px`,
-            backgroundColor: 'color-mix(in oklab, var(--color-primary) 15%, transparent)',
-            borderLeft: '1px solid color-mix(in oklab, var(--color-primary) 60%, transparent)',
-            borderRight: '1px solid color-mix(in oklab, var(--color-primary) 60%, transparent)',
+            backgroundColor:
+              'color-mix(in oklab, var(--color-primary) 15%, transparent)',
+            borderLeft:
+              '1px solid color-mix(in oklab, var(--color-primary) 60%, transparent)',
+            borderRight:
+              '1px solid color-mix(in oklab, var(--color-primary) 60%, transparent)',
           }"
         />
       </div>
@@ -631,7 +635,7 @@ const selectionOverlay = computed(() => {
     <!-- Playhead overlay — spans full roll height, stays in viewport-space -->
     <div
       v-if="currentTime !== undefined"
-      class="absolute top-0 bottom-0 w-px bg-accent opacity-75 pointer-events-none z-[5]"
+      class="absolute top-0 bottom-0 w-px bg-accent opacity-75 pointer-events-none z-5"
       :style="{ left: `${playheadLeft}px` }"
       aria-hidden="true"
     />

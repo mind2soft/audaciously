@@ -3,8 +3,8 @@
 // See: .opencode/context/refactor/01-terminology.md
 
 import { nanoid } from "nanoid";
-import type { ProjectNodeBase } from "../node";
 import type { AudioEffect } from "../../effects/types";
+import type { ProjectNodeBase } from "../node";
 
 export interface RecordedNode extends ProjectNodeBase<"recorded"> {
   /**

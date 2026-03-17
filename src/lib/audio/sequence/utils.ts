@@ -1,6 +1,6 @@
 import type { AudioSequence } from "./index";
 
-export function checkSequenceOverlap<Kind, Type>(
+export function checkSequenceOverlap<Kind extends string, Type>(
   a: AudioSequence<Kind, Type>,
   b: AudioSequence<Kind, Type>,
   tolerance = 0.001,
@@ -10,8 +10,7 @@ export function checkSequenceOverlap<Kind, Type>(
   const b1 = b.time;
   const b2 = b1 + b.playbackDuration;
   const overlap =
-    (a1 > b1 + tolerance && a1 < b2 - tolerance) ||
-    (b1 > a1 + tolerance && b1 < a2 - tolerance);
+    (a1 > b1 + tolerance && a1 < b2 - tolerance) || (b1 > a1 + tolerance && b1 < a2 - tolerance);
 
   if (overlap)
     console.warn(
@@ -29,7 +28,7 @@ export function checkSequenceOverlap<Kind, Type>(
   return overlap;
 }
 
-export function getSequenceGaps<Kind, Type>(
+export function getSequenceGaps<Kind extends string, Type>(
   sequence: AudioSequence<Kind, Type>,
   sequences?: Iterable<AudioSequence<Kind, Type>>,
 ): { before: number; after: number } {
@@ -47,10 +46,7 @@ export function getSequenceGaps<Kind, Type>(
       if (seqEnd <= sequence.time) {
         before = Math.min(before, sequence.time - seqEnd);
       } else if (seq.time >= sequence.time + sequence.playbackDuration) {
-        after = Math.min(
-          after,
-          seq.time - (sequence.time + sequence.playbackDuration),
-        );
+        after = Math.min(after, seq.time - (sequence.time + sequence.playbackDuration));
       }
     }
   }

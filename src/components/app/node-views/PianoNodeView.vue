@@ -8,27 +8,23 @@
  *   Row 3  Player controls: [play] [separator] [note buttons + BPM] [flex-1] [tools] [divider] [ZoomToolbar]
  */
 
-import { ref, computed, onMounted, onUnmounted } from "vue";
-import { useNodesStore } from "../../../stores/nodes";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useNodePlayback } from "../../../composables/useNodePlayback";
 import { usePianoClipboard } from "../../../composables/usePianoClipboard";
-import { NOTE_TYPE_LIST } from "../../../lib/music/instruments";
-import { baseSecondWidthInPixels } from "../../../lib/util/formatTime";
 import type { InstrumentNode } from "../../../features/nodes";
 import type { NoteDuration } from "../../../lib/music/instruments";
+import { NOTE_TYPE_LIST } from "../../../lib/music/instruments";
 import type { PianoRollToolId } from "../../../lib/piano-roll/tool-types";
-import PianoRoll, {
-  PIANO_ROLL_LABEL_WIDTH,
-} from "../../controls/PianoRollCanvas.vue";
+import { baseSecondWidthInPixels } from "../../../lib/util/formatTime";
+import {
+  ZOOM_MAX_INSTRUMENT_RATIO,
+  ZOOM_MIN_INSTRUMENT_DURATION,
+} from "../../../lib/zoom-constants";
+import { useNodesStore } from "../../../stores/nodes";
+import ButtonGroup, { type ButtonGroupItem } from "../../controls/ButtonGroup.vue";
+import PianoRoll, { PIANO_ROLL_LABEL_WIDTH } from "../../controls/PianoRollCanvas.vue";
 import ScrollableTimeline from "../../controls/ScrollableTimeline.vue";
 import ZoomToolbar from "../../controls/ZoomToolbar.vue";
-import ButtonGroup, {
-  type ButtonGroupItem,
-} from "../../controls/ButtonGroup.vue";
-import {
-  ZOOM_MIN_INSTRUMENT_DURATION,
-  ZOOM_MAX_INSTRUMENT_RATIO,
-} from "../../../lib/zoom-constants";
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -57,9 +53,7 @@ const viewRef = ref<HTMLElement | null>(null);
 const rollContainerWidth = ref(0);
 
 const totalDuration = computed(() =>
-  rollContainerWidth.value > 0
-    ? rollContainerWidth.value / baseSecondWidthInPixels
-    : 1,
+  rollContainerWidth.value > 0 ? rollContainerWidth.value / baseSecondWidthInPixels : 1,
 );
 
 const minScaleFactor = computed(() => {
@@ -189,8 +183,7 @@ onMounted(() => {
 
   if (!row3Ref.value) return;
   _row3Observer = new ResizeObserver(([entry]) => {
-    row3Compact.value =
-      (entry?.contentRect.width ?? 0) < ROW3_COMPACT_THRESHOLD;
+    row3Compact.value = (entry?.contentRect.width ?? 0) < ROW3_COMPACT_THRESHOLD;
   });
   _row3Observer.observe(row3Ref.value);
 });

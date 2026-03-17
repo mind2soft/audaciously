@@ -1,20 +1,20 @@
-import { zip, type Zippable } from "fflate";
-import {
-  db,
-  type NodeRecord,
-  type TrackRecord,
-  type SegmentRecord,
-  type AudioBlobRecord,
-} from "./db";
+import { type Zippable, zip } from "fflate";
 import {
   AWP_SCHEMA_VERSION,
+  type AwpAudioMeta,
   type AwpManifest,
   type AwpProjectInfo,
-  type AwpTrackEntry,
   type AwpSequenceEntry,
-  type AwpAudioMeta,
+  type AwpTrackEntry,
 } from "./awp-manifest";
 import { decompressBlobToFloat32Array } from "./compression";
+import {
+  type AudioBlobRecord,
+  db,
+  type NodeRecord,
+  type SegmentRecord,
+  type TrackRecord,
+} from "./db";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -55,13 +55,12 @@ export async function exportProject(
   const project = await db.projects.get(projectId);
   if (!project) return null;
 
-  const [trackRecords, segmentRecords, nodeRecords, audioBlobRecords] =
-    await Promise.all([
-      db.tracks.where("projectId").equals(projectId).toArray(),
-      db.segments.where("projectId").equals(projectId).toArray(),
-      db.nodes.where("projectId").equals(projectId).toArray(),
-      db.audioBlobs.where("projectId").equals(projectId).toArray(),
-    ]);
+  const [trackRecords, segmentRecords, nodeRecords, audioBlobRecords] = await Promise.all([
+    db.tracks.where("projectId").equals(projectId).toArray(),
+    db.segments.where("projectId").equals(projectId).toArray(),
+    db.nodes.where("projectId").equals(projectId).toArray(),
+    db.audioBlobs.where("projectId").equals(projectId).toArray(),
+  ]);
 
   onProgress?.({ phase: "reading", progress: 1 });
 
@@ -140,9 +139,7 @@ export async function exportProject(
   onProgress?.({ phase: "zipping", progress: 0 });
 
   const files: Zippable = {
-    "manifest.json": new TextEncoder().encode(
-      JSON.stringify(manifest, null, 2),
-    ),
+    "manifest.json": new TextEncoder().encode(JSON.stringify(manifest, null, 2)),
   };
 
   // Add raw PCM audio files — only blobs referenced in the manifest.
@@ -214,9 +211,7 @@ function buildTrackEntries(
   if (recordedSegs.length > 0) {
     const seqEntries: AwpSequenceEntry[] = recordedSegs.map((seg) => {
       const node = nodeMap.get(seg.nodeId)!;
-      const blobRec = node.audioBlobId
-        ? audioBlobMap.get(node.audioBlobId)
-        : undefined;
+      const blobRec = node.audioBlobId ? audioBlobMap.get(node.audioBlobId) : undefined;
 
       const audioMeta: AwpAudioMeta = blobRec
         ? {

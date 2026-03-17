@@ -18,7 +18,7 @@
  * to mean "fill remaining") never pushes the right pane off-screen.
  */
 
-import { ref, computed, onMounted, onBeforeUnmount } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 
 const DIVIDER_WIDTH = 12; // matches the w-3 (12px) hit-zone divider in the template
 
@@ -95,10 +95,7 @@ const onDividerMousedown = (evt: MouseEvent) => {
 const onMouseMove = (evt: MouseEvent) => {
   const delta = evt.clientX - dragStartX;
   // Clamp within [minLeft, maxLeft]
-  leftWidth.value = Math.min(
-    Math.max(props.minLeft, dragStartWidth + delta),
-    maxLeft.value,
-  );
+  leftWidth.value = Math.min(Math.max(props.minLeft, dragStartWidth + delta), maxLeft.value);
 };
 
 const onMouseUp = () => {
@@ -136,10 +133,7 @@ const onMouseUp = () => {
     </div>
 
     <!-- Right pane: fills remaining space, but respects minRight -->
-    <div
-      class="flex-1 overflow-hidden"
-      :style="{ minWidth: `${minRight}px` }"
-    >
+    <div class="flex-1 overflow-hidden" :style="{ minWidth: `${minRight}px` }">
       <slot name="right" />
     </div>
   </div>

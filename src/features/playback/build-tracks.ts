@@ -14,8 +14,9 @@
 
 import type { AudioTrack } from "../../lib/audio/track/index";
 import { createRecordedTrack } from "../../lib/audio/track/recorded/recorded-track";
+import type { MusicInstrumentType } from "../../lib/music/instruments";
+import type { InstrumentNode, ProjectNode, RecordedNode } from "../nodes";
 import type { Track } from "../sequence/track";
-import type { ProjectNode, RecordedNode, InstrumentNode } from "../nodes";
 import { createEffectSequence } from "./effect-sequence";
 
 // ── Public API ─────────────────────────────────────────────────────────────────
@@ -34,8 +35,8 @@ import { createEffectSequence } from "./effect-sequence";
 export function buildTracksFromStore(
   tracks: Track[],
   nodesById: Map<string, ProjectNode>,
-): AudioTrack<any>[] {
-  const engineTracks: AudioTrack<any>[] = [];
+): AudioTrack<"recorded">[] {
+  const engineTracks: AudioTrack<"recorded">[] = [];
 
   for (const track of tracks) {
     const engineTrack = createRecordedTrack(track.name, track.id);
@@ -51,7 +52,7 @@ export function buildTracksFromStore(
       const node = nodesById.get(segment.nodeId);
       if (!node || node.kind === "folder") continue;
 
-      const audioNode = node as RecordedNode | InstrumentNode;
+      const audioNode = node as RecordedNode | InstrumentNode<MusicInstrumentType>;
       const buffer = audioNode.targetBuffer;
       if (!buffer) continue; // no buffer yet (e.g. instrument still rendering)
 
@@ -65,7 +66,7 @@ export function buildTracksFromStore(
       );
 
       try {
-        engineTrack.addSequence(effectSequence as any);
+        engineTrack.addSequence(effectSequence);
       } catch (err) {
         // Overlap conflict — skip the segment rather than crash.
         console.warn(

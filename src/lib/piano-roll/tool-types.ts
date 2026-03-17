@@ -32,6 +32,5 @@ export interface PianoNotesClipboard {
  * Union of all clipboard payload types.
  * Extend here when drum-roll or audio-segment copying is implemented.
  */
-export type ClipboardEntry =
-  | PianoNotesClipboard;
-  // Future: | DrumNotesClipboard | AudioSegmentClipboard
+export type ClipboardEntry = PianoNotesClipboard;
+// Future: | DrumNotesClipboard | AudioSegmentClipboard

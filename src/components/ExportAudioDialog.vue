@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
-import { usePlayerStore } from "../stores/player";
-import { mixdownProject } from "../lib/audio/mixdown";
 import { encodeMp3 } from "../lib/audio/encode/mp3-encoder";
 import { encodeWav } from "../lib/audio/encode/wav-encoder";
+import { mixdownProject } from "../lib/audio/mixdown";
+import { usePlayerStore } from "../stores/player";
 
 const props = defineProps<{
   open: boolean;
@@ -57,9 +57,7 @@ watch(
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 const triggerDownload = (blob: Blob, name: string, ext: string) => {
-  const safeName =
-    (name || "untitled").replaceAll(/[^a-zA-Z0-9 _-]/g, "_").trim() ||
-    "untitled";
+  const safeName = (name || "untitled").replaceAll(/[^a-zA-Z0-9 _-]/g, "_").trim() || "untitled";
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;

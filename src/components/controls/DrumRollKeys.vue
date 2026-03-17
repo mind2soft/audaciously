@@ -13,8 +13,8 @@
  */
 
 import { ref } from "vue";
-import type { InstrumentPitch } from "../../lib/music/instruments";
 import { useDrumPreview } from "../../composables/useDrumPreview";
+import type { InstrumentPitch } from "../../lib/music/instruments";
 
 const props = defineProps<{
   pitches: InstrumentPitch[];

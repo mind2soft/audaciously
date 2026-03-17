@@ -10,24 +10,24 @@
  * No business logic — all state lives in Pinia stores.
  */
 
-import { ref, computed, watch, onMounted, onUnmounted } from "vue";
-import { useProjectStore } from "./stores/project";
-import { useAllNodes } from "./composables/useAllNodes";
-import AppShell from "./components/layout/AppShell.vue";
-import SplitPanel from "./components/layout/SplitPanel.vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import AppHeader from "./components/app/AppHeader.vue";
 import NodePanel from "./components/app/NodePanel.vue";
-import NodeView from "./components/app/NodeView.vue";
 import NodeProperties from "./components/app/NodeProperties.vue";
-import SequencePanel from "./components/app/SequencePanel.vue";
-import SequenceEffectsPanel from "./components/app/SequenceEffectsPanel.vue";
-import StatusBar from "./components/app/StatusBar.vue";
+import NodeView from "./components/app/NodeView.vue";
 import ProjectBrowser from "./components/app/ProjectBrowser.vue";
-import ProjectMetadataForm from "./components/ProjectMetadataForm.vue";
+import SequenceEffectsPanel from "./components/app/SequenceEffectsPanel.vue";
+import SequencePanel from "./components/app/SequencePanel.vue";
+import StatusBar from "./components/app/StatusBar.vue";
 import ExportAudioDialog from "./components/ExportAudioDialog.vue";
+import AppShell from "./components/layout/AppShell.vue";
+import SplitPanel from "./components/layout/SplitPanel.vue";
+import ProjectMetadataForm from "./components/ProjectMetadataForm.vue";
 import SettingsDialog from "./components/SettingsDialog.vue";
+import { useAllNodes } from "./composables/useAllNodes";
 import type { ProjectMetadata } from "./lib/storage/project-metadata";
 import { createDefaultMetadata } from "./lib/storage/project-metadata";
+import { useProjectStore } from "./stores/project";
 
 const project = useProjectStore();
 
@@ -162,7 +162,11 @@ onMounted(async () => {
     }
   } catch {
     // Project may have been deleted — start fresh.
-    try { localStorage.removeItem(LAST_PROJECT_KEY); } catch { /* noop */ }
+    try {
+      localStorage.removeItem(LAST_PROJECT_KEY);
+    } catch {
+      /* noop */
+    }
   }
 });
 
@@ -172,7 +176,9 @@ watch(
   (id) => {
     try {
       if (id) localStorage.setItem(LAST_PROJECT_KEY, id);
-    } catch { /* noop */ }
+    } catch {
+      /* noop */
+    }
   },
 );
 </script>

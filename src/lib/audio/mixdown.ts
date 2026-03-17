@@ -1,6 +1,6 @@
 import type { AudioPlayer } from "./player";
-import type { AudioTrack } from "./track";
 import type { BufferedAudioSequence } from "./sequence";
+import type { AudioTrack } from "./track";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -20,15 +20,13 @@ export interface MixdownOptions {
  * (type "audioBuffer") expose a `.buffer` getter. We duck-type by checking
  * for the presence of `buffer` as an `AudioBuffer`.
  */
-function collectBufferedSequences(
-  track: AudioTrack<unknown>,
-): BufferedAudioSequence<unknown>[] {
-  const result: BufferedAudioSequence<unknown>[] = [];
+function collectBufferedSequences(track: AudioTrack<string>): BufferedAudioSequence<string>[] {
+  const result: BufferedAudioSequence<string>[] = [];
 
   for (const seq of track.getSequences()) {
-    const candidate = seq as Partial<BufferedAudioSequence<unknown>>;
+    const candidate = seq as Partial<BufferedAudioSequence<string>>;
     if (candidate.buffer instanceof AudioBuffer) {
-      result.push(candidate as BufferedAudioSequence<unknown>);
+      result.push(candidate as BufferedAudioSequence<string>);
     }
   }
 
@@ -39,7 +37,7 @@ function collectBufferedSequences(
  * Compute the total duration of the project in seconds, considering every
  * non-muted track's sequences (position + playback duration).
  */
-function computeTotalDuration(tracks: AudioTrack<unknown>[]): number {
+function computeTotalDuration(tracks: AudioTrack<string>[]): number {
   let maxEnd = 0;
 
   for (const track of tracks) {
@@ -104,9 +102,7 @@ export async function mixdownProject(
       const source = offlineCtx.createBufferSource();
       source.buffer = seq.buffer;
       source.playbackRate.value =
-        isFinite(seq.playbackRate) && seq.playbackRate > 0
-          ? seq.playbackRate
-          : 1;
+        Number.isFinite(seq.playbackRate) && seq.playbackRate > 0 ? seq.playbackRate : 1;
       source.connect(gainNode);
       source.start(seq.time);
     }

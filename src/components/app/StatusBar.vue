@@ -15,8 +15,8 @@
  */
 
 import { computed } from "vue";
-import { useProjectStore } from "../../stores/project";
 import { usePlayerStore } from "../../stores/player";
+import { useProjectStore } from "../../stores/project";
 import { useSequenceStore } from "../../stores/sequence";
 import SaveIndicator from "../controls/SaveIndicator.vue";
 
@@ -36,8 +36,9 @@ const totalTimeLabel = computed(() => formatTime(sequence.totalDuration));
 </script>
 
 <template>
-  <div class="flex items-center w-full h-full px-2 gap-2 text-xs text-base-content/60">
-
+  <div
+    class="flex items-center w-full h-full px-2 gap-2 text-xs text-base-content/60"
+  >
     <!-- ── Save indicator ──────────────────────────────────────────────── -->
     <SaveIndicator
       :saving="project.saving"
@@ -58,6 +59,5 @@ const totalTimeLabel = computed(() => formatTime(sequence.totalDuration));
     <span class="tabular-nums font-mono">
       {{ currentTimeLabel }} / {{ totalTimeLabel }}
     </span>
-
   </div>
 </template>

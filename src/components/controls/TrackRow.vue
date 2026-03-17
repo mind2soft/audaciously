@@ -18,7 +18,7 @@
  * toggle-lock        User clicked the lock button.
  */
 
-import { ref, onBeforeUnmount } from "vue";
+import { onBeforeUnmount, ref } from "vue";
 import type { Track } from "../../features/sequence/track";
 
 const props = defineProps<{
@@ -75,10 +75,7 @@ onBeforeUnmount(() => {
 });
 
 const onSortDragstart = (evt: DragEvent) => {
-  evt.dataTransfer?.setData(
-    "application/x-audaciously-track-id",
-    props.track.id,
-  );
+  evt.dataTransfer?.setData("application/x-audaciously-track-id", props.track.id);
 };
 
 // ── Drop target ──────────────────────────────────────────────────────────────

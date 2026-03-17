@@ -37,14 +37,10 @@ export function loadTimelineState(projectId: string): TimelineState | null {
     const p = JSON.parse(raw) as Record<string, unknown>;
 
     const ratio =
-      typeof p.ratio === "number" && Number.isFinite(p.ratio) && p.ratio > 0
-        ? p.ratio
-        : 1;
+      typeof p.ratio === "number" && Number.isFinite(p.ratio) && p.ratio > 0 ? p.ratio : 1;
 
     const offsetTime =
-      typeof p.offsetTime === "number" &&
-      Number.isFinite(p.offsetTime) &&
-      p.offsetTime >= 0
+      typeof p.offsetTime === "number" && Number.isFinite(p.offsetTime) && p.offsetTime >= 0
         ? p.offsetTime
         : 0;
 
@@ -60,10 +56,7 @@ export function loadTimelineState(projectId: string): TimelineState | null {
  * Silently no-ops if localStorage is unavailable (private browsing, quota
  * exceeded, etc.).
  */
-export function saveTimelineState(
-  projectId: string,
-  state: TimelineState,
-): void {
+export function saveTimelineState(projectId: string, state: TimelineState): void {
   try {
     localStorage.setItem(storageKey(projectId), JSON.stringify(state));
   } catch {

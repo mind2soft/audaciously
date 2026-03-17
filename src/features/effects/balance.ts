@@ -6,10 +6,10 @@
 // models balance (equal-power cross-fade between L/R) rather than panning.
 
 import { nanoid } from "nanoid";
-import type { BalanceEffect } from "./types";
 import createStereoBalanceNode, {
   type StereoBalanceNode,
 } from "../../lib/audio/node/StereoBalanceNode";
+import type { BalanceEffect } from "./types";
 
 /** Create a new BalanceEffect with defaults. */
 export function createBalanceEffect(id?: string): BalanceEffect {
@@ -32,7 +32,9 @@ export function applyBalanceEffect(
   inputNode: AudioNode,
   outputNode: AudioNode,
 ): StereoBalanceNode {
-  const balanceNode = createStereoBalanceNode(context, { balance: effect.value });
+  const balanceNode = createStereoBalanceNode(context, {
+    balance: effect.value,
+  });
   inputNode.connect(balanceNode);
   balanceNode.connect(outputNode);
   return balanceNode;

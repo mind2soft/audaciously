@@ -1,14 +1,7 @@
 import Dexie, { type Table } from "dexie";
-import type {
-  MusicInstrumentType,
-  NoteDuration,
-  OctaveRange,
-} from "../music/instruments";
 import type { AudioEffect } from "../../features/effects/types";
-import type {
-  PlacedNote,
-  TimeSignature,
-} from "../../features/nodes/instrument/instrument-node";
+import type { PlacedNote, TimeSignature } from "../../features/nodes/instrument/instrument-node";
+import type { MusicInstrumentType, NoteDuration, OctaveRange } from "../music/instruments";
 
 // ─── Record interfaces (v2 schema) ───────────────────────────────────────────
 

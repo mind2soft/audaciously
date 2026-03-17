@@ -24,10 +24,7 @@ export interface ResolveColorOptions {
 const cache = new Map<string, string>();
 
 /** Deterministic cache key from varName + options (omits absent fields). */
-function cacheKey(
-  varName: string,
-  options: ResolveColorOptions | undefined,
-): string {
+function cacheKey(varName: string, options: ResolveColorOptions | undefined): string {
   if (!options) return varName;
   let k = varName;
   if (options.opacity !== undefined) k += `|o${options.opacity}`;
@@ -56,17 +53,12 @@ function getPhantomEl(): HTMLDivElement {
 
 // ── CSS expression builder ────────────────────────────────────────────────────
 
-function buildCssExpr(
-  varName: string,
-  options: ResolveColorOptions | undefined,
-): string {
+function buildCssExpr(varName: string, options: ResolveColorOptions | undefined): string {
   const { opacity, hue } = options ?? {};
 
   // Base: plain var() or hue-rotated via CSS relative-color syntax
   const base =
-    hue !== undefined
-      ? `oklch(from var(${varName}) l c calc(h + ${hue}))`
-      : `var(${varName})`;
+    hue !== undefined ? `oklch(from var(${varName}) l c calc(h + ${hue}))` : `var(${varName})`;
 
   // Opacity: color-mix with transparent
   if (opacity !== undefined && opacity !== 1) {
@@ -86,10 +78,7 @@ function buildCssExpr(
  * @param options  Optional opacity (0–1) and/or hue rotation (degrees)
  * @returns        Resolved `rgb(r, g, b)` or `rgba(r, g, b, a)` string
  */
-export function resolveColor(
-  varName: string,
-  options?: ResolveColorOptions,
-): string {
+export function resolveColor(varName: string, options?: ResolveColorOptions): string {
   const key = cacheKey(varName, options);
   const cached = cache.get(key);
   if (cached !== undefined) return cached;

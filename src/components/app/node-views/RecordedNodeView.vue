@@ -16,17 +16,17 @@
  * node   The RecordedNode to display / record into.
  */
 
-import { ref, computed, onMounted, onUnmounted, watch, nextTick } from "vue";
-import { recorder } from "../../../lib/audio/recorder-singleton";
-import { useNodesStore } from "../../../stores/nodes";
-import { usePlayerStore } from "../../../stores/player";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useNodePlayback } from "../../../composables/useNodePlayback";
 import type { RecordedNode } from "../../../features/nodes";
-import WaveformView from "../../controls/WaveformView.vue";
-import ZoomToolbar from "../../controls/ZoomToolbar.vue";
+import { recorder } from "../../../lib/audio/recorder-singleton";
+import { ZOOM_PX_PER_MIN_MS } from "../../../lib/zoom-constants";
+import { useNodesStore } from "../../../stores/nodes";
+import { usePlayerStore } from "../../../stores/player";
 import AudioAnalyzerView from "../../controls/AudioAnalyzerView.vue";
 import ScrollableTimeline from "../../controls/ScrollableTimeline.vue";
-import { ZOOM_PX_PER_MIN_MS } from "../../../lib/zoom-constants";
+import WaveformView from "../../controls/WaveformView.vue";
+import ZoomToolbar from "../../controls/ZoomToolbar.vue";
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -139,7 +139,7 @@ onMounted(() => {
     }
     const nodeId = props.node.id;
     try {
-      const buf = await recorder!.getAudioBuffer();
+      const buf = await recorder?.getAudioBuffer();
       nodes.setRecordedSourceBuffer(nodeId, buf);
       nodes.setRecordingState(nodeId, false);
     } catch {
@@ -156,9 +156,9 @@ onMounted(() => {
   recorder.addEventListener("timeupdate", onTimeUpdate);
 
   _removeRecorderListeners = () => {
-    recorder!.removeEventListener("record", onRecord);
-    recorder!.removeEventListener("stop", onStop);
-    recorder!.removeEventListener("timeupdate", onTimeUpdate);
+    recorder?.removeEventListener("record", onRecord);
+    recorder?.removeEventListener("stop", onStop);
+    recorder?.removeEventListener("timeupdate", onTimeUpdate);
   };
 });
 
@@ -247,8 +247,10 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div ref="viewRef" class="flex flex-col h-full w-full overflow-hidden bg-base-100">
-
+  <div
+    ref="viewRef"
+    class="flex flex-col h-full w-full overflow-hidden bg-base-100"
+  >
     <!-- ── Has buffer: 3-row layout ──────────────────────────────────────── -->
     <template v-if="node.sourceBuffer">
       <!-- Row 1+2: ScrollableTimeline wraps ruler + waveform -->
@@ -274,40 +276,75 @@ onUnmounted(() => {
       </ScrollableTimeline>
 
       <!-- Row 3: Player controls -->
-      <div class="shrink-0 flex items-center gap-2 px-3 py-1.5 bg-base-200 border-t border-base-300/60 min-h-10">
+      <div
+        class="shrink-0 flex items-center gap-2 px-3 py-1.5 bg-base-200 border-t border-base-300/60 min-h-10"
+      >
         <button
           class="btn btn-sm btn-ghost btn-square"
-          :title="!node.targetBuffer ? 'Preparing audio…' : previewState === 'playing' ? 'Pause' : 'Play'"
+          :title="
+            !node.targetBuffer
+              ? 'Preparing audio…'
+              : previewState === 'playing'
+                ? 'Pause'
+                : 'Play'
+          "
           :disabled="!node.targetBuffer"
           @click="previewState === 'playing' ? previewPause() : previewPlay()"
         >
           <i
             class="iconify size-4"
-            :class="!node.targetBuffer ? 'mdi--loading animate-spin' : previewState === 'playing' ? 'mdi--pause' : 'mdi--play'"
+            :class="
+              !node.targetBuffer
+                ? 'mdi--loading animate-spin'
+                : previewState === 'playing'
+                  ? 'mdi--pause'
+                  : 'mdi--play'
+            "
             aria-hidden="true"
           />
         </button>
-        <span class="text-xs text-base-content/50 tabular-nums">{{ playbackLabel }}</span>
+        <span class="text-xs text-base-content/50 tabular-nums">{{
+          playbackLabel
+        }}</span>
 
         <div class="flex-1" />
 
-        <button class="btn btn-xs btn-ghost" title="Insert silence — coming soon" disabled>
+        <button
+          class="btn btn-xs btn-ghost"
+          title="Insert silence — coming soon"
+          disabled
+        >
           <i class="iconify mdi--format-pilcrow size-3.5" aria-hidden="true" />
         </button>
         <button class="btn btn-xs btn-ghost" title="Cut — coming soon" disabled>
           <i class="iconify mdi--content-cut size-3.5" aria-hidden="true" />
         </button>
-        <button class="btn btn-xs btn-ghost" title="Copy — coming soon" disabled>
+        <button
+          class="btn btn-xs btn-ghost"
+          title="Copy — coming soon"
+          disabled
+        >
           <i class="iconify mdi--content-copy size-3.5" aria-hidden="true" />
         </button>
-        <button class="btn btn-xs btn-ghost" title="Paste — coming soon" disabled>
+        <button
+          class="btn btn-xs btn-ghost"
+          title="Paste — coming soon"
+          disabled
+        >
           <i class="iconify mdi--content-paste size-3.5" aria-hidden="true" />
         </button>
 
         <div class="w-px h-5 bg-base-300/60 mx-1" aria-hidden="true" />
 
-        <button class="btn btn-xs btn-ghost text-error" title="Delete recorded audio" @click="requestReset">
-          <i class="iconify mdi--trash-can-outline size-3.5" aria-hidden="true" />
+        <button
+          class="btn btn-xs btn-ghost text-error"
+          title="Delete recorded audio"
+          @click="requestReset"
+        >
+          <i
+            class="iconify mdi--trash-can-outline size-3.5"
+            aria-hidden="true"
+          />
           Reset
         </button>
 
@@ -330,19 +367,30 @@ onUnmounted(() => {
     <template v-else>
       <!-- Row 1: Audio analyzer (flex-1) -->
       <div class="flex-1 min-h-0 overflow-hidden">
-        <AudioAnalyzerView :analyser-buffer="analyserBuffer" class="w-full h-full" />
+        <AudioAnalyzerView
+          :analyser-buffer="analyserBuffer"
+          class="w-full h-full"
+        />
       </div>
 
       <!-- Row 2: Record controls -->
-      <div class="shrink-0 flex items-center gap-2 px-3 py-1.5 bg-base-200 border-t border-base-300/60 min-h-10">
+      <div
+        class="shrink-0 flex items-center gap-2 px-3 py-1.5 bg-base-200 border-t border-base-300/60 min-h-10"
+      >
         <!-- Not recording -->
         <template v-if="!isRecording">
-          <button class="btn btn-sm btn-error gap-1" title="Start recording" @click="startRecording">
+          <button
+            class="btn btn-sm btn-error gap-1"
+            title="Start recording"
+            @click="startRecording"
+          >
             <i class="iconify mdi--record size-4" aria-hidden="true" />
             Record
           </button>
           <span class="text-xs text-base-content/50">0:00</span>
-          <label class="flex items-center gap-1.5 text-xs text-base-content/60 ml-2 cursor-pointer select-none">
+          <label
+            class="flex items-center gap-1.5 text-xs text-base-content/60 ml-2 cursor-pointer select-none"
+          >
             <input
               type="checkbox"
               class="checkbox checkbox-xs"
@@ -355,11 +403,17 @@ onUnmounted(() => {
 
         <!-- Recording in progress -->
         <template v-else>
-          <button class="btn btn-sm btn-warning gap-1" title="Stop recording" @click="stopRecording">
+          <button
+            class="btn btn-sm btn-warning gap-1"
+            title="Stop recording"
+            @click="stopRecording"
+          >
             <i class="iconify mdi--stop size-4" aria-hidden="true" />
             Stop
           </button>
-          <span class="text-xs text-base-content/50 tabular-nums">{{ recordingDurationLabel }}</span>
+          <span class="text-xs text-base-content/50 tabular-nums">{{
+            recordingDurationLabel
+          }}</span>
         </template>
       </div>
     </template>
@@ -369,10 +423,17 @@ onUnmounted(() => {
       <div class="modal-box bg-base-300 max-w-sm">
         <h3 class="mb-2 text-lg font-bold">Delete Recording?</h3>
         <p class="py-3 text-sm text-base-content/70">
-          This will permanently delete the recorded audio from this node. This action cannot be undone.
+          This will permanently delete the recorded audio from this node. This
+          action cannot be undone.
         </p>
         <div class="modal-action">
-          <button class="btn btn-ghost" ref="resetCancelBtnRef" @click="cancelReset">Cancel</button>
+          <button
+            class="btn btn-ghost"
+            ref="resetCancelBtnRef"
+            @click="cancelReset"
+          >
+            Cancel
+          </button>
           <button class="btn btn-error" @click="doReset">Delete</button>
         </div>
       </div>

@@ -5,7 +5,7 @@
  * Props: effect: FadeInEffect, maxDuration: number (seconds)
  * Emits: update:effect(FadeInEffect), remove()
  */
-import type { FadeInEffect } from "../../features/effects/types";
+import type { FadeCurve, FadeInEffect } from "../../features/effects/types";
 
 const props = defineProps<{
   effect: FadeInEffect;
@@ -17,15 +17,16 @@ const emit = defineEmits<{
   remove: [];
 }>();
 
-const onToggleEnabled = () => {
-  emit("update:effect", { ...props.effect, enabled: !props.effect.enabled });
-};
-
 const onDurationInput = (evt: Event) => {
   const raw = (evt.target as HTMLInputElement).valueAsNumber;
   const max = props.maxDuration > 0 ? props.maxDuration : 999;
-  const duration = Math.min(max, Math.max(0, isNaN(raw) ? 0 : raw));
+  const duration = Math.min(max, Math.max(0, Number.isNaN(raw) ? 0 : raw));
   emit("update:effect", { ...props.effect, duration });
+};
+
+const onCurveChange = (evt: Event) => {
+  const curve = (evt.target as HTMLSelectElement).value as FadeCurve;
+  emit("update:effect", { ...props.effect, curve });
 };
 </script>
 
@@ -34,20 +35,6 @@ const onDurationInput = (evt: Event) => {
     class="flex items-center gap-2 px-2 py-1.5 text-xs"
     :class="effect.enabled ? '' : 'opacity-50'"
   >
-    <!-- Enable toggle -->
-    <button
-      class="btn btn-xs btn-ghost min-h-0 h-5 w-5 p-0 shrink-0"
-      :title="effect.enabled ? 'Disable effect' : 'Enable effect'"
-      :aria-pressed="effect.enabled"
-      @click="onToggleEnabled"
-    >
-      <i
-        :class="effect.enabled ? 'iconify mdi--toggle-switch text-success' : 'iconify mdi--toggle-switch-off text-base-content/40'"
-        class="size-4"
-        aria-hidden="true"
-      />
-    </button>
-
     <!-- Label -->
     <span class="font-medium w-16 shrink-0">Fade In</span>
 
@@ -78,14 +65,18 @@ const onDurationInput = (evt: Event) => {
     />
     <span class="shrink-0 text-base-content/50">s</span>
 
-    <!-- Remove button -->
-    <button
-      class="btn btn-xs btn-ghost min-h-0 h-5 w-5 p-0 shrink-0 text-base-content/40 hover:text-error"
-      title="Remove effect"
-      aria-label="Remove fade in effect"
-      @click="emit('remove')"
+    <!-- Curve select -->
+    <select
+      class="select select-xs shrink-0"
+      :disabled="!effect.enabled"
+      :value="effect.curve"
+      aria-label="Fade in curve"
+      @change="onCurveChange"
     >
-      <i class="iconify mdi--close size-4" aria-hidden="true" />
-    </button>
+      <option value="linear">Linear</option>
+      <option value="logarithmic">Log</option>
+      <option value="exponential">Exp</option>
+      <option value="sine">Sine</option>
+    </select>
   </div>
 </template>

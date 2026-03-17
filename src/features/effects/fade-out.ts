@@ -12,6 +12,7 @@ export function createFadeOutEffect(id?: string): FadeOutEffect {
     type: "fadeOut",
     enabled: true,
     duration: 0.5,
+    curve: "linear",
   };
 }
 

@@ -12,27 +12,24 @@
  * context (or an explicit effectScope) because it uses Vue watchEffect internally.
  */
 
-import { watchEffect, shallowReactive, effectScope, ref, watch } from "vue";
+import { effectScope, ref, shallowReactive, watch, watchEffect } from "vue";
 import {
-  type NoteDuration,
   type MusicInstrumentType,
+  type NoteDuration,
   type OctaveRange,
   PIANO_DEFAULT_OCTAVE_RANGE,
 } from "../../../music/instruments";
-import { createAudioTrack } from "../track";
+import { createSynthWorkerClient, SynthEmptyTrackSignal } from "../../../music/synthWorker";
 import { createInstrumentSequence } from "../../sequence/instrument/instrument-sequence";
-import {
-  createSynthWorkerClient,
-  SynthEmptyTrackSignal,
-} from "../../../music/synthWorker";
+import { createAudioTrack } from "../track";
 import {
   DEFAULT_TIME_SIGNATURE,
-  type TimeSignature,
-  type PlacedNote,
-  type InstrumentTrackKind,
   type InstrumentAudioTrack,
   type InstrumentTrackJSON,
+  type InstrumentTrackKind,
   instrumentTrackKind,
+  type PlacedNote,
+  type TimeSignature,
 } from "./index";
 
 // ─── One shared synth worker client for the whole app ─────────────────────────

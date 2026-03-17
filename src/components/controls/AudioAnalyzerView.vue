@@ -20,7 +20,7 @@
  *   polar           Radial bars radiating from an inner circle (full 360°).
  */
 
-import { ref, computed, onMounted, onUnmounted } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 
 const props = defineProps<{
   analyserBuffer: AudioBuffer | null;
@@ -145,7 +145,11 @@ const isActive = computed(() => props.analyserBuffer !== null);
     <div class="absolute top-1.5 right-1.5 z-10 flex gap-0.5">
       <button
         class="btn btn-xs btn-square transition-opacity"
-        :class="mode === 'linear-bottom' ? 'btn-primary' : 'btn-ghost opacity-40 hover:opacity-100'"
+        :class="
+          mode === 'linear-bottom'
+            ? 'btn-primary'
+            : 'btn-ghost opacity-40 hover:opacity-100'
+        "
         title="Linear — bottom anchored"
         @click="mode = 'linear-bottom'"
       >
@@ -153,7 +157,11 @@ const isActive = computed(() => props.analyserBuffer !== null);
       </button>
       <button
         class="btn btn-xs btn-square transition-opacity"
-        :class="mode === 'linear-centered' ? 'btn-primary' : 'btn-ghost opacity-40 hover:opacity-100'"
+        :class="
+          mode === 'linear-centered'
+            ? 'btn-primary'
+            : 'btn-ghost opacity-40 hover:opacity-100'
+        "
         title="Linear — centered (waveform)"
         @click="mode = 'linear-centered'"
       >
@@ -161,7 +169,11 @@ const isActive = computed(() => props.analyserBuffer !== null);
       </button>
       <button
         class="btn btn-xs btn-square transition-opacity"
-        :class="mode === 'polar' ? 'btn-primary' : 'btn-ghost opacity-40 hover:opacity-100'"
+        :class="
+          mode === 'polar'
+            ? 'btn-primary'
+            : 'btn-ghost opacity-40 hover:opacity-100'
+        "
         title="Polar"
         @click="mode = 'polar'"
       >

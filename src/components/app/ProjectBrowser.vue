@@ -20,16 +20,12 @@
  * Export / Import use the same awp-export / awp-import utilities as before.
  */
 
-import {
-  ref,
-  computed,
-  watch,
-} from "vue";
-import { useProjectStore } from "../../stores/project";
-import { storageService as storage } from "../../lib/storage/storage-singleton";
+import { computed, ref, watch } from "vue";
+import { type ExportProgress, exportProject } from "../../lib/storage/awp-export";
+import { type ImportOutcome, importProject } from "../../lib/storage/awp-import";
 import type { ProjectSummary } from "../../lib/storage/storage-service";
-import { exportProject, type ExportProgress } from "../../lib/storage/awp-export";
-import { importProject, type ImportOutcome } from "../../lib/storage/awp-import";
+import { storageService as storage } from "../../lib/storage/storage-singleton";
+import { useProjectStore } from "../../stores/project";
 
 // ── Stores ────────────────────────────────────────────────────────────────────
 
@@ -108,8 +104,7 @@ const fileInputRef = ref<HTMLInputElement | null>(null);
 const formatBytes = (bytes: number): string => {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 * 1024 * 1024)
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 };
 
@@ -147,8 +142,7 @@ const sortedProjects = computed(() => {
   const field = sortField.value;
   list.sort((a, b) => {
     if (field === "name") return a.name.localeCompare(b.name) * dir;
-    if (field === "updatedAt")
-      return (a.updatedAt.getTime() - b.updatedAt.getTime()) * dir;
+    if (field === "updatedAt") return (a.updatedAt.getTime() - b.updatedAt.getTime()) * dir;
     return (a.sizeBytes - b.sizeBytes) * dir;
   });
   return list;
@@ -294,12 +288,7 @@ const doImport = async (file: File) => {
   try {
     // Verify ZIP magic bytes (0x50 0x4B 0x03 0x04) before importing.
     const header = new Uint8Array(await file.slice(0, 4).arrayBuffer());
-    if (
-      header[0] !== 0x50 ||
-      header[1] !== 0x4b ||
-      header[2] !== 0x03 ||
-      header[3] !== 0x04
-    ) {
+    if (header[0] !== 0x50 || header[1] !== 0x4b || header[2] !== 0x03 || header[3] !== 0x04) {
       throw new Error("The selected file is not a valid .awp archive.");
     }
     const outcome: ImportOutcome = await importProject(file);
@@ -332,7 +321,7 @@ const handleDrop = async (e: DragEvent) => {
   e.preventDefault();
   dragOver.value = false;
   const file = e.dataTransfer?.files[0];
-  if (file && file.name.endsWith(".awp")) {
+  if (file?.name.endsWith(".awp")) {
     await doImport(file);
   } else if (file) {
     error.value = "Only .awp files can be imported.";
@@ -360,7 +349,6 @@ watch(
     @drop="handleDrop"
   >
     <div class="modal-box w-11/12 max-w-4xl bg-base-300">
-
       <!-- ── Modal header ──────────────────────────────────────────────── -->
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-lg font-semibold">Project Manager</h2>
@@ -371,7 +359,10 @@ watch(
             aria-label="New Project"
             @click="requestNew"
           >
-            <i class="iconify mdi--file-plus-outline size-4" aria-hidden="true" />
+            <i
+              class="iconify mdi--file-plus-outline size-4"
+              aria-hidden="true"
+            />
             New Project
           </button>
           <button
@@ -508,7 +499,9 @@ watch(
                 {{ proj.author || "\u2014" }}
               </td>
               <td class="tabular-nums">{{ proj.nodeCount }}</td>
-              <td class="tabular-nums">{{ formatDuration(proj.durationSeconds) }}</td>
+              <td class="tabular-nums">
+                {{ formatDuration(proj.durationSeconds) }}
+              </td>
               <td class="tabular-nums">{{ formatBytes(proj.sizeBytes) }}</td>
               <td class="text-base-content/60 text-xs">
                 {{ formatDate(proj.updatedAt) }}
@@ -565,7 +558,6 @@ watch(
           </tbody>
         </table>
       </div>
-
     </div>
 
     <!-- ── Backdrop (click to close) ──────────────────────────────────── -->
@@ -574,11 +566,7 @@ watch(
     </form>
 
     <!-- ── Delete confirmation modal ─────────────────────────────────── -->
-    <dialog
-      ref="deleteDialogRef"
-      class="modal"
-      @cancel.prevent="cancelDelete"
-    >
+    <dialog ref="deleteDialogRef" class="modal" @cancel.prevent="cancelDelete">
       <div class="modal-box bg-base-300 max-w-sm">
         <h3 class="mb-2 text-lg font-bold">Delete Project?</h3>
         <p class="py-4 text-sm text-base-content/70">
@@ -608,14 +596,17 @@ watch(
           This cannot be undone.
         </p>
         <div class="modal-action">
-          <button class="btn btn-ghost" @click="cancelNewConfirm">Cancel</button>
-          <button class="btn btn-warning" @click="confirmNew">Discard &amp; New</button>
+          <button class="btn btn-ghost" @click="cancelNewConfirm">
+            Cancel
+          </button>
+          <button class="btn btn-warning" @click="confirmNew">
+            Discard &amp; New
+          </button>
         </div>
       </div>
       <form method="dialog" class="modal-backdrop">
         <button @click.prevent="cancelNewConfirm">close</button>
       </form>
     </dialog>
-
   </dialog>
 </template>

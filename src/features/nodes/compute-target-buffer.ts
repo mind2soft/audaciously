@@ -7,8 +7,8 @@
 // Zero-copy optimisation: if no effects are enabled, `source` is returned as-is
 // (same reference). The caller should not mutate the returned buffer.
 
-import type { AudioEffect } from "../effects/types";
 import { applyEffectChain } from "../effects/apply-effects";
+import type { AudioEffect } from "../effects/types";
 
 /**
  * Pre-bake all enabled effects from `effects` into a new AudioBuffer using an
@@ -29,11 +29,7 @@ export async function computeTargetBuffer(
   // Zero-copy fast path: no enabled effects → return the source unchanged.
   if (enabled.length === 0) return source;
 
-  const offCtx = new OfflineAudioContext(
-    source.numberOfChannels,
-    source.length,
-    source.sampleRate,
-  );
+  const offCtx = new OfflineAudioContext(source.numberOfChannels, source.length, source.sampleRate);
 
   const bufSrc = offCtx.createBufferSource();
   bufSrc.buffer = source;

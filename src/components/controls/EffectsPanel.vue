@@ -23,24 +23,26 @@
  */
 
 import { computed, ref } from "vue";
-import type {
-  AudioEffect,
-  AudioEffectType,
-  GainEffect,
-  BalanceEffect,
-  FadeInEffect,
-  FadeOutEffect,
-} from "../../features/effects/types";
 import {
-  createGainEffect,
   createBalanceEffect,
   createFadeInEffect,
   createFadeOutEffect,
+  createGainEffect,
+  createSplitEffect,
+  createVolumeEffect,
 } from "../../features/effects";
-import EffectGain from "./EffectGain.vue";
+import type {
+  AudioEffect,
+  AudioEffectType,
+  BalanceEffect,
+  FadeInEffect,
+  FadeOutEffect,
+  GainEffect,
+} from "../../features/effects/types";
 import EffectBalance from "./EffectBalance.vue";
 import EffectFadeIn from "./EffectFadeIn.vue";
 import EffectFadeOut from "./EffectFadeOut.vue";
+import EffectGain from "./EffectGain.vue";
 
 const props = withDefaults(
   defineProps<{
@@ -69,9 +71,7 @@ const ALL_EFFECT_TYPES: { type: AudioEffectType; label: string }[] = [
 
 /** Only show types not already present in the chain. */
 const availableTypes = computed(() =>
-  ALL_EFFECT_TYPES.filter(
-    (t) => !props.effects.some((e) => e.type === t.type),
-  ),
+  ALL_EFFECT_TYPES.filter((t) => !props.effects.some((e) => e.type === t.type)),
 );
 
 const addDropdownOpen = ref(false);
@@ -80,10 +80,24 @@ const addEffect = (type: AudioEffectType) => {
   addDropdownOpen.value = false;
   let newEffect: AudioEffect;
   switch (type) {
-    case "gain":    newEffect = createGainEffect();    break;
-    case "balance": newEffect = createBalanceEffect(); break;
-    case "fadeIn":  newEffect = createFadeInEffect();  break;
-    case "fadeOut": newEffect = createFadeOutEffect(); break;
+    case "gain":
+      newEffect = createGainEffect();
+      break;
+    case "balance":
+      newEffect = createBalanceEffect();
+      break;
+    case "fadeIn":
+      newEffect = createFadeInEffect();
+      break;
+    case "fadeOut":
+      newEffect = createFadeOutEffect();
+      break;
+    case "split":
+      newEffect = createSplitEffect();
+      break;
+    case "volume":
+      newEffect = createVolumeEffect();
+      break;
   }
   emit("update:effects", [...props.effects, newEffect]);
 };
@@ -140,7 +154,9 @@ const onDragend = () => {
       v-if="showHeader"
       class="flex items-center justify-between px-2 py-1 bg-base-200 border-b border-base-300/60"
     >
-      <span class="text-xs font-semibold text-base-content/70 uppercase tracking-wide">
+      <span
+        class="text-xs font-semibold text-base-content/70 uppercase tracking-wide"
+      >
         Effects
       </span>
 
@@ -166,11 +182,7 @@ const onDragend = () => {
           role="listbox"
         >
           <li v-for="t in availableTypes" :key="t.type">
-            <button
-              class="text-xs"
-              role="option"
-              @click="addEffect(t.type)"
-            >
+            <button class="text-xs" role="option" @click="addEffect(t.type)">
               {{ t.label }}
             </button>
           </li>
@@ -220,26 +232,26 @@ const onDragend = () => {
         <div class="flex-1 min-w-0">
           <EffectGain
             v-if="effect.type === 'gain'"
-            :effect="(effect as GainEffect)"
+            :effect="effect as GainEffect"
             @update:effect="onUpdateEffect(index, $event)"
             @remove="onRemoveEffect(index)"
           />
           <EffectBalance
             v-else-if="effect.type === 'balance'"
-            :effect="(effect as BalanceEffect)"
+            :effect="effect as BalanceEffect"
             @update:effect="onUpdateEffect(index, $event)"
             @remove="onRemoveEffect(index)"
           />
           <EffectFadeIn
             v-else-if="effect.type === 'fadeIn'"
-            :effect="(effect as FadeInEffect)"
+            :effect="effect as FadeInEffect"
             :maxDuration="maxDuration ?? 0"
             @update:effect="onUpdateEffect(index, $event)"
             @remove="onRemoveEffect(index)"
           />
           <EffectFadeOut
             v-else-if="effect.type === 'fadeOut'"
-            :effect="(effect as FadeOutEffect)"
+            :effect="effect as FadeOutEffect"
             :maxDuration="maxDuration ?? 0"
             @update:effect="onUpdateEffect(index, $event)"
             @remove="onRemoveEffect(index)"

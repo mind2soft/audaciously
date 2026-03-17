@@ -63,8 +63,7 @@ const render = () => {
   ctx.clearRect(0, 0, w, h);
 
   // Background
-  const bgColor =
-    getComputedStyle(canvas).getPropertyValue("--color-base-200") || "#1e1e2e";
+  const bgColor = getComputedStyle(canvas).getPropertyValue("--color-base-200") || "#1e1e2e";
   ctx.fillStyle = `oklch(${bgColor})`;
 
   // Use CSS variables via computed style
@@ -81,9 +80,7 @@ const render = () => {
   // When visibleDuration is provided (window-fit mode), derive px/sec from the
   // canvas width so the ruler spans exactly the visible window. Otherwise fall
   // back to the DAW-style fixed pixel-per-second scale (ratio * 16).
-  const pixelsPerSecond = props.visibleDuration
-    ? w / props.visibleDuration
-    : props.ratio * 16; // baseSecondWidthInPixels = 16
+  const pixelsPerSecond = props.visibleDuration ? w / props.visibleDuration : props.ratio * 16; // baseSecondWidthInPixels = 16
 
   const startTime = props.offsetTime;
   const endTime = startTime + w / pixelsPerSecond;

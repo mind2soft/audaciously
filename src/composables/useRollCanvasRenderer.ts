@@ -10,11 +10,7 @@ import type { InstrumentPitch } from "../lib/music/instruments";
 // ── Coordinate helper ─────────────────────────────────────────────────────────
 
 /** Convert a beat position to a canvas X coordinate. */
-export function beatToX(
-  beat: number,
-  offsetBeat: number,
-  pxPerBeat: number,
-): number {
+export function beatToX(beat: number, offsetBeat: number, pxPerBeat: number): number {
   return (beat - offsetBeat) * pxPerBeat;
 }
 
@@ -71,9 +67,7 @@ export function drawGrid(p: DrawGridParams): void {
 
   // 3. Measure lines
   const firstMeasure = Math.floor(offsetBeat / beatsPerMeasure);
-  const lastMeasure = Math.ceil(
-    (offsetBeat + width / pxPerBeat) / beatsPerMeasure,
-  );
+  const lastMeasure = Math.ceil((offsetBeat + width / pxPerBeat) / beatsPerMeasure);
   const measureBeats = new Set<number>();
 
   ctx.strokeStyle = "rgba(255,255,255,0.12)";

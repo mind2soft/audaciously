@@ -102,9 +102,7 @@ export interface MetadataValidationResult {
 }
 
 /** Validate all metadata fields at once. */
-export function validateMetadata(
-  metadata: ProjectMetadata,
-): MetadataValidationResult {
+export function validateMetadata(metadata: ProjectMetadata): MetadataValidationResult {
   const errors: Partial<Record<keyof ProjectMetadata, string>> = {};
 
   const nameErr = validateProjectName(metadata.name);

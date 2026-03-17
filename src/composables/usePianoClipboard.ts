@@ -8,9 +8,9 @@
 //  • Uses the ClipboardEntry discriminated union so future content types
 //    (drum notes, audio segments) can be added without breaking this file.
 
-import { ref, computed } from "vue";
 import { nanoid } from "nanoid";
 import type { ComputedRef } from "vue";
+import { computed, ref } from "vue";
 import type { PlacedNote } from "../features/nodes";
 import type { ClipboardEntry, PianoNotesClipboard } from "../lib/piano-roll/tool-types";
 
@@ -53,9 +53,7 @@ function _ensureListener(): void {
   // The `storage` event only fires in OTHER tabs, never the current one.
   window.addEventListener("storage", (evt: StorageEvent) => {
     if (evt.key !== STORAGE_KEY) return;
-    _entry.value = evt.newValue
-      ? (JSON.parse(evt.newValue) as ClipboardEntry)
-      : null;
+    _entry.value = evt.newValue ? (JSON.parse(evt.newValue) as ClipboardEntry) : null;
   });
 }
 
@@ -76,11 +74,7 @@ export interface UsePianoClipboard {
    *
    * @returns Number of notes copied (0 when the array is empty).
    */
-  copyPianoNotes(
-    notes: PlacedNote[],
-    selectionStart: number,
-    selectionEnd: number,
-  ): number;
+  copyPianoNotes(notes: PlacedNote[], selectionStart: number, selectionEnd: number): number;
   /**
    * Cut a set of notes to the clipboard.
    * Notes are normalised relative to selectionStart (so pasting restores the
@@ -90,24 +84,16 @@ export interface UsePianoClipboard {
    *
    * @returns Number of notes cut (0 when the array is empty).
    */
-  cutPianoNotes(
-    notes: PlacedNote[],
-    selectionStart: number,
-    selectionEnd: number,
-  ): number;
+  cutPianoNotes(notes: PlacedNote[], selectionStart: number, selectionEnd: number): number;
 }
 
 export function usePianoClipboard(): UsePianoClipboard {
   _ensureListener();
 
-  const hasPianoNotes = computed(
-    () => _entry.value?.type === "piano-notes",
-  );
+  const hasPianoNotes = computed(() => _entry.value?.type === "piano-notes");
 
   const pianoNotesEntry = computed<PianoNotesClipboard | null>(() =>
-    _entry.value?.type === "piano-notes"
-      ? (_entry.value as PianoNotesClipboard)
-      : null,
+    _entry.value?.type === "piano-notes" ? (_entry.value as PianoNotesClipboard) : null,
   );
 
   function copyPianoNotes(
@@ -129,9 +115,7 @@ export function usePianoClipboard(): UsePianoClipboard {
     // Use actual content width as the splice shift-amount so that notes
     // extending beyond the original selection end don't collide with the
     // existing notes that were pushed right on paste.
-    const durationBeats = Math.max(
-      ...normalised.map((n) => n.startBeat + n.durationBeats),
-    );
+    const durationBeats = Math.max(...normalised.map((n) => n.startBeat + n.durationBeats));
 
     // selectionStart / selectionEnd are accepted but not used in the new
     // normalisation strategy; kept in the signature for future use (e.g.

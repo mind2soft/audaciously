@@ -11,15 +11,12 @@
 //    is false; if the clipboard is cleared while active, ghost notes vanish
 //    and clicks are no-ops.
 
-import { ref, computed } from "vue";
 import { nanoid } from "nanoid";
 import type { ComputedRef } from "vue";
+import { computed, ref } from "vue";
 import type { PlacedNote } from "../features/nodes";
 import type { InstrumentPitch } from "../lib/music/instruments";
-import {
-  snapBeatRound,
-  insertNotesAt,
-} from "../lib/piano-roll/note-utils";
+import { insertNotesAt, snapBeatRound } from "../lib/piano-roll/note-utils";
 import { usePianoClipboard } from "./usePianoClipboard";
 
 // ── Context ───────────────────────────────────────────────────────────────────
@@ -53,7 +50,7 @@ export function usePasteTool(ctx: PasteToolContext) {
     return pianoNotesEntry.value.notes.map((n) => ({
       ...n,
       id: `ghost-${n.id}`,
-      startBeat: beatLine.value! + n.startBeat,
+      startBeat: (beatLine.value ?? 0) + n.startBeat,
     }));
   });
 
@@ -87,9 +84,7 @@ export function usePasteTool(ctx: PasteToolContext) {
       id: nanoid(),
     }));
 
-    ctx.emitNotes(
-      insertNotesAt(ctx.notes.value, freshNotes, insertBeat, entry.durationBeats),
-    );
+    ctx.emitNotes(insertNotesAt(ctx.notes.value, freshNotes, insertBeat, entry.durationBeats));
   }
 
   // ── Public interface ───────────────────────────────────────────────────────

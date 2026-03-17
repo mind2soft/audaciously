@@ -8,14 +8,14 @@
 //    Real-time preview is computed without mutating the store.
 //  • Mouseup: finalises positions, resolves pitch conflicts (rightmost wins).
 
-import { ref, computed, onUnmounted } from "vue";
 import type { ComputedRef } from "vue";
+import { computed, onUnmounted, ref } from "vue";
 import type { PlacedNote } from "../features/nodes";
 import type { InstrumentPitch } from "../lib/music/instruments";
 import {
-  snapBeatRound,
-  resolveOverlapsKeepRightmost,
   computeSnapBeats,
+  resolveOverlapsKeepRightmost,
+  snapBeatRound,
 } from "../lib/piano-roll/note-utils";
 
 // ── Context ───────────────────────────────────────────────────────────────────
@@ -81,12 +81,10 @@ export function usePanTool(ctx: PanToolContext) {
     const snappedDelta = snapBeatRound(rawDeltaBeats, dragSnapBeats.value);
     // Clamp so no dragged note goes before beat 0.
     const minDraggedStart = Math.min(
-      ...ctx.notes.value
-        .filter((n) => draggedIds.value.has(n.id))
-        .map((n) => n.startBeat),
+      ...ctx.notes.value.filter((n) => draggedIds.value.has(n.id)).map((n) => n.startBeat),
       Infinity,
     );
-    return isFinite(minDraggedStart)
+    return Number.isFinite(minDraggedStart)
       ? Math.max(-minDraggedStart, snappedDelta)
       : snappedDelta;
   }
@@ -139,9 +137,7 @@ export function usePanTool(ctx: PanToolContext) {
     isDragging.value = true;
 
     draggedIds.value = new Set(
-      ctx.notes.value
-        .filter((n) => n.startBeat >= snapped)
-        .map((n) => n.id),
+      ctx.notes.value.filter((n) => n.startBeat >= snapped).map((n) => n.id),
     );
 
     // Snap step = largest note duration in the dragged set, capped at
@@ -149,9 +145,7 @@ export function usePanTool(ctx: PanToolContext) {
     // a measure boundary after the move.
     const dragged = ctx.notes.value.filter((n) => draggedIds.value.has(n.id));
     const maxDuration =
-      dragged.length > 0
-        ? Math.max(...dragged.map((n) => n.durationBeats))
-        : ctx.snapBeats.value;
+      dragged.length > 0 ? Math.max(...dragged.map((n) => n.durationBeats)) : ctx.snapBeats.value;
     dragSnapBeats.value = computeSnapBeats(maxDuration, ctx.beatsPerMeasure.value);
 
     document.addEventListener("mousemove", onDocMousemove);

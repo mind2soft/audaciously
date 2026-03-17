@@ -15,14 +15,11 @@
 //   // In the app-level useAllNodes composable (not in individual views):
 //   useInstrumentNode(instrumentNodeRef)
 
-import { watch, ref, type Ref } from "vue";
-import {
-  createSynthWorkerClient,
-  SynthEmptyTrackSignal,
-} from "../lib/music/synthWorker";
-import { useNodesStore } from "../stores/nodes";
+import { type Ref, ref, watch } from "vue";
 import type { InstrumentNode } from "../features/nodes";
 import { computeTargetBuffer } from "../features/nodes/compute-target-buffer";
+import { createSynthWorkerClient, SynthEmptyTrackSignal } from "../lib/music/synthWorker";
+import { useNodesStore } from "../stores/nodes";
 
 // ── Module-level synth client ─────────────────────────────────────────────────
 // One client is sufficient for the whole application — the underlying worker
@@ -53,9 +50,9 @@ const synthClient = createSynthWorkerClient();
  * The watcher fires immediately on mount (immediate: true) so that any node
  * already in the store is rendered without requiring a manual edit.
  */
-export function useInstrumentNode(
-  nodeRef: Ref<InstrumentNode | null>,
-): { isComputing: Ref<boolean> } {
+export function useInstrumentNode(nodeRef: Ref<InstrumentNode | null>): {
+  isComputing: Ref<boolean>;
+} {
   const nodesStore = useNodesStore();
   const isComputing = ref(false);
 

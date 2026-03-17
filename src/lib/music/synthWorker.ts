@@ -14,16 +14,16 @@
  * and added to the player as a regular AudioTrack — no special treatment needed.
  */
 
-import SynthWorker from "../../workers/synth-processor?worker";
+import type { PlacedNoteID } from "../../features/nodes/instrument/instrument-node";
 import type {
-  SynthRequest,
-  SynthResponse,
   SynthError,
   SynthNote,
+  SynthRequest,
+  SynthResponse,
 } from "../../workers/synth-processor";
-import type { MusicInstrumentType, InstrumentPitchKey } from "./instruments";
+import SynthWorker from "../../workers/synth-processor?worker";
 import type { AudioTrackID } from "../audio/track/track";
-import type { PlacedNoteID } from "../../features/nodes/instrument/instrument-node";
+import type { InstrumentPitchKey, MusicInstrumentType } from "./instruments";
 
 // ─── Minimal render options ───────────────────────────────────────────────────
 
@@ -63,47 +63,36 @@ const pending = new Map<AudioTrackID, PendingRender>();
 
 // ─── Response handler ─────────────────────────────────────────────────────────
 
-worker.addEventListener(
-  "message",
-  (evt: MessageEvent<SynthResponse | SynthError>) => {
-    const data = evt.data;
-    const entry = pending.get(data.trackId);
+worker.addEventListener("message", (evt: MessageEvent<SynthResponse | SynthError>) => {
+  const data = evt.data;
+  const entry = pending.get(data.trackId);
 
-    // Ignore stale responses (superseded by a newer seqNum).
-    if (entry?.seqNum !== data.seqNum) return;
+  // Ignore stale responses (superseded by a newer seqNum).
+  if (entry?.seqNum !== data.seqNum) return;
 
-    pending.delete(data.trackId);
+  pending.delete(data.trackId);
 
-    if ("error" in data) {
-      entry.reject(new Error(data.error));
-      return;
-    }
+  if ("error" in data) {
+    entry.reject(new Error(data.error));
+    return;
+  }
 
-    if (data.empty) {
-      // Signal "nothing to play" via a rejected promise so the caller can
-      // remove the AudioTrack from the player cleanly.
-      entry.reject(new SynthEmptyTrackSignal());
-      return;
-    }
+  if (data.empty) {
+    // Signal "nothing to play" via a rejected promise so the caller can
+    // remove the AudioTrack from the player cleanly.
+    entry.reject(new SynthEmptyTrackSignal());
+    return;
+  }
 
-    // Assemble the AudioBuffer from the transferred Float32Arrays.
-    // Use a detached OfflineAudioContext just to create the AudioBuffer with
-    // the correct sample rate.  This is instantaneous (no rendering).
-    const tmpCtx = new OfflineAudioContext(
-      2,
-      data.left.length,
-      DEFAULT_SAMPLE_RATE,
-    );
-    const audioBuffer = tmpCtx.createBuffer(
-      2,
-      data.left.length,
-      DEFAULT_SAMPLE_RATE,
-    );
-    audioBuffer.copyToChannel(data.left as Float32Array<ArrayBuffer>, 0);
-    audioBuffer.copyToChannel(data.right as Float32Array<ArrayBuffer>, 1);
-    entry.resolve(audioBuffer);
-  },
-);
+  // Assemble the AudioBuffer from the transferred Float32Arrays.
+  // Use a detached OfflineAudioContext just to create the AudioBuffer with
+  // the correct sample rate.  This is instantaneous (no rendering).
+  const tmpCtx = new OfflineAudioContext(2, data.left.length, DEFAULT_SAMPLE_RATE);
+  const audioBuffer = tmpCtx.createBuffer(2, data.left.length, DEFAULT_SAMPLE_RATE);
+  audioBuffer.copyToChannel(data.left as Float32Array<ArrayBuffer>, 0);
+  audioBuffer.copyToChannel(data.right as Float32Array<ArrayBuffer>, 1);
+  entry.resolve(audioBuffer);
+});
 
 // ─── Sentinel error class ─────────────────────────────────────────────────────
 

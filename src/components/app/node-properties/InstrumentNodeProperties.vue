@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { useNodesStore } from "../../../stores/nodes";
 import type { InstrumentNode } from "../../../features/nodes";
+import { useNodesStore } from "../../../stores/nodes";
 
 const props = defineProps<{ node: InstrumentNode }>();
 const nodes = useNodesStore();
@@ -17,13 +17,12 @@ function beatUnitLabel(unit: number): string {
 
 function onBpmInput(event: Event): void {
   const v = parseFloat((event.target as HTMLInputElement).value);
-  if (!isNaN(v))
-    nodes.setInstrumentBpm(props.node.id, Math.max(20, Math.min(300, v)));
+  if (!Number.isNaN(v)) nodes.setInstrumentBpm(props.node.id, Math.max(20, Math.min(300, v)));
 }
 
 function onBeatsPerMeasureChange(event: Event): void {
   const v = parseInt((event.target as HTMLSelectElement).value, 10);
-  if (!isNaN(v)) {
+  if (!Number.isNaN(v)) {
     nodes.setInstrumentTimeSignature(props.node.id, {
       ...props.node.timeSignature,
       beatsPerMeasure: v,
@@ -33,7 +32,7 @@ function onBeatsPerMeasureChange(event: Event): void {
 
 function onBeatUnitChange(event: Event): void {
   const v = parseInt((event.target as HTMLSelectElement).value, 10);
-  if (!isNaN(v)) {
+  if (!Number.isNaN(v)) {
     nodes.setInstrumentTimeSignature(props.node.id, {
       ...props.node.timeSignature,
       beatUnit: v,
@@ -64,9 +63,10 @@ function onBeatUnitChange(event: Event): void {
           :value="node.bpm"
           @input="onBpmInput"
         />
-        <span class="text-xs tabular-nums text-base-content/70 w-8 text-right">{{
-          node.bpm
-        }}</span>
+        <span
+          class="text-xs tabular-nums text-base-content/70 w-8 text-right"
+          >{{ node.bpm }}</span
+        >
       </div>
 
       <!-- Meter label -->

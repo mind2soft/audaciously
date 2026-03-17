@@ -27,7 +27,10 @@ defineProps<{
     </template>
     <template v-else-if="saving">
       <span class="text-info flex items-center gap-1">
-        <i class="iconify mdi--loading animate-spin size-3" aria-hidden="true" />
+        <i
+          class="iconify mdi--loading animate-spin size-3"
+          aria-hidden="true"
+        />
         Saving&hellip;
       </span>
     </template>
@@ -39,7 +42,10 @@ defineProps<{
     </template>
     <template v-else>
       <span class="text-success/60 flex items-center gap-1">
-        <i class="iconify mdi--check-circle-outline size-3" aria-hidden="true" />
+        <i
+          class="iconify mdi--check-circle-outline size-3"
+          aria-hidden="true"
+        />
         Saved
       </span>
     </template>

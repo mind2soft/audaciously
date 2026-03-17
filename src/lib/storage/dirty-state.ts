@@ -109,20 +109,14 @@ export function markSequenceDirty(
 }
 
 /** Remove a track entry (called after the track has been deleted from the DB). */
-export function clearTrackDirty(
-  state: DirtyState,
-  trackId: string,
-): DirtyState {
+export function clearTrackDirty(state: DirtyState, trackId: string): DirtyState {
   if (!(trackId in state.tracks)) return state;
   const { [trackId]: _removed, ...rest } = state.tracks;
   return { ...state, tracks: rest };
 }
 
 /** Remove a sequence entry (called after the sequence has been saved/deleted). */
-export function clearSequenceDirty(
-  state: DirtyState,
-  sequenceId: string,
-): DirtyState {
+export function clearSequenceDirty(state: DirtyState, sequenceId: string): DirtyState {
   if (!(sequenceId in state.sequences)) return state;
   const { [sequenceId]: _removed, ...rest } = state.sequences;
   return { ...state, sequences: rest };

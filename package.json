@@ -7,7 +7,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "format": "biome format --write",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write --unsafe ."
   },
   "dependencies": {
     "@breezystack/lamejs": "^1.2.7",
@@ -19,6 +22,7 @@
     "waveform-path": "^0.0.2"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.4.7",
     "@iconify-json/file-icons": "^1.2.2",
     "@iconify-json/mdi": "^1.2.3",
     "@iconify/tailwind": "^1.2.0",

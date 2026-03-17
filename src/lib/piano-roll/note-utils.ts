@@ -10,10 +10,7 @@ import type { InstrumentPitchKey } from "../music/instruments";
 /** True when two notes occupy overlapping time on the same pitch. */
 export function notesOverlap(a: PlacedNote, b: PlacedNote): boolean {
   if (a.pitchKey !== b.pitchKey) return false;
-  return (
-    a.startBeat < b.startBeat + b.durationBeats &&
-    b.startBeat < a.startBeat + a.durationBeats
-  );
+  return a.startBeat < b.startBeat + b.durationBeats && b.startBeat < a.startBeat + a.durationBeats;
 }
 
 // ── Hit testing ───────────────────────────────────────────────────────────────
@@ -67,12 +64,8 @@ export function hitTestNote(
  *   - Invalid inputs (noteDurationBeats ≤ 0, NaN, Infinity) safely return
  *     beatsPerMeasure via the explicit guard below.
  */
-export function computeSnapBeats(
-  noteDurationBeats: number,
-  beatsPerMeasure: number,
-): number {
-  if (noteDurationBeats <= 0 || !isFinite(noteDurationBeats))
-    return beatsPerMeasure;
+export function computeSnapBeats(noteDurationBeats: number, beatsPerMeasure: number): number {
+  if (noteDurationBeats <= 0 || !Number.isFinite(noteDurationBeats)) return beatsPerMeasure;
   if (noteDurationBeats >= beatsPerMeasure) return beatsPerMeasure;
   const ratio = beatsPerMeasure / noteDurationBeats;
   return Number.isInteger(ratio) ? noteDurationBeats : beatsPerMeasure;
@@ -83,8 +76,7 @@ export function computeSnapBeats(
  * Used by the place tool so the new note starts at-or-before the click.
  */
 export function snapBeatFloor(rawBeat: number, snapBeats: number): number {
-  const snapped =
-    Math.floor((rawBeat + Number.EPSILON) / snapBeats) * snapBeats;
+  const snapped = Math.floor((rawBeat + Number.EPSILON) / snapBeats) * snapBeats;
   return Math.max(0, Number(snapped.toFixed(6)));
 }
 
@@ -103,11 +95,7 @@ export function snapBeatRound(rawBeat: number, snapBeats: number): number {
  * Convert a viewport clientX to a raw (unsnapped) beat position.
  * getBoundingClientRect() already accounts for scroll, so no manual offset needed.
  */
-export function clientXToRawBeat(
-  clientX: number,
-  rect: DOMRect,
-  pxPerBeat: number,
-): number {
+export function clientXToRawBeat(clientX: number, rect: DOMRect, pxPerBeat: number): number {
   return (clientX - rect.left) / pxPerBeat;
 }
 
@@ -124,9 +112,7 @@ export function shiftNotesFrom(
   deltaBeats: number,
 ): PlacedNote[] {
   return notes.map((n) =>
-    n.startBeat >= fromBeat
-      ? { ...n, startBeat: Math.max(0, n.startBeat + deltaBeats) }
-      : n,
+    n.startBeat >= fromBeat ? { ...n, startBeat: Math.max(0, n.startBeat + deltaBeats) } : n,
   );
 }
 
@@ -137,9 +123,7 @@ export function shiftNotesFrom(
  * Algorithm: sort descending by startBeat, then greedily add each note
  * only when it doesn't conflict with an already-kept note.
  */
-export function resolveOverlapsKeepRightmost(
-  notes: PlacedNote[],
-): PlacedNote[] {
+export function resolveOverlapsKeepRightmost(notes: PlacedNote[]): PlacedNote[] {
   const sorted = [...notes].sort((a, b) => b.startBeat - a.startBeat);
   const kept: PlacedNote[] = [];
   for (const note of sorted) {
@@ -179,9 +163,7 @@ export function notesInRange(
   rangeStart: number,
   rangeEnd: number,
 ): PlacedNote[] {
-  return notes.filter(
-    (n) => n.startBeat < rangeEnd && n.startBeat + n.durationBeats > rangeStart,
-  );
+  return notes.filter((n) => n.startBeat < rangeEnd && n.startBeat + n.durationBeats > rangeStart);
 }
 
 /**
@@ -203,13 +185,9 @@ export function cutNotesInRange(
   rangeStart: number,
   rangeEnd: number,
 ): PlacedNote[] {
-  const removeIds = new Set(
-    notesInRange(notes, rangeStart, rangeEnd).map((n) => n.id),
-  );
+  const removeIds = new Set(notesInRange(notes, rangeStart, rangeEnd).map((n) => n.id));
 
-  const toShift = notes.filter(
-    (n) => !removeIds.has(n.id) && n.startBeat >= rangeEnd,
-  );
+  const toShift = notes.filter((n) => !removeIds.has(n.id) && n.startBeat >= rangeEnd);
 
   const rawGap = rangeEnd - rangeStart;
   let shiftAmount = rawGap;
@@ -223,8 +201,6 @@ export function cutNotesInRange(
   return notes
     .filter((n) => !removeIds.has(n.id))
     .map((n) =>
-      n.startBeat >= rangeEnd
-        ? { ...n, startBeat: Math.max(0, n.startBeat - shiftAmount) }
-        : n,
+      n.startBeat >= rangeEnd ? { ...n, startBeat: Math.max(0, n.startBeat - shiftAmount) } : n,
     );
 }

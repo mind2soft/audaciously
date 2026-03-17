@@ -12,6 +12,7 @@ export function createFadeInEffect(id?: string): FadeInEffect {
     type: "fadeIn",
     enabled: true,
     duration: 0.5,
+    curve: "linear",
   };
 }
 

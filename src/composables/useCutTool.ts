@@ -14,15 +14,11 @@
 //    note array, and closes the gap — shifting subsequent notes left, snapped
 //    to the largest note duration among the shifted notes.
 
-import { ref, computed, onUnmounted } from "vue";
-import type { Ref, ComputedRef } from "vue";
+import type { ComputedRef, Ref } from "vue";
+import { computed, onUnmounted, ref } from "vue";
 import type { PlacedNote } from "../features/nodes";
 import type { InstrumentPitch } from "../lib/music/instruments";
-import {
-  snapBeatRound,
-  notesInRange,
-  cutNotesInRange,
-} from "../lib/piano-roll/note-utils";
+import { cutNotesInRange, notesInRange, snapBeatRound } from "../lib/piano-roll/note-utils";
 import { usePianoClipboard } from "./usePianoClipboard";
 
 const SCROLL_EDGE_PX = 40; // px from container edge to trigger auto-scroll
@@ -69,9 +65,7 @@ export function useCutTool(ctx: CutToolContext) {
   const selectedNoteIds = computed<Set<string>>(() => {
     const range = selectionRange.value;
     if (!range) return new Set();
-    return new Set(
-      notesInRange(ctx.notes.value, range.start, range.end).map((n) => n.id),
-    );
+    return new Set(notesInRange(ctx.notes.value, range.start, range.end).map((n) => n.id));
   });
 
   // ── Coordinate helpers ─────────────────────────────────────────────────────
@@ -147,8 +141,7 @@ export function useCutTool(ctx: CutToolContext) {
     if (scrollEl) {
       const r = scrollEl.getBoundingClientRect();
       const nearEdge =
-        evt.clientX < r.left + SCROLL_EDGE_PX ||
-        evt.clientX > r.right - SCROLL_EDGE_PX;
+        evt.clientX < r.left + SCROLL_EDGE_PX || evt.clientX > r.right - SCROLL_EDGE_PX;
       if (nearEdge) startAutoScroll();
       else stopAutoScroll();
     }

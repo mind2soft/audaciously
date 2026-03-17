@@ -6,16 +6,16 @@
  * to the appropriate per-type panel via dynamic component.
  */
 
-import { computed, ref, watch, nextTick } from "vue";
-import { useNodesStore } from "../../stores/nodes";
-import type { RecordedNode, InstrumentNode } from "../../features/nodes";
+import { computed, nextTick, ref, watch } from "vue";
 import type { AudioEffect } from "../../features/effects";
+import type { InstrumentNode, RecordedNode } from "../../features/nodes";
+import type { MusicInstrumentType } from "../../lib/music/instruments";
+import { useNodesStore } from "../../stores/nodes";
+import EffectsPipeline from "../controls/EffectsPipeline.vue";
 import FolderNodeProperties from "./node-properties/FolderNodeProperties.vue";
-import RecordedNodeProperties from "./node-properties/RecordedNodeProperties.vue";
 import InstrumentNodeProperties from "./node-properties/InstrumentNodeProperties.vue";
 import PianoNodeProperties from "./node-properties/PianoNodeProperties.vue";
-import EffectsPanel from "../controls/EffectsPanel.vue";
-import type { MusicInstrumentType } from "../../lib/music/instruments";
+import RecordedNodeProperties from "./node-properties/RecordedNodeProperties.vue";
 
 const nodes = useNodesStore();
 
@@ -26,14 +26,10 @@ const selectedRecorded = computed((): RecordedNode | null => {
   return n?.kind === "recorded" ? (n as RecordedNode) : null;
 });
 
-const selectedInstrument = computed(
-  (): InstrumentNode<MusicInstrumentType> | null => {
-    const n = selectedNode.value;
-    return n?.kind === "instrument"
-      ? (n as InstrumentNode<MusicInstrumentType>)
-      : null;
-  },
-);
+const selectedInstrument = computed((): InstrumentNode<MusicInstrumentType> | null => {
+  const n = selectedNode.value;
+  return n?.kind === "instrument" ? (n as InstrumentNode<MusicInstrumentType>) : null;
+});
 
 /** The instrument-specific sub-panel: Piano or Drum (null = no sub-panel). */
 const instrumentSubPanel = computed(() => {
@@ -58,11 +54,20 @@ function onRename(name: string): void {
   }
 }
 
-// ── Instrument effects (owned here, not in InstrumentNodeProperties) ──────────
+/** Source label and icon for EffectsPipeline (instrument nodes only). */
+const instrumentSourceLabel = computed((): string => {
+  const inst = selectedInstrument.value;
+  if (!inst) return "Instrument";
+  return inst.instrumentType === "drums" ? "Drums" : "Piano";
+});
 
-const bufferDuration = computed(
-  () => selectedInstrument.value?.targetBuffer?.duration,
-);
+const instrumentSourceIcon = computed((): string => {
+  const inst = selectedInstrument.value;
+  if (!inst) return "mdi--music-note";
+  return inst.instrumentType === "drums" ? "mdi--drum" : "mdi--piano";
+});
+
+const bufferDuration = computed(() => selectedInstrument.value?.targetBuffer?.duration);
 
 function onUpdateEffects(effects: AudioEffect[]): void {
   if (selectedInstrument.value) {
@@ -158,27 +163,34 @@ watch(confirmDelete, async (val) => {
         :node="selectedRecorded"
       />
 
-      <!-- InstrumentNode: common → specific → effects -->
+      <!-- InstrumentNode: pipeline (source slot contains common + specific properties) -->
       <div
         v-else-if="selectedInstrument"
         class="flex flex-col flex-1 min-h-0 overflow-hidden"
       >
-        <!-- 1. Common: Tempo & Meter -->
-        <InstrumentNodeProperties :node="selectedInstrument" />
-        <!-- 2. Specific: Piano (octave range + note duration) or Drum (step size) -->
-        <template v-if="instrumentSubPanel">
-          <div class="border-t border-base-300/40 shrink-0" />
-          <component :is="instrumentSubPanel" :node="selectedInstrument" />
-        </template>
-        <!-- 3. Effects panel (flex-1, scrollable) -->
-        <div class="border-t border-base-300/40 shrink-0" />
-        <div class="flex-1 overflow-y-auto min-h-0">
-          <EffectsPanel
-            :effects="selectedInstrument.effects"
-            :maxDuration="bufferDuration"
-            @update:effects="onUpdateEffects"
-          />
-        </div>
+        <EffectsPipeline
+          :key="selectedInstrument.id"
+          :effects="selectedInstrument.effects"
+          :maxDuration="bufferDuration"
+          :sourceLabel="instrumentSourceLabel"
+          :sourceIcon="instrumentSourceIcon"
+          @update:effects="onUpdateEffects"
+        >
+          <template #source-properties>
+            <div class="flex flex-col">
+              <!-- 1. Common: Tempo & Meter -->
+              <InstrumentNodeProperties :node="selectedInstrument" />
+              <!-- 2. Specific: Piano (octave range + note duration) or Drum (step size) -->
+              <template v-if="instrumentSubPanel">
+                <div class="border-t border-base-300/40" />
+                <component
+                  :is="instrumentSubPanel"
+                  :node="selectedInstrument"
+                />
+              </template>
+            </div>
+          </template>
+        </EffectsPipeline>
       </div>
     </template>
 

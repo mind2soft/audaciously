@@ -27,8 +27,8 @@
  */
 
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import type { InstrumentNode, ProjectNode, RecordedNode } from "../../features/nodes/node";
 import type { Segment } from "../../features/sequence/segment";
-import type { ProjectNode, RecordedNode, InstrumentNode } from "../../features/nodes/node";
 import { createWaveformProcessor } from "../../lib/audio/waveform";
 
 const props = defineProps<{
@@ -58,8 +58,8 @@ const rawDuration = computed((): number => {
 });
 
 /** Visible duration after applying trim. */
-const visibleDuration = computed(
-  () => Math.max(0, rawDuration.value - props.segment.trimStart - props.segment.trimEnd),
+const visibleDuration = computed(() =>
+  Math.max(0, rawDuration.value - props.segment.trimStart - props.segment.trimEnd),
 );
 
 /** Left offset in pixels (segment time position). */
@@ -97,7 +97,9 @@ const updateWaveform = () => {
       normalize: false,
     })
     .then(
-      (p) => { waveformPath.value = p; },
+      (p) => {
+        waveformPath.value = p;
+      },
       () => {},
     );
 };
@@ -124,10 +126,8 @@ const noteBars = computed(() => {
   if (!instrNode.notes.length) return [];
 
   // Use buffer duration as denominator for x-axis, fallback to 1
-  const totalBeats = instrNode.notes.reduce(
-    (max, n) => Math.max(max, n.startBeat + n.durationBeats),
-    0,
-  ) || 1;
+  const totalBeats =
+    instrNode.notes.reduce((max, n) => Math.max(max, n.startBeat + n.durationBeats), 0) || 1;
 
   const w = widthPx.value;
   const h = 100; // SVG viewBox height

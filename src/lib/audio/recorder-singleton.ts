@@ -8,8 +8,8 @@
  * DO NOT import from Vue components via inject — import this module directly.
  */
 
-import { createRecorder, type Recorder } from "./recorder";
 import { loadSettings, settingsToMediaStreamConstraints } from "../settings";
+import { createRecorder, type Recorder } from "./recorder";
 
 const settings = loadSettings();
 

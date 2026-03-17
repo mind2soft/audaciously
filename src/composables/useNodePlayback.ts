@@ -12,8 +12,8 @@
 // Usage:
 //   const { state, currentTime, play, pause, stop, seek } = useNodePlayback(nodeRef)
 
-import { ref, watch, onUnmounted, type Ref } from "vue";
-import type { RecordedNode, InstrumentNode } from "../features/nodes";
+import { onUnmounted, type Ref, ref, watch } from "vue";
+import type { InstrumentNode, RecordedNode } from "../features/nodes";
 
 // ── Public types ───────────────────────────────────────────────────────────────
 

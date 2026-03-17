@@ -1,11 +1,7 @@
 import type { RecordedTrackKind } from "../../track/recorded";
-import { type AudioSequencePlayback } from "../index";
+import type { AudioSequencePlayback } from "../index";
 import { createAudioSequence } from "../sequence";
-import {
-  recordedSequenceType,
-  type RecordedSequence,
-  type RecordedSequenceType,
-} from "./index";
+import { type RecordedSequence, type RecordedSequenceType, recordedSequenceType } from "./index";
 
 // ─── Internal playback state ──────────────────────────────────────────────────
 
@@ -26,11 +22,7 @@ export function createRecordedSequence(
   time: number,
   id?: string,
 ): RecordedSequence {
-  return createAudioSequence<
-    RecordedTrackKind,
-    RecordedSequenceType,
-    RecordedSequence
-  >(
+  return createAudioSequence<RecordedTrackKind, RecordedSequenceType, RecordedSequence>(
     recordedSequenceType,
     time,
     (base, dispatchEvent) => {
@@ -46,10 +38,7 @@ export function createRecordedSequence(
       }
 
       function startPlayback(startTime: number, currentTime?: number) {
-        if (
-          !state.playback ||
-          base.time + buffer.duration / base.playbackRate < startTime
-        ) {
+        if (!state.playback || base.time + buffer.duration / base.playbackRate < startTime) {
           return;
         }
 
@@ -61,9 +50,7 @@ export function createRecordedSequence(
 
         source.buffer = buffer;
         const playbackRate =
-          isFinite(base.playbackRate) && base.playbackRate > 0
-            ? base.playbackRate
-            : 1;
+          Number.isFinite(base.playbackRate) && base.playbackRate > 0 ? base.playbackRate : 1;
         source.playbackRate.value = playbackRate;
 
         state.playback.activeSource = source;
@@ -123,9 +110,7 @@ export function createRecordedSequence(
 
           if (hasChanged && state.playback?.activeSource) {
             const safeRate =
-              isFinite(base.playbackRate) && base.playbackRate > 0
-                ? base.playbackRate
-                : 1;
+              Number.isFinite(base.playbackRate) && base.playbackRate > 0 ? base.playbackRate : 1;
             state.playback.activeSource.playbackRate.value = safeRate;
             dispatchEvent({ type: "change" });
           }

@@ -1,17 +1,17 @@
 import { nanoid } from "nanoid";
 import { createEmitter } from "../../emitter";
 import {
-  trackPropertySymbol,
   type AudioSequence,
   type AudioSequenceEventMap,
   type AudioSequenceInternal,
   type AudioSequenceJSON,
+  trackPropertySymbol,
 } from "./index";
 
 // ─── Supplemental ─────────────────────────────────────────────────────────────
 
-export type AudioSequenceDispatch<Kind, Type> = (event: {
-  type: keyof AudioSequenceEventMap<Kind, Type>;
+export type AudioSequenceDispatch<TrackKind extends string, SequenceVariant> = (event: {
+  type: keyof AudioSequenceEventMap<TrackKind, SequenceVariant>;
 }) => void;
 
 /**
@@ -21,27 +21,27 @@ export type AudioSequenceDispatch<Kind, Type> = (event: {
  * Mirrors the AudioTrackSupplemental pattern from track/track.ts.
  */
 export type AudioSequenceSupplemental<
-  Kind,
-  Type,
-  Seq extends AudioSequence<Kind, Type>,
+  TrackKind extends string,
+  SequenceVariant,
+  Seq extends AudioSequence<TrackKind, SequenceVariant>,
 > = (
-  base: AudioSequence<Kind, Type>,
-  dispatchEvent: AudioSequenceDispatch<Kind, Type>,
-) => Omit<Seq, keyof AudioSequence<Kind, Type>>;
+  base: AudioSequence<TrackKind, SequenceVariant>,
+  dispatchEvent: AudioSequenceDispatch<TrackKind, SequenceVariant>,
+) => Omit<Seq, keyof AudioSequence<TrackKind, SequenceVariant>>;
 
 // ─── Factory ──────────────────────────────────────────────────────────────────
 
 export const createAudioSequence = <
-  Kind,
-  Type,
-  Sequence extends AudioSequence<Kind, Type>,
+  TrackKind extends string,
+  SequenceVariant,
+  Sequence extends AudioSequence<TrackKind, SequenceVariant>,
 >(
-  type: Type,
+  type: SequenceVariant,
   time: number,
-  supplemental?: AudioSequenceSupplemental<Kind, Type, Sequence>,
+  supplemental?: AudioSequenceSupplemental<TrackKind, SequenceVariant, Sequence>,
   id?: string,
 ): Sequence => {
-  const internal: AudioSequenceInternal<Kind> = {
+  const internal: AudioSequenceInternal<TrackKind> = {
     id: id ?? nanoid(),
     selected: false,
     playbackRate: 1,
@@ -49,13 +49,13 @@ export const createAudioSequence = <
   };
 
   const { dispatchEvent, ...emitter } = createEmitter<
-    AudioSequenceEventMap<Kind, Type>
+    AudioSequenceEventMap<TrackKind, SequenceVariant>
   >((event) => {
     event.sequence = sequence;
     return event;
   });
 
-  const sequence: AudioSequence<Kind, Type> = {
+  const sequence: AudioSequence<TrackKind, SequenceVariant> = {
     get [trackPropertySymbol]() {
       return internal.track;
     },
@@ -63,7 +63,7 @@ export const createAudioSequence = <
       internal.track = value;
     },
 
-    get type(): Type {
+    get type(): SequenceVariant {
       return type;
     },
 
@@ -136,7 +136,7 @@ export const createAudioSequence = <
 
   const supplementalProps = supplemental?.(
     sequence,
-    dispatchEvent as unknown as AudioSequenceDispatch<Kind, Type>,
+    dispatchEvent as unknown as AudioSequenceDispatch<TrackKind, SequenceVariant>,
   );
 
   // Use Object.defineProperties so that getter/setter pairs from the
@@ -146,9 +146,7 @@ export const createAudioSequence = <
   const result = Object.create(null) as Sequence;
   Object.defineProperties(result, {
     ...Object.getOwnPropertyDescriptors(sequence),
-    ...(supplementalProps
-      ? Object.getOwnPropertyDescriptors(supplementalProps)
-      : {}),
+    ...(supplementalProps ? Object.getOwnPropertyDescriptors(supplementalProps) : {}),
   });
 
   return result;

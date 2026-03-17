@@ -3,34 +3,20 @@
 // See: .opencode/context/refactor/03-state-management.md (P2-03)
 
 import { defineStore } from "pinia";
-import { ref, computed } from "vue";
-import type {
-  ProjectNode,
-  FolderNode,
-  RecordedNode,
-  InstrumentNode,
-} from "../features/nodes";
-import {
-  createFolderNode,
-  createRecordedNode,
-  createInstrumentNode,
-} from "../features/nodes";
+import { computed, ref } from "vue";
 import type { AudioEffect, AudioEffectType } from "../features/effects";
 import {
-  createGainEffect,
   createBalanceEffect,
   createFadeInEffect,
   createFadeOutEffect,
+  createGainEffect,
+  createSplitEffect,
+  createVolumeEffect,
 } from "../features/effects";
-import type {
-  PlacedNote,
-  TimeSignature,
-} from "../features/nodes/instrument/instrument-node";
-import type {
-  MusicInstrumentType,
-  NoteDuration,
-  OctaveRange,
-} from "../lib/music/instruments";
+import type { FolderNode, InstrumentNode, ProjectNode, RecordedNode } from "../features/nodes";
+import { createFolderNode, createInstrumentNode, createRecordedNode } from "../features/nodes";
+import type { PlacedNote, TimeSignature } from "../features/nodes/instrument/instrument-node";
+import type { MusicInstrumentType, NoteDuration, OctaveRange } from "../lib/music/instruments";
 
 // ── Serialization types ────────────────────────────────────────────────────────
 
@@ -54,9 +40,7 @@ export const useNodesStore = defineStore("nodes", () => {
   // ── Computed ──────────────────────────────────────────────────────────────
 
   const selectedNode = computed((): ProjectNode | null =>
-    selectedNodeId.value
-      ? (nodesById.value.get(selectedNodeId.value) ?? null)
-      : null,
+    selectedNodeId.value ? (nodesById.value.get(selectedNodeId.value) ?? null) : null,
   );
 
   const rootNodes = computed((): ProjectNode[] =>
@@ -163,11 +147,7 @@ export const useNodesStore = defineStore("nodes", () => {
     }
   }
 
-  function moveNode(
-    id: string,
-    newParentId: string | null,
-    insertIndex?: number,
-  ): void {
+  function moveNode(id: string, newParentId: string | null, insertIndex?: number): void {
     const node = nodesById.value.get(id);
     if (!node) return;
 
@@ -228,8 +208,7 @@ export const useNodesStore = defineStore("nodes", () => {
 
   function addEffect(id: string, type: AudioEffectType): void {
     const node = nodesById.value.get(id);
-    if (!node || (node.kind !== "recorded" && node.kind !== "instrument"))
-      return;
+    if (!node || (node.kind !== "recorded" && node.kind !== "instrument")) return;
     const target = node as RecordedNode | InstrumentNode;
 
     // Enforce one instance per type
@@ -249,14 +228,19 @@ export const useNodesStore = defineStore("nodes", () => {
       case "fadeOut":
         effect = createFadeOutEffect();
         break;
+      case "split":
+        effect = createSplitEffect();
+        break;
+      case "volume":
+        effect = createVolumeEffect();
+        break;
     }
     target.effects.push(effect);
   }
 
   function removeEffect(id: string, effectId: string): void {
     const node = nodesById.value.get(id);
-    if (!node || (node.kind !== "recorded" && node.kind !== "instrument"))
-      return;
+    if (!node || (node.kind !== "recorded" && node.kind !== "instrument")) return;
     const target = node as RecordedNode | InstrumentNode;
     const idx = target.effects.findIndex((e) => e.id === effectId);
     if (idx !== -1) {
@@ -264,14 +248,9 @@ export const useNodesStore = defineStore("nodes", () => {
     }
   }
 
-  function reorderEffects(
-    id: string,
-    fromIndex: number,
-    toIndex: number,
-  ): void {
+  function reorderEffects(id: string, fromIndex: number, toIndex: number): void {
     const node = nodesById.value.get(id);
-    if (!node || (node.kind !== "recorded" && node.kind !== "instrument"))
-      return;
+    if (!node || (node.kind !== "recorded" && node.kind !== "instrument")) return;
     const target = node as RecordedNode | InstrumentNode;
     if (
       fromIndex < 0 ||
@@ -314,10 +293,7 @@ export const useNodesStore = defineStore("nodes", () => {
     }
   }
 
-  function setInstrumentSelectedNoteType(
-    id: string,
-    noteType: NoteDuration,
-  ): void {
+  function setInstrumentSelectedNoteType(id: string, noteType: NoteDuration): void {
     const node = nodesById.value.get(id);
     if (node && node.kind === "instrument") {
       (node as InstrumentNode).selectedNoteType = noteType;

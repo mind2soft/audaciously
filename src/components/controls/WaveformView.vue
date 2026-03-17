@@ -20,16 +20,7 @@
  *                         mode; start/end are times in seconds.
  */
 
-import {
-  computed,
-  inject,
-  onBeforeUnmount,
-  onMounted,
-  ref,
-  useId,
-  watch,
-  watchEffect,
-} from "vue";
+import { computed, inject, onBeforeUnmount, onMounted, ref, useId, watch, watchEffect } from "vue";
 import { createWaveformProcessor } from "../../lib/audio/waveform";
 import { scrollableTimelineKey } from "../../lib/scrollable-timeline";
 
@@ -97,10 +88,7 @@ const updatePath = () => {
   const totalSamples = props.buffer.length;
 
   const startSample = Math.floor(offsetTime * sampleRate);
-  const endSample = Math.min(
-    Math.ceil((offsetTime + visibleDuration) * sampleRate),
-    totalSamples,
-  );
+  const endSample = Math.min(Math.ceil((offsetTime + visibleDuration) * sampleRate), totalSamples);
 
   waveform
     .getLinearPath(props.buffer, {
@@ -138,7 +126,14 @@ const resizeObserver = new ResizeObserver(debouncedUpdatePath);
 
 // Re-render immediately when props that affect the visible window change.
 watch(
-  () => [props.buffer, props.ratio, props.offsetTime, effectiveOffsetTime.value, effectiveVisibleDuration.value] as const,
+  () =>
+    [
+      props.buffer,
+      props.ratio,
+      props.offsetTime,
+      effectiveOffsetTime.value,
+      effectiveVisibleDuration.value,
+    ] as const,
   updatePath,
 );
 
@@ -211,10 +206,7 @@ const zoomBandEndPct = ref(0);
 const onZoomDocMousemove = (evt: MouseEvent) => {
   if (!svgRef.value) return;
   const rect = svgRef.value.getBoundingClientRect();
-  zoomBandEndPct.value = Math.min(
-    Math.max((evt.clientX - rect.left) / rect.width, 0),
-    1,
-  );
+  zoomBandEndPct.value = Math.min(Math.max((evt.clientX - rect.left) / rect.width, 0), 1);
 };
 
 const onZoomDocMouseup = () => {
@@ -248,10 +240,7 @@ const onMousedown = (evt: MouseEvent) => {
     // Start rubber-band zoom-select drag
     if (!svgRef.value) return;
     const rect = svgRef.value.getBoundingClientRect();
-    const pct = Math.min(
-      Math.max((evt.clientX - rect.left) / rect.width, 0),
-      1,
-    );
+    const pct = Math.min(Math.max((evt.clientX - rect.left) / rect.width, 0), 1);
     zoomBandStartPct.value = pct;
     zoomBandEndPct.value = pct;
     isZoomSelecting.value = true;
@@ -292,21 +281,33 @@ const onMousedown = (evt: MouseEvent) => {
           <stop offset="0%" stop-color="var(--color-accent)" />
           <stop :offset="`${positionPct}%`" stop-color="var(--color-accent)" />
           <!-- Unplayed portion: muted -->
-          <stop :offset="`${positionPct}%`" stop-color="var(--color-base-content)" stop-opacity="0.3" />
-          <stop offset="100%" stop-color="var(--color-base-content)" stop-opacity="0.3" />
+          <stop
+            :offset="`${positionPct}%`"
+            stop-color="var(--color-base-content)"
+            stop-opacity="0.3"
+          />
+          <stop
+            offset="100%"
+            stop-color="var(--color-base-content)"
+            stop-opacity="0.3"
+          />
         </template>
         <!-- Playhead outside visible window: uniform muted colour -->
         <template v-else>
-          <stop offset="0%" stop-color="var(--color-base-content)" stop-opacity="0.3" />
-          <stop offset="100%" stop-color="var(--color-base-content)" stop-opacity="0.3" />
+          <stop
+            offset="0%"
+            stop-color="var(--color-base-content)"
+            stop-opacity="0.3"
+          />
+          <stop
+            offset="100%"
+            stop-color="var(--color-base-content)"
+            stop-opacity="0.3"
+          />
         </template>
       </linearGradient>
     </defs>
-    <path
-      class="stroke-1 fill-none"
-      :stroke="`url(#wfGrad_${id})`"
-      :d="path"
-    />
+    <path class="stroke-1 fill-none" :stroke="`url(#wfGrad_${id})`" :d="path" />
     <!-- Playhead cursor line (only when within the visible window) -->
     <line
       v-if="positionVisible"
@@ -339,7 +340,9 @@ const onMousedown = (evt: MouseEvent) => {
         font-size="9"
         text-anchor="middle"
         pointer-events="none"
-      >{{ formatTime(hoverTime) }}</text>
+      >
+        {{ formatTime(hoverTime) }}
+      </text>
     </template>
     <!-- Zoom-select rubber-band rectangle -->
     <rect

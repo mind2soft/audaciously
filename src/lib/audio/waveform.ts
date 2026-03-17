@@ -1,16 +1,13 @@
 import { nanoid } from "nanoid";
-import WaveformWorker from "../../workers/waveform-processor?worker";
 import type {
-  WaveformMessage,
   LinearPathOptions,
+  WaveformMessage,
   WaveformResponse,
 } from "../../workers/waveform-processor";
+import WaveformWorker from "../../workers/waveform-processor?worker";
 
 export interface WaveformProcessor {
-  getLinearPath(
-    framesData: AudioBuffer,
-    options: LinearPathOptions,
-  ): Promise<string>;
+  getLinearPath(framesData: AudioBuffer, options: LinearPathOptions): Promise<string>;
   /** Reject any in-flight request for this processor and remove it from the
    *  promises map. Call when the owning component is unmounted / destroyed. */
   dispose(): void;
@@ -69,13 +66,7 @@ export function createWaveformProcessor(): WaveformProcessor {
 
   return {
     async getLinearPath(audioBuffer, options) {
-      const {
-        channel = 0,
-        animation = false,
-        animationframes = 10,
-        start,
-        end,
-      } = options;
+      const { channel = 0, animation = false, animationframes = 10, start, end } = options;
 
       promises.get(id)?.reject();
       promises.delete(id);

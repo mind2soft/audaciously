@@ -1,26 +1,23 @@
 import { nanoid } from "nanoid";
-import {
-  db,
-  type ProjectRecord,
-  type AudioBlobRecord,
-  type NodeRecord,
-  type TrackRecord,
-  type SegmentRecord,
-} from "./db";
-import {
-  serializeNodes,
-  serializeSequence,
-  deserializeNodes,
-  deserializeSequence,
-  type DeserializedProjectData,
-} from "./project-serialization";
-import { serializeMetadata, type ProjectMetadata } from "./project-metadata";
-import {
-  compressFloat32Array,
-  decompressBlobToFloat32Array,
-} from "./compression";
 import type { NodeTreeJSON } from "../../stores/nodes";
 import type { SequenceJSON } from "../../stores/sequence";
+import { compressFloat32Array, decompressBlobToFloat32Array } from "./compression";
+import {
+  type AudioBlobRecord,
+  db,
+  type NodeRecord,
+  type ProjectRecord,
+  type SegmentRecord,
+  type TrackRecord,
+} from "./db";
+import { type ProjectMetadata, serializeMetadata } from "./project-metadata";
+import {
+  type DeserializedProjectData,
+  deserializeNodes,
+  deserializeSequence,
+  serializeNodes,
+  serializeSequence,
+} from "./project-serialization";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -73,9 +70,7 @@ export async function saveProject(
       const channelData: Blob[] = [];
 
       for (let ch = 0; ch < numberOfChannels; ch++) {
-        channelData.push(
-          await compressFloat32Array(ref.buffer.getChannelData(ch)),
-        );
+        channelData.push(await compressFloat32Array(ref.buffer.getChannelData(ch)));
       }
 
       return {
@@ -90,8 +85,7 @@ export async function saveProject(
   );
 
   // Derive project-level bpm from first instrument node, or default.
-  const bpm =
-    nodeRecords.find((n) => n.kind === "instrument")?.bpm ?? 120;
+  const bpm = nodeRecords.find((n) => n.kind === "instrument")?.bpm ?? 120;
 
   // Derive sampleRate from first audio blob, or default.
   const sampleRate = audioBlobRecords[0]?.sampleRate ?? 44100;
@@ -174,9 +168,7 @@ export async function loadProject(
 
   await Promise.all(
     audioBlobRecords.map(async (rec) => {
-      const channels = await Promise.all(
-        rec.channelData.map(decompressBlobToFloat32Array),
-      );
+      const channels = await Promise.all(rec.channelData.map(decompressBlobToFloat32Array));
 
       const buffer = audioContext.createBuffer(
         rec.numberOfChannels,
@@ -193,11 +185,7 @@ export async function loadProject(
   );
 
   // Reconstruct store JSON.
-  const { nodesById, rootIds } = deserializeNodes(
-    nodeRecords,
-    record.rootIds ?? [],
-    audioBuffers,
-  );
+  const { nodesById, rootIds } = deserializeNodes(nodeRecords, record.rootIds ?? [], audioBuffers);
 
   const { tracks } = deserializeSequence(trackRecords, segmentRecords);
 
@@ -378,14 +366,13 @@ export async function getProjectSize(id: string): Promise<number> {
  * Update only the user-editable metadata fields of a project without touching
  * nodes, tracks, segments, or audio blobs.
  */
-export async function updateProjectMetadata(
-  id: string,
-  metadata: ProjectMetadata,
-): Promise<void> {
+export async function updateProjectMetadata(id: string, metadata: ProjectMetadata): Promise<void> {
+  // @ts-expect-error — Dexie's KeyPaths<ProjectRecord> hits a circular type from
+  // SplitEffect.left/right: AudioEffect[] (recursive). The update is safe at runtime.
   await db.projects.update(id, {
     ...serializeMetadata(metadata),
     updatedAt: new Date(),
-  });
+  } as any);
 }
 
 // ─── Granular node / track / segment ops ─────────────────────────────────────
@@ -397,9 +384,7 @@ export async function updateProjectMetadata(
  * Insert or replace a single node record (no audio blob).
  * Also bumps `projects.updatedAt` in the same transaction.
  */
-export async function upsertNodeRecord(
-  record: NodeRecord,
-): Promise<void> {
+export async function upsertNodeRecord(record: NodeRecord): Promise<void> {
   await db.transaction("rw", db.projects, db.nodes, async () => {
     await db.nodes.put(record);
     await db.projects.update(record.projectId, { updatedAt: new Date() });
@@ -410,27 +395,18 @@ export async function upsertNodeRecord(
  * Delete a single node record.
  * Also removes any associated audio blob and bumps `projects.updatedAt`.
  */
-export async function deleteNodeRecord(
-  projectId: string,
-  nodeId: string,
-): Promise<void> {
-  await db.transaction(
-    "rw",
-    db.projects,
-    db.nodes,
-    db.audioBlobs,
-    async () => {
-      const node = await db.nodes.get(nodeId);
+export async function deleteNodeRecord(projectId: string, nodeId: string): Promise<void> {
+  await db.transaction("rw", db.projects, db.nodes, db.audioBlobs, async () => {
+    const node = await db.nodes.get(nodeId);
 
-      await db.nodes.delete(nodeId);
+    await db.nodes.delete(nodeId);
 
-      if (node?.audioBlobId) {
-        await db.audioBlobs.delete(node.audioBlobId);
-      }
+    if (node?.audioBlobId) {
+      await db.audioBlobs.delete(node.audioBlobId);
+    }
 
-      await db.projects.update(projectId, { updatedAt: new Date() });
-    },
-  );
+    await db.projects.update(projectId, { updatedAt: new Date() });
+  });
 }
 
 /**
@@ -448,23 +424,14 @@ export async function upsertTrackRecord(record: TrackRecord): Promise<void> {
  * Delete a single track record and all its segments.
  * Also bumps `projects.updatedAt`.
  */
-export async function deleteTrackRecord(
-  projectId: string,
-  trackId: string,
-): Promise<void> {
-  await db.transaction(
-    "rw",
-    db.projects,
-    db.tracks,
-    db.segments,
-    async () => {
-      await Promise.all([
-        db.tracks.delete(trackId),
-        db.segments.where("trackId").equals(trackId).delete(),
-      ]);
-      await db.projects.update(projectId, { updatedAt: new Date() });
-    },
-  );
+export async function deleteTrackRecord(projectId: string, trackId: string): Promise<void> {
+  await db.transaction("rw", db.projects, db.tracks, db.segments, async () => {
+    await Promise.all([
+      db.tracks.delete(trackId),
+      db.segments.where("trackId").equals(trackId).delete(),
+    ]);
+    await db.projects.update(projectId, { updatedAt: new Date() });
+  });
 }
 
 /**
@@ -482,10 +449,7 @@ export async function upsertSegmentRecord(record: SegmentRecord): Promise<void> 
  * Delete a single segment record.
  * Also bumps `projects.updatedAt`.
  */
-export async function deleteSegmentRecord(
-  projectId: string,
-  segmentId: string,
-): Promise<void> {
+export async function deleteSegmentRecord(projectId: string, segmentId: string): Promise<void> {
   await db.transaction("rw", db.projects, db.segments, async () => {
     await db.segments.delete(segmentId);
     await db.projects.update(projectId, { updatedAt: new Date() });
@@ -513,27 +477,21 @@ export async function upsertAudioBlob(
     ),
   );
 
-  await db.transaction(
-    "rw",
-    db.projects,
-    db.nodes,
-    db.audioBlobs,
-    async () => {
-      const existing = await db.nodes.get(nodeId);
-      const audioBlobId = existing?.audioBlobId ?? nanoid();
+  await db.transaction("rw", db.projects, db.nodes, db.audioBlobs, async () => {
+    const existing = await db.nodes.get(nodeId);
+    const audioBlobId = existing?.audioBlobId ?? nanoid();
 
-      const blobRecord: AudioBlobRecord = {
-        id: audioBlobId,
-        projectId,
-        sampleRate,
-        numberOfChannels,
-        lengthInFrames: length,
-        channelData,
-      };
+    const blobRecord: AudioBlobRecord = {
+      id: audioBlobId,
+      projectId,
+      sampleRate,
+      numberOfChannels,
+      lengthInFrames: length,
+      channelData,
+    };
 
-      await db.audioBlobs.put(blobRecord);
-      await db.nodes.update(nodeId, { audioBlobId });
-      await db.projects.update(projectId, { updatedAt: new Date() });
-    },
-  );
+    await db.audioBlobs.put(blobRecord);
+    await db.nodes.update(nodeId, { audioBlobId });
+    await db.projects.update(projectId, { updatedAt: new Date() });
+  });
 }

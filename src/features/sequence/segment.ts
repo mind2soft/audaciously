@@ -21,11 +21,7 @@ export interface Segment {
 }
 
 /** Create a new Segment with a unique id. */
-export function createSegment(
-  nodeId: string,
-  time: number,
-  id?: string,
-): Segment {
+export function createSegment(nodeId: string, time: number, id?: string): Segment {
   return {
     id: id ?? nanoid(),
     nodeId,

@@ -19,19 +19,19 @@ export interface AudioTrackJSON {
 
 // ─── Events ───────────────────────────────────────────────────────────────────
 
-export interface AudioTrackEvent<Kind, EventType extends string> {
+export interface AudioTrackEvent<TrackKind extends string, EventType extends string> {
   type: EventType;
-  track: AudioTrack<Kind>;
+  track: AudioTrack<TrackKind>;
 }
 
-export type AudioTrackEventMap<Kind> = {
-  play: (event: AudioTrackEvent<Kind, "play">) => void;
-  stop: (event: AudioTrackEvent<Kind, "stop">) => void;
-  change: (event: AudioTrackEvent<Kind, "change">) => void;
+export type AudioTrackEventMap<TrackKind extends string> = {
+  play: (event: AudioTrackEvent<TrackKind, "play">) => void;
+  stop: (event: AudioTrackEvent<TrackKind, "stop">) => void;
+  change: (event: AudioTrackEvent<TrackKind, "change">) => void;
 };
 
-export type AudioTrackDispatch<Kind> = (event: {
-  type: keyof AudioTrackEventMap<Kind>;
+export type AudioTrackDispatch<TrackKind extends string> = (event: {
+  type: keyof AudioTrackEventMap<TrackKind>;
 }) => void;
 
 export type AudioTrackPlayOptions = {
@@ -40,9 +40,10 @@ export type AudioTrackPlayOptions = {
   startTime?: number;
 };
 
-export interface AudioTrack<Kind> extends Emitter<AudioTrackEventMap<Kind>> {
+export interface AudioTrack<TrackKind extends string>
+  extends Emitter<AudioTrackEventMap<TrackKind>> {
   readonly id: string;
-  readonly kind: Kind;
+  readonly kind: TrackKind;
   readonly isPlaying: boolean;
 
   name: string;
@@ -53,14 +54,18 @@ export interface AudioTrack<Kind> extends Emitter<AudioTrackEventMap<Kind>> {
   volume: number;
   balance: number;
 
-  addSequence<Type extends string>(sequence: AudioSequence<Kind, Type>): void;
+  addSequence<SequenceVariant extends string>(
+    sequence: AudioSequence<TrackKind, SequenceVariant>,
+  ): void;
   countSequences(): number;
-  getSequence<Type extends string>(
+  getSequence<SequenceVariant extends string>(
     id: string,
-  ): AudioSequence<Kind, Type> | void;
-  getSequences<Type extends string>(): Iterable<AudioSequence<Kind, Type>>;
-  removeSequence<Type extends string>(
-    sequence: AudioSequence<Kind, Type> | string,
+  ): AudioSequence<TrackKind, SequenceVariant> | undefined;
+  getSequences<SequenceVariant extends string>(): Iterable<
+    AudioSequence<TrackKind, SequenceVariant>
+  >;
+  removeSequence<SequenceVariant extends string>(
+    sequence: AudioSequence<TrackKind, SequenceVariant> | string,
   ): boolean;
 
   /**

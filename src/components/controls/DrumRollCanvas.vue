@@ -133,7 +133,10 @@ function clientYToPitchIdx(clientY: number): number {
   const rect = canvasRef.value?.getBoundingClientRect();
   if (!rect) return 0;
   const py = clientY - rect.top;
-  return Math.max(0, Math.min(pitches.length - 1, Math.floor(py / ROW_HEIGHT_PX)));
+  return Math.max(
+    0,
+    Math.min(pitches.length - 1, Math.floor(py / ROW_HEIGHT_PX)),
+  );
 }
 
 // ── Tool context ──────────────────────────────────────────────────────────────
@@ -149,7 +152,8 @@ const toolCtxBase = {
   beatsPerMeasure,
   rowHeightPx: ROW_HEIGHT_PX,
   clientXToBeat,
-  scrollRef: timelineCtx?.scrollEl ?? ref<HTMLDivElement | undefined>(undefined),
+  scrollRef:
+    timelineCtx?.scrollEl ?? ref<HTMLDivElement | undefined>(undefined),
   emitNotes: (notes: PlacedNote[]) => emit("update:notes", notes),
 };
 
@@ -288,7 +292,10 @@ const onMousedown = (evt: MouseEvent) => {
 
     const existing = hitTestDrumNote(rawBeat, pitchId);
     if (existing) {
-      emit("update:notes", props.node.notes.filter((n) => n.id !== existing.id));
+      emit(
+        "update:notes",
+        props.node.notes.filter((n) => n.id !== existing.id),
+      );
     } else {
       const startBeat = rawBeatToStartBeat(rawBeat);
       const newNote: PlacedNote = {
@@ -366,11 +373,11 @@ function doRender(): void {
   ctx2d.scale(dpr, dpr);
   ctx2d.clearRect(0, 0, w, h);
 
-  const primaryColor   = resolveColor("--color-primary");
+  const primaryColor = resolveColor("--color-primary");
   const secondaryColor = resolveColor("--color-secondary");
-  const accentColor    = resolveColor("--color-accent");
-  const warningColor   = resolveColor("--color-warning");
-  const infoColor      = resolveColor("--color-info");
+  const accentColor = resolveColor("--color-accent");
+  const warningColor = resolveColor("--color-warning");
+  const infoColor = resolveColor("--color-info");
 
   const ob = offsetBeat.value;
   const ppb = pxPerBeat.value;
@@ -403,7 +410,10 @@ function doRender(): void {
     );
   } else if (props.activeTool === "pan" && panTool.isDragging.value) {
     panTool.draggedIds.value.forEach((id) =>
-      colorOverrides.set(id, resolveColor("--color-secondary", { opacity: 0.6 })),
+      colorOverrides.set(
+        id,
+        resolveColor("--color-secondary", { opacity: 0.6 }),
+      ),
     );
   }
 

@@ -32,7 +32,11 @@ const onInput = (evt: Event): void => {
 </script>
 
 <template>
-  <div class="flex items-center gap-2 min-w-0" role="group" aria-label="Master volume">
+  <div
+    class="flex items-center gap-2 min-w-0"
+    role="group"
+    aria-label="Master volume"
+  >
     <i
       class="iconify mdi--volume-medium size-5 text-base-content/50 shrink-0"
       aria-hidden="true"
@@ -50,7 +54,9 @@ const onInput = (evt: Event): void => {
       aria-valuemax="200"
       @input="onInput"
     />
-    <span class="text-xs font-mono tabular-nums w-8 text-right text-base-content/50 shrink-0">
+    <span
+      class="text-xs font-mono tabular-nums w-8 text-right text-base-content/50 shrink-0"
+    >
       {{ Math.round(volume * 100) }}%
     </span>
   </div>

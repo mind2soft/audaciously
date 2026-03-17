@@ -11,10 +11,10 @@
 //   // In the app-level useAllNodes composable (not in individual views):
 //   useRecordedNode(recordedNodeRef)
 
-import { watch, ref, type Ref } from "vue";
-import { useNodesStore } from "../stores/nodes";
+import { type Ref, ref, watch } from "vue";
 import type { RecordedNode } from "../features/nodes";
 import { computeTargetBuffer } from "../features/nodes/compute-target-buffer";
+import { useNodesStore } from "../stores/nodes";
 
 /**
  * Registers a reactive watcher on the given RecordedNode reference.
@@ -35,9 +35,9 @@ import { computeTargetBuffer } from "../features/nodes/compute-target-buffer";
  * The watcher fires immediately on mount (immediate: true) so that a node
  * already in the store gets its targetBuffer set without requiring an edit.
  */
-export function useRecordedNode(
-  nodeRef: Ref<RecordedNode | null>,
-): { isComputing: Ref<boolean> } {
+export function useRecordedNode(nodeRef: Ref<RecordedNode | null>): {
+  isComputing: Ref<boolean>;
+} {
   const nodesStore = useNodesStore();
   const isComputing = ref(false);
 

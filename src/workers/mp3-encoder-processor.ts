@@ -39,10 +39,7 @@ export interface Mp3EncodeError {
   error: string;
 }
 
-export type Mp3WorkerMessage =
-  | Mp3EncodeProgress
-  | Mp3EncodeResponse
-  | Mp3EncodeError;
+export type Mp3WorkerMessage = Mp3EncodeProgress | Mp3EncodeResponse | Mp3EncodeError;
 
 // ─── Encoder ──────────────────────────────────────────────────────────────────
 
@@ -73,22 +70,17 @@ function encode(req: Mp3EncodeRequest): void {
       for (let i = 0; i < samples.length; i += BLOCK_SIZE) {
         push(encoder.encodeBuffer(samples.subarray(i, i + BLOCK_SIZE)));
         processed = Math.min(i + BLOCK_SIZE, totalSamples);
-        if (processed % (BLOCK_SIZE * 50) === 0 || processed >= totalSamples)
-          reportProgress();
+        if (processed % (BLOCK_SIZE * 50) === 0 || processed >= totalSamples) reportProgress();
       }
     } else {
       const left = channelData[0];
       const right = channelData[1];
       for (let i = 0; i < left.length; i += BLOCK_SIZE) {
         push(
-          encoder.encodeBuffer(
-            left.subarray(i, i + BLOCK_SIZE),
-            right.subarray(i, i + BLOCK_SIZE),
-          ),
+          encoder.encodeBuffer(left.subarray(i, i + BLOCK_SIZE), right.subarray(i, i + BLOCK_SIZE)),
         );
         processed = Math.min(i + BLOCK_SIZE, totalSamples);
-        if (processed % (BLOCK_SIZE * 50) === 0 || processed >= totalSamples)
-          reportProgress();
+        if (processed % (BLOCK_SIZE * 50) === 0 || processed >= totalSamples) reportProgress();
       }
     }
 

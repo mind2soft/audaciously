@@ -17,11 +17,11 @@
  */
 
 import { ref } from "vue";
+import type { MusicInstrumentType } from "../../lib/music/instruments";
+import { INSTRUMENT_LIST } from "../../lib/music/instruments";
 import { useNodesStore } from "../../stores/nodes";
 import NodeTree from "../controls/NodeTree.vue";
 import ScrollArea from "../layout/ScrollArea.vue";
-import type { MusicInstrumentType } from "../../lib/music/instruments";
-import { INSTRUMENT_LIST } from "../../lib/music/instruments";
 
 const nodes = useNodesStore();
 

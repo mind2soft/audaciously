@@ -2,19 +2,16 @@
 // useProjectStore — project metadata, save/load, dirty state, modal flags.
 // See: .opencode/context/refactor/03-state-management.md (P2-05)
 
-import { defineStore } from "pinia";
-import { ref, computed, watch } from "vue";
-import {
-  createDefaultMetadata,
-  type ProjectMetadata,
-} from "../lib/storage/project-metadata";
-import { createAutoSave, type AutoSave } from "../lib/storage/auto-save";
-import { saveProject, loadProject } from "../lib/storage/project-repository";
 import { nanoid } from "nanoid";
+import { defineStore } from "pinia";
+import { computed, ref, watch } from "vue";
+import type { InstrumentNode, RecordedNode } from "../features/nodes";
+import { type AutoSave, createAutoSave } from "../lib/storage/auto-save";
+import { createDefaultMetadata, type ProjectMetadata } from "../lib/storage/project-metadata";
+import { loadProject, saveProject } from "../lib/storage/project-repository";
 import { useNodesStore } from "./nodes";
-import { useSequenceStore } from "./sequence";
 import { usePlayerStore } from "./player";
-import type { RecordedNode, InstrumentNode } from "../features/nodes";
+import { useSequenceStore } from "./sequence";
 
 // ── Store ─────────────────────────────────────────────────────────────────────
 
@@ -95,8 +92,7 @@ export const useProjectStore = defineStore("project", () => {
         nodesStore.nodesById.forEach((node, id) => {
           if (node.kind === "recorded") {
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const { targetBuffer: _tb, isRecording: _ir, ...rest } =
-              node as RecordedNode;
+            const { targetBuffer: _tb, isRecording: _ir, ...rest } = node as RecordedNode;
             snap[id] = rest;
           } else if (node.kind === "instrument") {
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -152,7 +148,8 @@ export const useProjectStore = defineStore("project", () => {
     // is safe to close afterwards.
     let tempCtx: AudioContext | null = null;
     const audioCtx: BaseAudioContext =
-      playerStore.getAudioContext() ?? (() => {
+      playerStore.getAudioContext() ??
+      (() => {
         tempCtx = new AudioContext();
         return tempCtx;
       })();

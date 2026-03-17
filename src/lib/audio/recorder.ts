@@ -72,8 +72,7 @@ interface RecorderInternal {
 }
 
 const sanitizeMediaRecorderOptions = (options?: MediaRecorderOptions) => {
-  const validMimeType =
-    !options?.mimeType || MediaRecorder.isTypeSupported(options.mimeType);
+  const validMimeType = !options?.mimeType || MediaRecorder.isTypeSupported(options.mimeType);
 
   return validMimeType ? options : undefined;
 };
@@ -98,13 +97,11 @@ const createRecorder = (options?: RecorderOptions): Recorder => {
     previewSeq: 0,
   };
 
-  const { dispatchEvent, ...emitter } = createEmitter<RecorderEventMap>(
-    (event) => {
-      event.recorder = recorder;
-      event.timestamp = Date.now();
-      return event;
-    },
-  );
+  const { dispatchEvent, ...emitter } = createEmitter<RecorderEventMap>((event) => {
+    event.recorder = recorder;
+    event.timestamp = Date.now();
+    return event;
+  });
 
   function initAudioContext() {
     if (!internal.audioContext || internal.audioContext.state === "closed") {
@@ -134,18 +131,16 @@ const createRecorder = (options?: RecorderOptions): Recorder => {
 
     internal.analyserNode?.disconnect();
     internal.sourceNode?.disconnect();
-    internal.mediaRecorder?.stream.getTracks().forEach((track) => track.stop());
 
     internal.mediaRecorder?.removeEventListener("start", startEventListener);
     internal.mediaRecorder?.removeEventListener("pause", pauseEventListener);
     internal.mediaRecorder?.removeEventListener("resume", resumeEventListener);
-    internal.mediaRecorder?.removeEventListener(
-      "dataavailable",
-      dateAvailableEventListener,
-    );
+    internal.mediaRecorder?.removeEventListener("dataavailable", dateAvailableEventListener);
     internal.mediaRecorder?.removeEventListener("stop", stopEventListener);
 
-    internal.mediaRecorder?.stream.getTracks().forEach((track) => track.stop());
+    internal.mediaRecorder?.stream.getTracks().forEach((track) => {
+      track.stop();
+    });
 
     internal.analyserData = null;
     internal.analyserNode = null;
@@ -167,11 +162,7 @@ const createRecorder = (options?: RecorderOptions): Recorder => {
     }
   }
   function updateAnalyserData() {
-    if (
-      internal.audioContext &&
-      internal.analyserNode &&
-      internal.analyserData
-    ) {
+    if (internal.audioContext && internal.analyserNode && internal.analyserData) {
       const buffer = internal.audioContext.createBuffer(
         1,
         internal.analyserData.length,
@@ -191,8 +182,7 @@ const createRecorder = (options?: RecorderOptions): Recorder => {
     }
   }
   function updatePermissionState(state: PermissionState) {
-    const newRecorderState: RecorderState =
-      state === "denied" ? "error" : "ready";
+    const newRecorderState: RecorderState = state === "denied" ? "error" : "ready";
     if (newRecorderState !== internal.state) {
       internal.state = newRecorderState;
       dispatchEvent({ type: internal.state });
@@ -227,8 +217,7 @@ const createRecorder = (options?: RecorderOptions): Recorder => {
         offset += ab.byteLength;
       }
 
-      const audioBuffer =
-        await internal.audioContext.decodeAudioData(arrayBuffer);
+      const audioBuffer = await internal.audioContext.decodeAudioData(arrayBuffer);
 
       // Guard: discard if superseded or recording already stopped
       if (seq !== internal.previewSeq || internal.state !== "recording") return;
@@ -282,18 +271,13 @@ const createRecorder = (options?: RecorderOptions): Recorder => {
 
       let mediaStream: MediaStream | null = null;
       try {
-        mediaStream = await navigator.mediaDevices.getUserMedia(
-          internal.mediaStreamConstraints,
-        );
+        mediaStream = await navigator.mediaDevices.getUserMedia(internal.mediaStreamConstraints);
       } catch (err) {
         if (err instanceof OverconstrainedError) {
           // One or more custom constraints (e.g. echoCancellation: false) are
           // not supported by this device/browser.  Retry with the bare minimum
           // so recording can still proceed.
-          console.warn(
-            "recorder: OverconstrainedError – retrying with plain { audio: true }",
-            err,
-          );
+          console.warn("recorder: OverconstrainedError – retrying with plain { audio: true }", err);
           try {
             mediaStream = await navigator.mediaDevices.getUserMedia({
               audio: true,
@@ -320,19 +304,14 @@ const createRecorder = (options?: RecorderOptions): Recorder => {
         internal.sourceNode = audioContext.createMediaStreamSource(mediaStream);
         internal.analyserNode = audioContext.createAnalyser();
 
-        internal.analyserData = new Float32Array(
-          internal.analyserNode.frequencyBinCount,
-        );
+        internal.analyserData = new Float32Array(internal.analyserNode.frequencyBinCount);
 
         internal.sourceNode.connect(internal.analyserNode);
 
         internal.mediaRecorder.addEventListener("start", startEventListener);
         internal.mediaRecorder.addEventListener("pause", pauseEventListener);
         internal.mediaRecorder.addEventListener("resume", resumeEventListener);
-        internal.mediaRecorder.addEventListener(
-          "dataavailable",
-          dateAvailableEventListener,
-        );
+        internal.mediaRecorder.addEventListener("dataavailable", dateAvailableEventListener);
         internal.mediaRecorder.addEventListener("stop", stopEventListener);
         internal.mediaRecorder.start(timeslice);
       } else {
@@ -364,10 +343,7 @@ const createRecorder = (options?: RecorderOptions): Recorder => {
 
     async getAudioBuffer() {
       const audioContext = initAudioContext();
-      const bufferSize = internal.blobs.reduce(
-        (len, blob) => len + blob.size,
-        0,
-      );
+      const bufferSize = internal.blobs.reduce((len, blob) => len + blob.size, 0);
 
       if (!bufferSize) {
         return audioContext.createBuffer(1, 0, audioContext.sampleRate);

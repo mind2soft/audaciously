@@ -23,15 +23,15 @@
  */
 
 import { computed } from "vue";
-import { useSequenceStore } from "../../stores/sequence";
-import { useTimelineStore } from "../../stores/timeline";
+import { useSegmentDrag } from "../../composables/useSegmentDrag";
 import { useNodesStore } from "../../stores/nodes";
 import { usePlayerStore } from "../../stores/player";
-import { useSegmentDrag } from "../../composables/useSegmentDrag";
-import TimelineRuler from "../controls/TimelineRuler.vue";
-import ZoomControl from "../controls/ZoomControl.vue";
-import TrackRow from "../controls/TrackRow.vue";
+import { useSequenceStore } from "../../stores/sequence";
+import { useTimelineStore } from "../../stores/timeline";
 import SegmentBlock from "../controls/SegmentBlock.vue";
+import TimelineRuler from "../controls/TimelineRuler.vue";
+import TrackRow from "../controls/TrackRow.vue";
+import ZoomControl from "../controls/ZoomControl.vue";
 import ScrollArea from "../layout/ScrollArea.vue";
 
 const sequence = useSequenceStore();
@@ -82,9 +82,7 @@ function onTrackToggleLock(trackId: string): void {
 
 function onTrackDrop(trackId: string, event: DragEvent): void {
   // ── Track reorder drop ──────────────────────────────────────────────────
-  const fromTrackId = event.dataTransfer?.getData(
-    "application/x-audaciously-track-id",
-  );
+  const fromTrackId = event.dataTransfer?.getData("application/x-audaciously-track-id");
   if (fromTrackId) {
     const fromIndex = sequence.tracks.findIndex((t) => t.id === fromTrackId);
     const toIndex = sequence.tracks.findIndex((t) => t.id === trackId);
@@ -106,10 +104,7 @@ function onTrackDrop(trackId: string, event: DragEvent): void {
   const el = event.currentTarget as HTMLElement | null;
   const rect = el?.getBoundingClientRect();
   const relativeX = rect ? event.clientX - rect.left : 0;
-  const time = Math.max(
-    0,
-    relativeX / pixelsPerSecond.value + timeline.offsetTime,
-  );
+  const time = Math.max(0, relativeX / pixelsPerSecond.value + timeline.offsetTime);
 
   try {
     sequence.addSegment(trackId, nodeId, time);

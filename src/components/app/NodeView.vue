@@ -7,12 +7,12 @@
  */
 
 import { computed } from "vue";
+import type { InstrumentNode, RecordedNode } from "../../features/nodes";
 import { useNodesStore } from "../../stores/nodes";
-import type { RecordedNode, InstrumentNode } from "../../features/nodes";
-import EmptyNodeView from "./node-views/EmptyNodeView.vue";
-import RecordedNodeView from "./node-views/RecordedNodeView.vue";
-import PianoNodeView from "./node-views/PianoNodeView.vue";
 import DrumNodeView from "./node-views/DrumNodeView.vue";
+import EmptyNodeView from "./node-views/EmptyNodeView.vue";
+import PianoNodeView from "./node-views/PianoNodeView.vue";
+import RecordedNodeView from "./node-views/RecordedNodeView.vue";
 
 const nodes = useNodesStore();
 

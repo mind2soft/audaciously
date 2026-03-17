@@ -6,11 +6,17 @@
 // under src/lib/audio/. It is used by build-tracks.ts to translate the new
 // Track/Segment/ProjectNode data model into engine-compatible AudioTrack objects.
 
-import type { AudioSequence, AudioSequencePlayOptions, AudioSequenceEventMap, AudioSequenceJSON } from "../../lib/audio/sequence/index";
+import type {
+  AudioSequence,
+  AudioSequenceEventMap,
+  AudioSequenceJSON,
+  AudioSequencePlayOptions,
+} from "../../lib/audio/sequence/index";
 import { trackPropertySymbol } from "../../lib/audio/sequence/index";
+import type { AudioTrack } from "../../lib/audio/track";
 import { createEmitter } from "../../lib/emitter";
-import type { AudioEffect } from "../effects/types";
 import { applyEffectChain } from "../effects/apply-effects";
+import type { AudioEffect } from "../effects/types";
 
 // ── Concrete types ─────────────────────────────────────────────────────────────
 
@@ -66,13 +72,12 @@ export function createEffectSequence(
     return Math.max(0, buffer.duration - trimStart - trimEnd);
   }
 
-  const { dispatchEvent, ...emitter } =
-    createEmitter<AudioSequenceEventMap<EffectSequenceKind, EffectSequenceType>>(
-      (event) => {
-        (event as any).sequence = sequence;
-        return event;
-      },
-    );
+  const { dispatchEvent, ...emitter } = createEmitter<
+    AudioSequenceEventMap<EffectSequenceKind, EffectSequenceType>
+  >((event) => {
+    (event as { sequence: EffectSequence }).sequence = sequence;
+    return event;
+  });
 
   function _teardown(): void {
     if (state.source) {
@@ -149,7 +154,7 @@ export function createEffectSequence(
   // ── Public sequence object ─────────────────────────────────────────────────
 
   // Internal track reference (set by AudioTrack.addSequence via the symbol).
-  let _track: any = undefined;
+  let _track: AudioTrack<"recorded">;
 
   const sequence: EffectSequence = {
     get [trackPropertySymbol]() {

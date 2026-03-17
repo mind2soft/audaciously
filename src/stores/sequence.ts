@@ -6,19 +6,21 @@
 // Constraint: Segments on the same track cannot overlap.
 
 import { defineStore } from "pinia";
-import { ref, computed } from "vue";
-import type { Track } from "../features/sequence/track";
-import { createTrack } from "../features/sequence/track";
-import type { Segment } from "../features/sequence/segment";
-import { createSegment } from "../features/sequence/segment";
+import { computed, ref } from "vue";
 import type { AudioEffect, AudioEffectType } from "../features/effects";
-import type { RecordedNode, InstrumentNode } from "../features/nodes";
 import {
-  createGainEffect,
   createBalanceEffect,
   createFadeInEffect,
   createFadeOutEffect,
+  createGainEffect,
+  createSplitEffect,
+  createVolumeEffect,
 } from "../features/effects";
+import type { InstrumentNode, RecordedNode } from "../features/nodes";
+import type { Segment } from "../features/sequence/segment";
+import { createSegment } from "../features/sequence/segment";
+import type { Track } from "../features/sequence/track";
+import { createTrack } from "../features/sequence/track";
 import { useNodesStore } from "./nodes";
 
 // ── Serialization types ────────────────────────────────────────────────────────
@@ -221,6 +223,12 @@ export const useSequenceStore = defineStore("sequence", () => {
       case "fadeOut":
         effect = createFadeOutEffect();
         break;
+      case "split":
+        effect = createSplitEffect();
+        break;
+      case "volume":
+        effect = createVolumeEffect();
+        break;
     }
     timelineEffects.value.push(effect);
   }
@@ -252,6 +260,10 @@ export const useSequenceStore = defineStore("sequence", () => {
   function toggleTimelineEffect(id: string): void {
     const effect = timelineEffects.value.find((e) => e.id === id);
     if (effect) effect.enabled = !effect.enabled;
+  }
+
+  function setTimelineEffects(effects: AudioEffect[]): void {
+    timelineEffects.value = [...effects];
   }
 
   // ── Serialization ─────────────────────────────────────────────────────────
@@ -306,6 +318,7 @@ export const useSequenceStore = defineStore("sequence", () => {
     reorderTimelineEffects,
     setTimelineEffectValue,
     toggleTimelineEffect,
+    setTimelineEffects,
     // serialization
     toJSON,
     fromJSON,

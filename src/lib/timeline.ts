@@ -56,8 +56,7 @@ const getOptimalTimeStep = (ratio: number) => {
 };
 
 export const scaleRatio = (ratio: number, dir: ScaleDirection) => {
-  const scaleValue =
-    dir === ScaleDirection.UP ? scale_b / scale_a : scale_a / scale_b;
+  const scaleValue = dir === ScaleDirection.UP ? scale_b / scale_a : scale_a / scale_b;
   const newRatio = ratio * scaleValue;
 
   return newRatio > scale_min && newRatio < scale_max ? newRatio : ratio;
@@ -69,12 +68,10 @@ export const createTimeline = (options?: TimelineOptions): Timeline => {
     offsetTime: options?.offsetTime ?? 0,
   };
 
-  const { dispatchEvent, ...emitter } = createEmitter<TimelineEventMap>(
-    (event) => {
-      event.timeline = timeline;
-      return event;
-    },
-  );
+  const { dispatchEvent, ...emitter } = createEmitter<TimelineEventMap>((event) => {
+    event.timeline = timeline;
+    return event;
+  });
 
   const timeline: Timeline = {
     get ratio() {
@@ -130,8 +127,7 @@ export const createTimeline = (options?: TimelineOptions): Timeline => {
       const timeStep = getOptimalTimeStep(internal.ratio);
       const offsetWidth = formatTimeToPixel(internal.ratio, timeStep);
       const scrollOffset = (offsetWidth / timeStep) * internal.offsetTime;
-      const currentOffset =
-        (offsetWidth / timeStep) * currentTime - scrollOffset;
+      const currentOffset = (offsetWidth / timeStep) * currentTime - scrollOffset;
       let offset = -(scrollOffset % offsetWidth) - offsetWidth;
       let time = Math.trunc(scrollOffset / offsetWidth) * timeStep - timeStep;
       let lblText: string;

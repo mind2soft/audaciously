@@ -27,7 +27,12 @@ defineExpose({ open, close });
 
 <template>
   <div class="drawer">
-    <input ref="drawerRef" :id="drawerId" type="checkbox" class="drawer-toggle" />
+    <input
+      ref="drawerRef"
+      :id="drawerId"
+      type="checkbox"
+      class="drawer-toggle"
+    />
 
     <!-- Main content area -->
     <div class="flex flex-col drawer-content">

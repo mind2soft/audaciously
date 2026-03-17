@@ -66,7 +66,7 @@ const emit = defineEmits<{
   copied: [noteCount: number];
   cut: [noteCount: number];
   "zoom-select": [startTime: number, endTime: number];
-}>(); 
+}>();
 
 // ── Refs ──────────────────────────────────────────────────────────────────────
 
@@ -106,8 +106,8 @@ const GRID_WIDTH = computed(() => {
 
 // ── Offset time (from context or zero) ───────────────────────────────────────
 
-const offsetTimePx = computed(() =>
-  (timelineCtx?.offsetTime.value ?? 0) * pxPerSec.value,
+const offsetTimePx = computed(
+  () => (timelineCtx?.offsetTime.value ?? 0) * pxPerSec.value,
 );
 
 // ── Pitches ───────────────────────────────────────────────────────────────────
@@ -212,7 +212,8 @@ const toolCtxBase = {
   rowHeightPx: NOTE_HEIGHT_PX,
   clientXToBeat,
   clientYToPitchIdx,
-  scrollRef: timelineCtx?.scrollEl ?? ref<HTMLDivElement | undefined>(undefined),
+  scrollRef:
+    timelineCtx?.scrollEl ?? ref<HTMLDivElement | undefined>(undefined),
   emitNotes: (notes: PlacedNote[]) => emit("update:notes", notes),
   onPlace: (pitchId: string) => notePreview.playNote(pitchId),
 };
@@ -424,7 +425,8 @@ onUnmounted(() => {
 const playheadLeft = computed(
   () =>
     LABEL_WIDTH_PX +
-    ((props.currentTime ?? 0) - (timelineCtx?.offsetTime.value ?? 0)) * pxPerSec.value,
+    ((props.currentTime ?? 0) - (timelineCtx?.offsetTime.value ?? 0)) *
+      pxPerSec.value,
 );
 
 // ── Programmatic scroll (for zoom-in / zoom-select from parent) ────────────────
@@ -435,9 +437,7 @@ const playheadLeft = computed(
     class="relative flex flex-col h-full w-full overflow-hidden bg-base-100 select-none"
   >
     <!-- ── Roll body ──────────────────────────────────────────────────────── -->
-    <div
-      class="flex-1 flex overflow-y-auto overflow-x-hidden"
-    >
+    <div class="flex-1 flex overflow-y-auto overflow-x-hidden">
       <!-- Left pitch labels — sticky so they don't scroll horizontally -->
       <PianoRollKeys
         :pitches="pitches"
@@ -566,9 +566,12 @@ const playheadLeft = computed(
           :style="{
             left: `${Math.min(zoomDragStartBeat, zoomDragEndBeat) * pxPerBeatRender}px`,
             width: `${Math.abs(zoomDragEndBeat - zoomDragStartBeat) * pxPerBeatRender}px`,
-            backgroundColor: 'color-mix(in oklab, var(--color-primary) 15%, transparent)',
-            borderLeft: '1px solid color-mix(in oklab, var(--color-primary) 60%, transparent)',
-            borderRight: '1px solid color-mix(in oklab, var(--color-primary) 60%, transparent)',
+            backgroundColor:
+              'color-mix(in oklab, var(--color-primary) 15%, transparent)',
+            borderLeft:
+              '1px solid color-mix(in oklab, var(--color-primary) 60%, transparent)',
+            borderRight:
+              '1px solid color-mix(in oklab, var(--color-primary) 60%, transparent)',
           }"
         />
       </div>

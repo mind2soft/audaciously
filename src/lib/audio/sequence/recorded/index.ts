@@ -13,17 +13,11 @@ export const recordingSequenceType = "recording" as const;
 
 // ─── Interfaces ───────────────────────────────────────────────────────────────
 
-export interface RecordedSequence extends AudioSequence<
-  RecordedTrackKind,
-  RecordedSequenceType
-> {
+export interface RecordedSequence extends AudioSequence<RecordedTrackKind, RecordedSequenceType> {
   readonly buffer: AudioBuffer;
 }
 
-export interface RecordingSequence extends AudioSequence<
-  RecordedTrackKind,
-  RecordingSequenceType
-> {
+export interface RecordingSequence extends AudioSequence<RecordedTrackKind, RecordingSequenceType> {
   readonly buffer: AudioBuffer;
   /**
    * Replace the preview buffer with a freshly-decoded chunk and fire a

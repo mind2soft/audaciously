@@ -17,8 +17,7 @@ export function useDrumPreview() {
 
   function playHit(pitchId: string): void {
     const ctx = getContext();
-    const fire = () =>
-      playDrumHit(ctx, ctx.destination, pitchId, ctx.currentTime);
+    const fire = () => playDrumHit(ctx, ctx.destination, pitchId, ctx.currentTime);
 
     if (ctx.state === "suspended") {
       ctx.resume().then(fire);

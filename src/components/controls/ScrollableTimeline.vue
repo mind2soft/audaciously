@@ -10,20 +10,12 @@
  * Provides ScrollableTimelineContext via inject key scrollableTimelineKey.
  */
 
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from "vue";
 import {
-  computed,
-  nextTick,
-  onBeforeUnmount,
-  onMounted,
-  provide,
-  ref,
-  watch,
-} from "vue";
-import TimelineRuler from "./TimelineRuler.vue";
-import {
-  scrollableTimelineKey,
   type ScrollableTimelineContext,
+  scrollableTimelineKey,
 } from "../../lib/scrollable-timeline";
+import TimelineRuler from "./TimelineRuler.vue";
 
 const props = withDefaults(
   defineProps<{
@@ -76,10 +68,7 @@ const effectiveMaxScaleFactor = computed(() => {
 const scaleFactorModel = computed({
   get: () => props.scaleFactor ?? 1,
   set: (v: number) => {
-    const clamped = Math.max(
-      props.minScaleFactor ?? 1,
-      Math.min(effectiveMaxScaleFactor.value, v),
-    );
+    const clamped = Math.max(props.minScaleFactor ?? 1, Math.min(effectiveMaxScaleFactor.value, v));
     emit("update:scaleFactor", clamped);
   },
 });
@@ -94,9 +83,7 @@ const currentTimeModel = computed({
 // ── Geometry ──────────────────────────────────────────────────────────────────
 
 const gutterWidthRef = computed(() => props.gutterWidth ?? 0);
-const contentWidth = computed(() =>
-  Math.max(0, viewportWidth.value - gutterWidthRef.value),
-);
+const contentWidth = computed(() => Math.max(0, viewportWidth.value - gutterWidthRef.value));
 const innerWidth = computed(
   () => gutterWidthRef.value + contentWidth.value * scaleFactorModel.value,
 );
@@ -138,7 +125,7 @@ const onScroll = () => {
 /** Walk the DOM tree to find the first element that can scroll vertically. */
 function findVerticalScrollable(el: Element): Element | null {
   for (let i = 0; i < el.children.length; i++) {
-    const child = el.children[i]!;
+    const child = el.children[i];
     const { overflowY } = getComputedStyle(child);
     if (
       (overflowY === "auto" || overflowY === "scroll") &&
@@ -167,10 +154,7 @@ const onWheel = (evt: WheelEvent) => {
   // Normal wheel → horizontal scroll
   const delta = evt.deltaY || evt.deltaX;
   const scrollDelta = (delta / 300) * contentWidth.value;
-  const newLeft = Math.max(
-    0,
-    Math.min(maxScrollLeft.value, scrollLeftPx.value + scrollDelta),
-  );
+  const newLeft = Math.max(0, Math.min(maxScrollLeft.value, scrollLeftPx.value + scrollDelta));
   if (scrollEl.value) {
     scrollEl.value.scrollLeft = newLeft;
     scrollLeftPx.value = newLeft;
@@ -185,24 +169,18 @@ watch(currentTimeModel, (t) => {
   const pps = pixelsPerSecond.value;
   if (pps <= 0) return;
 
-  const vd   = visibleDuration.value;
-  const low  = offsetTime.value + vd * 0.1;
+  const vd = visibleDuration.value;
+  const low = offsetTime.value + vd * 0.1;
   const high = offsetTime.value + vd * 0.9;
 
   if (t > high) {
     // Anchor playhead at 90% — scroll advances at exactly playback speed
-    const newLeft = Math.max(
-      0,
-      Math.min(maxScrollLeft.value, (t - vd * 0.9) * pps),
-    );
+    const newLeft = Math.max(0, Math.min(maxScrollLeft.value, (t - vd * 0.9) * pps));
     scrollEl.value.scrollLeft = newLeft;
     scrollLeftPx.value = newLeft;
   } else if (t < low) {
     // Anchor playhead at 10% (e.g. seeking backwards while playing)
-    const newLeft = Math.max(
-      0,
-      Math.min(maxScrollLeft.value, (t - vd * 0.1) * pps),
-    );
+    const newLeft = Math.max(0, Math.min(maxScrollLeft.value, (t - vd * 0.1) * pps));
     scrollEl.value.scrollLeft = newLeft;
     scrollLeftPx.value = newLeft;
   }
@@ -216,10 +194,7 @@ watch(scaleFactorModel, async () => {
   const pps = pixelsPerSecond.value;
   if (pps <= 0) return;
   const cw = contentWidth.value;
-  const newLeft = Math.max(
-    0,
-    Math.min(maxScrollLeft.value, currentTimeModel.value * pps - cw / 2),
-  );
+  const newLeft = Math.max(0, Math.min(maxScrollLeft.value, currentTimeModel.value * pps - cw / 2));
   scrollEl.value.scrollLeft = newLeft;
   scrollLeftPx.value = newLeft;
 });
@@ -257,9 +232,13 @@ const isRulerDragging = ref(false);
 const onRulerMousedown = () => {
   if (!props.enableSeek) return;
   isRulerDragging.value = true;
-  document.addEventListener("mouseup", () => {
-    isRulerDragging.value = false;
-  }, { once: true });
+  document.addEventListener(
+    "mouseup",
+    () => {
+      isRulerDragging.value = false;
+    },
+    { once: true },
+  );
 };
 
 // ── Ruler wheel → zoom ────────────────────────────────────────────────────────
@@ -269,7 +248,7 @@ const onRulerWheel = (evt: WheelEvent) => {
   evt.preventDefault();
   const delta = evt.deltaY || evt.deltaX;
   // Scroll up (delta < 0) → zoom in; scroll down (delta > 0) → zoom out.
-  scaleFactorModel.value = scaleFactorModel.value * Math.pow(1.002, -delta);
+  scaleFactorModel.value = scaleFactorModel.value * 1.002 ** -delta;
 };
 
 // ── Provided context ──────────────────────────────────────────────────────────
@@ -293,9 +272,17 @@ provide(scrollableTimelineKey, context);
 <template>
   <div class="flex flex-col w-full h-full overflow-hidden">
     <!-- Row 1: Ruler -->
-    <div class="flex flex-row shrink-0" @wheel.prevent="onRulerWheel" @mousedown="onRulerMousedown">
+    <div
+      class="flex flex-row shrink-0"
+      @wheel.prevent="onRulerWheel"
+      @mousedown="onRulerMousedown"
+    >
       <!-- Gutter placeholder -->
-      <div v-if="gutterWidthRef > 0" :style="{ width: `${gutterWidthRef}px` }" class="shrink-0" />
+      <div
+        v-if="gutterWidthRef > 0"
+        :style="{ width: `${gutterWidthRef}px` }"
+        class="shrink-0"
+      />
       <!-- Ruler fills remaining width -->
       <TimelineRuler
         class="flex-1"
@@ -317,10 +304,7 @@ provide(scrollableTimelineKey, context);
       @wheel.prevent="onWheel"
     >
       <!-- Inner div establishes the scroll range -->
-      <div
-        class="relative h-full"
-        :style="{ width: `${innerWidth}px` }"
-      >
+      <div class="relative h-full" :style="{ width: `${innerWidth}px` }">
         <!-- Sticky div: never scrolls horizontally, always viewport-width -->
         <div
           class="sticky left-0 h-full overflow-hidden"

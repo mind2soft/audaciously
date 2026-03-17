@@ -17,12 +17,12 @@
 //   @mousedown.prevent="drag.startTrimStartDrag(seg.id, $event)"
 //   @mousedown.prevent="drag.startTrimEndDrag(seg.id, $event)"
 
-import { ref, onUnmounted, type Ref } from "vue";
-import { useSequenceStore } from "../stores/sequence";
-import { useNodesStore } from "../stores/nodes";
-import type { Track } from "../features/sequence/track";
+import { onUnmounted, type Ref, ref } from "vue";
+import type { InstrumentNode, RecordedNode } from "../features/nodes";
 import type { Segment } from "../features/sequence/segment";
-import type { RecordedNode, InstrumentNode } from "../features/nodes";
+import type { Track } from "../features/sequence/track";
+import { useNodesStore } from "../stores/nodes";
+import { useSequenceStore } from "../stores/sequence";
 
 // ── Public types ───────────────────────────────────────────────────────────────
 
@@ -84,9 +84,7 @@ interface ActiveDrag {
  *   Must match the pixel-per-second ratio used when rendering segments so that
  *   pixel deltas convert correctly to time deltas.
  */
-export function useSegmentDrag(
-  pixelsPerSecond: Ref<number>,
-): UseSegmentDragReturn {
+export function useSegmentDrag(pixelsPerSecond: Ref<number>): UseSegmentDragReturn {
   const sequenceStore = useSequenceStore();
   const nodesStore = useNodesStore();
 
@@ -100,9 +98,7 @@ export function useSegmentDrag(
 
   // ── Private helpers ────────────────────────────────────────────────────────
 
-  function _findSegment(
-    segmentId: string,
-  ): { segment: Segment; track: Track } | null {
+  function _findSegment(segmentId: string): { segment: Segment; track: Track } | null {
     for (const track of sequenceStore.tracks) {
       const segment = track.segments.find((s) => s.id === segmentId);
       if (segment) return { segment, track };
@@ -146,9 +142,7 @@ export function useSegmentDrag(
       const snapAfter = otherEnd;
 
       clamped =
-        Math.abs(clamped - snapBefore) <= Math.abs(clamped - snapAfter)
-          ? snapBefore
-          : snapAfter;
+        Math.abs(clamped - snapBefore) <= Math.abs(clamped - snapAfter) ? snapBefore : snapAfter;
     }
 
     return clamped;
@@ -171,18 +165,11 @@ export function useSegmentDrag(
         const found = _findSegment(activeDrag.segmentId);
         if (!found) return;
 
-        const track = sequenceStore.tracks.find(
-          (t) => t.id === activeDrag!.trackId,
-        );
+        const track = sequenceStore.tracks.find((t) => t.id === activeDrag?.trackId);
         if (!track) return;
 
         const segDuration = _segmentDuration(found.segment);
-        const clamped = _clampNoOverlap(
-          activeDrag.segmentId,
-          track,
-          desiredTime,
-          segDuration,
-        );
+        const clamped = _clampNoOverlap(activeDrag.segmentId, track, desiredTime, segDuration);
         sequenceStore.moveSegment(activeDrag.segmentId, clamped);
         break;
       }
@@ -253,11 +240,7 @@ export function useSegmentDrag(
     event.preventDefault();
   }
 
-  function startMoveDrag(
-    segmentId: string,
-    trackId: string,
-    event: MouseEvent,
-  ): void {
+  function startMoveDrag(segmentId: string, trackId: string, event: MouseEvent): void {
     _beginDrag(segmentId, trackId, "move", event);
   }
 

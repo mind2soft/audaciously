@@ -11,11 +11,11 @@
 
 import { defineStore } from "pinia";
 import { ref } from "vue";
-import { createPlayer, type AudioPlayer } from "../lib/audio/player";
-import { loadSettings } from "../lib/settings";
 import { buildTracksFromStore } from "../features/playback/build-tracks";
-import { useSequenceStore } from "./sequence";
+import { type AudioPlayer, createPlayer } from "../lib/audio/player";
+import { loadSettings } from "../lib/settings";
 import { useNodesStore } from "./nodes";
+import { useSequenceStore } from "./sequence";
 
 // ── Module-level engine singleton (initialized with persisted settings) ─────
 // Created once per app lifetime; reused across HMR reloads via Pinia.
@@ -86,10 +86,7 @@ export const usePlayerStore = defineStore("player", () => {
     const sequenceStore = useSequenceStore();
     const nodesStore = useNodesStore();
 
-    const engineTracks = buildTracksFromStore(
-      sequenceStore.tracks,
-      nodesStore.nodesById,
-    );
+    const engineTracks = buildTracksFromStore(sequenceStore.tracks, nodesStore.nodesById);
     engine.setTracks(engineTracks);
   }
 

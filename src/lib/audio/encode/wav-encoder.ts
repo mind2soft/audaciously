@@ -13,10 +13,7 @@ export interface WavEncoderOptions {
  * Supports 16-bit PCM (default, format 1) and 32-bit float (format 3).
  * Multi-channel audio is interleaved automatically. Zero external dependencies.
  */
-export function encodeWav(
-  audioBuffer: AudioBuffer,
-  options: WavEncoderOptions = {},
-): Blob {
+export function encodeWav(audioBuffer: AudioBuffer, options: WavEncoderOptions = {}): Blob {
   const numChannels = audioBuffer.numberOfChannels;
   const sampleRate = audioBuffer.sampleRate;
   const format = options.float32 ? 3 : 1;

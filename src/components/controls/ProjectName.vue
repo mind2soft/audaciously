@@ -71,7 +71,8 @@ const handleKeydown = (e: KeyboardEvent) => {
     <span
       class="invisible col-start-1 row-start-1 whitespace-pre text-xl font-semibold px-3 min-w-24 pointer-events-none select-none"
       aria-hidden="true"
-    >{{ model || 'Untitled Project' }}</span>
+      >{{ model || "Untitled Project" }}</span
+    >
 
     <!-- Editing state: input overlays the ghost span -->
     <input

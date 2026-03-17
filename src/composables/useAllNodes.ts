@@ -13,11 +13,11 @@
 //     the node is removed, cleaning up the watcher and computed ref.
 //   - FolderNodes are skipped — they carry no audio buffer.
 
-import { watch, computed, effectScope } from "vue";
+import { computed, effectScope, watch } from "vue";
+import type { InstrumentNode, RecordedNode } from "../features/nodes";
 import { useNodesStore } from "../stores/nodes";
-import type { RecordedNode, InstrumentNode } from "../features/nodes";
-import { useRecordedNode } from "./useRecordedNode";
 import { useInstrumentNode } from "./useInstrumentNode";
+import { useRecordedNode } from "./useRecordedNode";
 
 /**
  * Registers per-node reactive buffer-recompute loops for every
@@ -59,9 +59,7 @@ export function useAllNodes(): void {
           scopes.set(id, scope);
           scope.run(() => {
             const nodeRef = computed(
-              () =>
-                (nodesStore.nodesById.get(id) as RecordedNode | undefined) ??
-                null,
+              () => (nodesStore.nodesById.get(id) as RecordedNode | undefined) ?? null,
             );
             useRecordedNode(nodeRef);
           });
@@ -70,9 +68,7 @@ export function useAllNodes(): void {
           scopes.set(id, scope);
           scope.run(() => {
             const nodeRef = computed(
-              () =>
-                (nodesStore.nodesById.get(id) as InstrumentNode | undefined) ??
-                null,
+              () => (nodesStore.nodesById.get(id) as InstrumentNode | undefined) ?? null,
             );
             useInstrumentNode(nodeRef);
           });

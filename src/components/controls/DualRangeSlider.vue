@@ -31,9 +31,7 @@ const fillStyle = computed(() => {
 
 // ── z-index: low thumb goes on top when handles touch/cross ───────────────────
 
-const lowZIndex = computed(() =>
-  props.modelValue.low >= props.modelValue.high ? 5 : 3,
-);
+const lowZIndex = computed(() => (props.modelValue.low >= props.modelValue.high ? 5 : 3));
 
 // ── Event handlers ────────────────────────────────────────────────────────────
 
@@ -56,7 +54,10 @@ function onHighInput(event: Event): void {
     <!-- Unfilled track -->
     <div class="absolute inset-x-0 h-2 rounded-full bg-primary/10" />
     <!-- Filled range between handles -->
-    <div class="absolute top-0 h-4 rounded-full bg-primary" :style="fillStyle" />
+    <div
+      class="absolute top-0 h-4 rounded-full bg-primary"
+      :style="fillStyle"
+    />
     <!-- Low handle -->
     <input
       type="range"

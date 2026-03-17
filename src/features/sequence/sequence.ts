@@ -5,9 +5,9 @@
 // A new Sequence always starts with one empty Track (per spec).
 
 import { nanoid } from "nanoid";
+import type { AudioEffect } from "../effects/types";
 import type { Track } from "./track";
 import { createTrack } from "./track";
-import type { AudioEffect } from "../effects/types";
 
 export interface Sequence {
   readonly id: string;

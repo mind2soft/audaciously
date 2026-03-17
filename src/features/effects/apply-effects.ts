@@ -2,11 +2,11 @@
 // applyEffectChain — applies an ordered list of effects to a WebAudio graph.
 // See: .opencode/context/refactor/05-audio-effects.md
 
-import type { AudioEffect } from "./types";
-import { applyGainEffect } from "./gain";
 import { applyBalanceEffect } from "./balance";
 import { applyFadeInEffect } from "./fade-in";
 import { applyFadeOutEffect } from "./fade-out";
+import { applyGainEffect } from "./gain";
+import type { AudioEffect } from "./types";
 
 /**
  * Applies a list of effects to a WebAudio graph by chaining them between
@@ -73,6 +73,11 @@ export function applyEffectChain(
         createdNodes.push(node);
         break;
       }
+      case "split":
+      case "volume":
+        // Not yet wired into WebAudio — pass-through for now
+        prev.connect(next);
+        break;
     }
 
     if (next !== outputNode) {

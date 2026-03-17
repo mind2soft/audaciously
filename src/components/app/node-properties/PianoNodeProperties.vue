@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { useNodesStore } from "../../../stores/nodes";
-import DualRangeSlider from "../../controls/DualRangeSlider.vue";
-import {
-  PIANO_OCTAVE_MIN,
-  PIANO_OCTAVE_MAX,
-  PIANO_OCTAVE_PRESETS,
-} from "../../../lib/music/instruments";
 import type { InstrumentNode } from "../../../features/nodes";
 import type { OctaveRange } from "../../../lib/music/instruments";
+import {
+  PIANO_OCTAVE_MAX,
+  PIANO_OCTAVE_MIN,
+  PIANO_OCTAVE_PRESETS,
+} from "../../../lib/music/instruments";
+import { useNodesStore } from "../../../stores/nodes";
+import DualRangeSlider from "../../controls/DualRangeSlider.vue";
 
 const props = defineProps<{ node: InstrumentNode }>();
 const nodes = useNodesStore();
@@ -31,10 +31,7 @@ function applyPreset(range: OctaveRange): void {
 }
 
 function isActivePreset(range: OctaveRange): boolean {
-  return (
-    props.node.octaveRange.low === range.low &&
-    props.node.octaveRange.high === range.high
-  );
+  return props.node.octaveRange.low === range.low && props.node.octaveRange.high === range.high;
 }
 </script>
 
@@ -44,7 +41,9 @@ function isActivePreset(range: OctaveRange): boolean {
     <div class="px-3 py-2 flex flex-col gap-2 shrink-0">
       <!-- Header row: label + presets dropdown -->
       <div class="flex items-center justify-between">
-        <p class="text-[10px] uppercase tracking-wider text-base-content/35 font-medium">
+        <p
+          class="text-[10px] uppercase tracking-wider text-base-content/35 font-medium"
+        >
           Octave Range
         </p>
         <!-- Presets dropdown -->
@@ -59,12 +58,16 @@ function isActivePreset(range: OctaveRange): boolean {
           >
             <li v-for="preset in PIANO_OCTAVE_PRESETS" :key="preset.label">
               <button
-                :class="isActivePreset(preset.range) ? 'text-primary font-medium' : ''"
+                :class="
+                  isActivePreset(preset.range) ? 'text-primary font-medium' : ''
+                "
                 :title="preset.title"
                 @click="applyPreset(preset.range)"
               >
                 {{ preset.label }}
-                <span class="text-base-content/40 text-[10px] ml-1">{{ preset.title }}</span>
+                <span class="text-base-content/40 text-[10px] ml-1">{{
+                  preset.title
+                }}</span>
               </button>
             </li>
           </ul>

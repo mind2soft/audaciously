@@ -6,8 +6,6 @@
 // It lives in composables/useInstrumentNode.ts (P4-02). This file is pure data.
 
 import { nanoid } from "nanoid";
-import type { ProjectNodeBase, ProjectNodeID } from "../node";
-import type { AudioEffect } from "../../effects/types";
 import type {
   InstrumentPitchKey,
   MusicInstrumentType,
@@ -15,6 +13,8 @@ import type {
   OctaveRange,
 } from "../../../lib/music/instruments";
 import { PIANO_DEFAULT_OCTAVE_RANGE } from "../../../lib/music/instruments";
+import type { AudioEffect } from "../../effects/types";
+import type { ProjectNodeBase, ProjectNodeID } from "../node";
 
 // ─── Re-exported types (originally from track/instrument/index.ts) ─────────────
 
@@ -44,9 +44,8 @@ export interface PlacedNote {
 
 // ─── InstrumentNode interface ─────────────────────────────────────────────────
 
-export interface InstrumentNode<
-  InstrumentType extends MusicInstrumentType = MusicInstrumentType,
-> extends ProjectNodeBase<"instrument"> {
+export interface InstrumentNode<InstrumentType extends MusicInstrumentType = MusicInstrumentType>
+  extends ProjectNodeBase<"instrument"> {
   instrumentType: InstrumentType;
   bpm: number;
   timeSignature: TimeSignature;
@@ -68,9 +67,7 @@ export interface InstrumentNode<
 // ─── Factory ──────────────────────────────────────────────────────────────────
 
 /** Create a new InstrumentNode with a unique id. */
-export function createInstrumentNode<
-  InstrumentType extends MusicInstrumentType,
->(
+export function createInstrumentNode<InstrumentType extends MusicInstrumentType>(
   name: string,
   instrumentType: InstrumentType,
   id?: ProjectNodeID,

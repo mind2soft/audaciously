@@ -10,14 +10,14 @@
  */
 
 import { ref, watch } from "vue";
-import { usePlayerStore } from "../stores/player";
+import { type AudioDeviceList, enumerateAudioDevices } from "../lib/audio/devices";
 import {
-  loadSettings,
-  saveSettings,
   defaultSettings,
+  loadSettings,
   type PersistedSettings,
+  saveSettings,
 } from "../lib/settings";
-import { enumerateAudioDevices, type AudioDeviceList } from "../lib/audio/devices";
+import { usePlayerStore } from "../stores/player";
 
 const props = defineProps<{
   open: boolean;
@@ -90,10 +90,11 @@ function doCancel(): void {
       <h3 class="mb-6 text-lg font-bold">Settings</h3>
 
       <div class="flex flex-col gap-6">
-
         <!-- ─── Audio Input ──────────────────────────────────────────────── -->
         <section class="flex flex-col gap-3">
-          <h4 class="text-xs font-semibold uppercase tracking-wider text-base-content/50">
+          <h4
+            class="text-xs font-semibold uppercase tracking-wider text-base-content/50"
+          >
             Audio Input
           </h4>
 
@@ -121,10 +122,14 @@ function doCancel(): void {
 
           <!-- Browser processing toggles -->
           <div class="flex flex-col gap-2.5 pt-1">
-            <label class="flex items-center justify-between gap-3 cursor-pointer">
+            <label
+              class="flex items-center justify-between gap-3 cursor-pointer"
+            >
               <div class="flex flex-col gap-0.5">
                 <span class="text-sm">Echo Cancellation</span>
-                <span class="text-xs text-base-content/50">Reduces speaker feedback in the recording.</span>
+                <span class="text-xs text-base-content/50"
+                  >Reduces speaker feedback in the recording.</span
+                >
               </div>
               <input
                 type="checkbox"
@@ -132,10 +137,14 @@ function doCancel(): void {
                 v-model="staged.echoCancellation"
               />
             </label>
-            <label class="flex items-center justify-between gap-3 cursor-pointer">
+            <label
+              class="flex items-center justify-between gap-3 cursor-pointer"
+            >
               <div class="flex flex-col gap-0.5">
                 <span class="text-sm">Noise Suppression</span>
-                <span class="text-xs text-base-content/50">Filters out background noise from recordings.</span>
+                <span class="text-xs text-base-content/50"
+                  >Filters out background noise from recordings.</span
+                >
               </div>
               <input
                 type="checkbox"
@@ -143,10 +152,14 @@ function doCancel(): void {
                 v-model="staged.noiseSuppression"
               />
             </label>
-            <label class="flex items-center justify-between gap-3 cursor-pointer">
+            <label
+              class="flex items-center justify-between gap-3 cursor-pointer"
+            >
               <div class="flex flex-col gap-0.5">
                 <span class="text-sm">Auto Gain Control</span>
-                <span class="text-xs text-base-content/50">Automatically adjusts microphone input level.</span>
+                <span class="text-xs text-base-content/50"
+                  >Automatically adjusts microphone input level.</span
+                >
               </div>
               <input
                 type="checkbox"
@@ -161,7 +174,9 @@ function doCancel(): void {
 
         <!-- ─── Audio Output ───────────────────────────────────────────────── -->
         <section class="flex flex-col gap-3">
-          <h4 class="text-xs font-semibold uppercase tracking-wider text-base-content/50">
+          <h4
+            class="text-xs font-semibold uppercase tracking-wider text-base-content/50"
+          >
             Audio Output
           </h4>
 
@@ -204,11 +219,11 @@ function doCancel(): void {
               v-model.number="staged.volume"
             />
             <p class="text-xs text-base-content/50">
-              Up to 300% for quiet recordings. Applied immediately when you click Done.
+              Up to 300% for quiet recordings. Applied immediately when you
+              click Done.
             </p>
           </label>
         </section>
-
       </div>
 
       <!-- Actions -->

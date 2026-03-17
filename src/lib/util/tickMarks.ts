@@ -21,11 +21,29 @@ export type TickMark = {
  * or whole-minute boundaries.
  */
 const TICK_STEPS: readonly number[] = [
-  0.001, 0.002, 0.005,           // ms range
-  0.01,  0.02,  0.025, 0.05,    // 10–50 ms
-  0.1,   0.2,   0.25,  0.5,     // sub-second fractions
-  1,     2,     5,     10,  15,  30, // seconds
-  60,    120,   300,   600, 1800, 3600, // minutes / hours
+  0.001,
+  0.002,
+  0.005, // ms range
+  0.01,
+  0.02,
+  0.025,
+  0.05, // 10–50 ms
+  0.1,
+  0.2,
+  0.25,
+  0.5, // sub-second fractions
+  1,
+  2,
+  5,
+  10,
+  15,
+  30, // seconds
+  60,
+  120,
+  300,
+  600,
+  1800,
+  3600, // minutes / hours
 ];
 
 /**
@@ -40,12 +58,10 @@ const selectSteps = (
   minSpacingPx: number,
 ): { minorStep: number; majorStep: number } => {
   const minInterval = minSpacingPx / pixelsPerSecond;
-  const minorStep =
-    TICK_STEPS.find((s) => s >= minInterval) ?? TICK_STEPS[TICK_STEPS.length - 1];
+  const minorStep = TICK_STEPS.find((s) => s >= minInterval) ?? TICK_STEPS[TICK_STEPS.length - 1];
   // Major step: first step that gives at least 3.5× the minor spacing,
   // ensuring ≥ 3 minor ticks appear between each label.
-  const majorStep =
-    TICK_STEPS.find((s) => s >= minorStep * 3.5) ?? minorStep;
+  const majorStep = TICK_STEPS.find((s) => s >= minorStep * 3.5) ?? minorStep;
   return { minorStep, majorStep };
 };
 

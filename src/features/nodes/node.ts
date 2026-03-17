@@ -5,12 +5,12 @@
 // NOTE: "AudioNode" is reserved by the Web Audio API. App-level nodes are
 // always called "ProjectNode" (or "PNode" in short references).
 
-import type { FolderNode } from "./folder/folder-node";
-import type { RecordedNode } from "./recorded/recorded-node";
-import type { InstrumentNode } from "./instrument/instrument-node";
 import type { MusicInstrumentType } from "../../lib/music/instruments";
+import type { FolderNode } from "./folder/folder-node";
+import type { InstrumentNode } from "./instrument/instrument-node";
+import type { RecordedNode } from "./recorded/recorded-node";
 
-export type { FolderNode, RecordedNode, InstrumentNode };
+export type { FolderNode, InstrumentNode, RecordedNode };
 
 export type ProjectNodeKind = "folder" | "recorded" | "instrument";
 
@@ -23,7 +23,4 @@ export interface ProjectNodeBase<NodeKind extends ProjectNodeKind> {
 }
 
 /** Union of all concrete node types. */
-export type ProjectNode =
-  | FolderNode
-  | RecordedNode
-  | InstrumentNode<MusicInstrumentType>;
+export type ProjectNode = FolderNode | RecordedNode | InstrumentNode<MusicInstrumentType>;

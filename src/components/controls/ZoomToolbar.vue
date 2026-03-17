@@ -43,7 +43,10 @@ const emit = defineEmits<{
       :disabled="disabled || zoomRatio <= minRatio"
       @click="emit('zoom-out')"
     >
-      <i class="iconify mdi--magnify-minus-outline size-3.5" aria-hidden="true" />
+      <i
+        class="iconify mdi--magnify-minus-outline size-3.5"
+        aria-hidden="true"
+      />
     </button>
 
     <!-- Zoom Select (rubber-band drag to zoom into region) -->
@@ -64,7 +67,10 @@ const emit = defineEmits<{
       :disabled="disabled || zoomRatio >= maxRatio"
       @click="emit('zoom-in')"
     >
-      <i class="iconify mdi--magnify-plus-outline size-3.5" aria-hidden="true" />
+      <i
+        class="iconify mdi--magnify-plus-outline size-3.5"
+        aria-hidden="true"
+      />
     </button>
   </div>
 </template>
