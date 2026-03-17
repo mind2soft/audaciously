@@ -20,7 +20,9 @@ export async function enumerateAudioDevices(): Promise<AudioDeviceList> {
   // Briefly request the microphone so browsers unlock device labels.
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    stream.getTracks().forEach((t) => t.stop());
+    for (const track of stream.getTracks()) {
+      track.stop();
+    }
   } catch {
     // Permission denied or unavailable — proceed with possibly unlabelled devices.
   }

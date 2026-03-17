@@ -38,14 +38,10 @@ export function loadSettings(): PersistedSettings {
 
     return {
       inputDeviceId:
-        typeof p.inputDeviceId === "string"
-          ? p.inputDeviceId
-          : defaultSettings.inputDeviceId,
+        typeof p.inputDeviceId === "string" ? p.inputDeviceId : defaultSettings.inputDeviceId,
 
       outputDeviceId:
-        typeof p.outputDeviceId === "string"
-          ? p.outputDeviceId
-          : defaultSettings.outputDeviceId,
+        typeof p.outputDeviceId === "string" ? p.outputDeviceId : defaultSettings.outputDeviceId,
 
       echoCancellation:
         typeof p.echoCancellation === "boolean"

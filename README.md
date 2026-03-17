@@ -1,66 +1,102 @@
 # Audaciously
 
-> A browser-based audio recorder and editor inspired by [Audacity](https://www.audacityteam.org/) — built entirely with the Web Audio API, Vue 3, and TypeScript.
+> What happens when you build a DAW entirely inside the browser — no server, no plugins, no native libs — and see how far the Web Audio API will bend before it breaks?
 
-**[🎙️ Try it live →](https://mind2soft.github.io/audaciously/)**
+**[🎙️ Open the live demo →](https://mind2soft.github.io/audaciously/)**
+
+*v0.0.3 — intentionally rough. Audaciously experimental.*
 
 ---
 
-## What is it?
+## Wait, the browser can do THAT?
 
-Audaciously is an experiment in how far the modern browser's audio capabilities can take you. It gives you a familiar multi-track DAW-style interface — record from your microphone, layer tracks, cut and rearrange sequences, control volume — all without installing anything, without a server, and without any native audio libraries.
+Multi-track recording. A piano roll. A node-based instrument tree. WAV and MP3 export. Project files that compress and travel as a single `.awp` bundle. Stereo balance — including a custom `AudioNode` the Web Audio API forgot to ship.
 
-Under the hood everything runs on the raw [Web Audio API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API), with waveform rendering offloaded to a Web Worker so the UI stays smooth no matter how large your project gets.
+All of it runs in your tab. Nothing leaves your browser. No account. No install. Just the raw Web Audio API, pushed to see where it gives out.
+
+This is **Audaciously** — an Audacity-inspired DAW experiment built on Vue 3, TypeScript, and the browser's own audio primitives.
 
 ---
 
 ## Features
 
-### Recording
+### 🎙️ Recording
+
 - Record from any connected microphone
-- Overdub safely: echo cancellation, noise suppression, and auto gain control are **off by default** so playback audio doesn't bleed into your recording
+- Echo cancellation, noise suppression, and AGC are **off by default** — clean overdubs, no bleed
 - Live waveform visualisation while recording
 
-### Playback
+### ▶️ Playback
+
 - Multi-track simultaneous playback
-- Play, pause, resume, stop, and seek
 - Master volume with up to **3× boost** (300%)
 - Real-time output waveform display
 
-### Instrument tracks
-- Add note-based instrument tracks alongside recorded audio tracks
-- Built-in instruments: piano, drums, and more
-- **Piano roll editor** for placing and editing notes with precision
+### 🎹 Node-based instrument system
 
-### Editing tools
+Notes aren't organised in a flat track list — they live in a **node tree**: folder nodes, instrument nodes, recorded nodes. It scales better, and it's architecturally more interesting.
+
+- Built-in instruments: **piano** and **drums**
+- Full **piano roll editor** with five dedicated tools:
+
 | Tool | What it does |
-|------|--------------|
+|------|-------------|
+| **Place** | Draw notes directly onto the grid; click existing notes to erase |
+| **Pan** | Drag every note after a beat boundary in time (snaps to longest note duration) |
+| **Copy** | Drag-select a range, copy it to the internal clipboard |
+| **Cut** | Drag-select a range, remove notes and close the resulting gap |
+| **Paste** | Insert clipboard notes at the cursor, pushing existing notes right |
+
+- Internal clipboard backed by `localStorage` — paste across tabs
+- Piano roll zoom control
+
+### ✂️ Timeline editing
+
+| Tool | What it does |
+|------|-------------|
 | **Select** | Click a sequence to select it |
 | **Split** | Cut a sequence at any point into two independent clips |
-| **Move** | Drag a sequence to reposition it on the timeline |
+| **Move** | Drag a sequence to any position on the timeline |
 | **Cut** | Remove a sequence from its track |
 
-### Projects
-- **Auto-save** keeps your work safe as you go — no manual save required
-- Projects persist across browser sessions via **IndexedDB** (no server, no account)
-- **Project browser** — open, rename, and delete saved projects from one place
-- **AWP import/export** — share projects as `.awp` (Audaciously Web Project) files
-- **Save indicator** shows auto-save status at a glance
-- **Storage dashboard** displays IndexedDB usage and available quota
+### 🎚️ Per-node effects chain
 
-### Export
-- Export your mix to **WAV** or **MP3** via a dedicated export dialog
+Every node in the tree can carry: **Gain**, **Balance**, **Fade In**, **Fade Out**.
 
-### Settings
-- Choose your **input device** (microphone) and **output device** (speakers / headphones)
-- Toggle **echo cancellation**, **noise suppression**, and **auto gain control** per session
-- Output device changes take effect immediately in supported browsers (Chrome 110+)
+### 💾 Projects
 
-### Under the hood
-- Waveforms computed as SVG paths in a **Web Worker** — no main-thread blocking
-- Custom **stereo balance node** built on top of the Web Audio graph (the API doesn't ship one)
-- Zero audio libraries — pure `AudioContext`, `GainNode`, `AnalyserNode`, `AudioBufferSourceNode`, `MediaRecorder`
-- Project data stored entirely client-side via **Dexie** (IndexedDB wrapper) — nothing leaves your browser
+- **Auto-save** to IndexedDB as you work — no manual save, no lost sessions
+- Project browser to open, rename, and delete saved projects
+- **AWP import/export** — portable `.awp` project bundles (fflate-compressed)
+- Storage dashboard showing IndexedDB quota and usage
+
+### 📤 Export
+
+- **WAV** and **MP3** export via offline Web Audio rendering
+
+### ⚙️ Settings
+
+- Choose input (microphone) and output (speakers/headphones) devices
+- Toggle echo cancellation, noise suppression, auto gain control
+- Output device switching takes effect immediately (Chrome 110+)
+
+---
+
+## How it works (under the hood)
+
+The interesting parts — the things that required working around the Web Audio API rather than with it:
+
+**Custom stereo balance node** — The Web Audio API has no built-in balance/pan node that works on stereo sources the way you'd expect. Audaciously implements its own by splitting audio into two `GainNode`s and crossing the levels. It's wired directly into the audio graph like any other native node.
+
+**SVG waveforms in a Web Worker** — Waveform paths are computed as SVG `d` strings inside a dedicated worker thread. The main thread never touches the raw sample data. No matter how large your project, the UI doesn't block.
+
+**Zero audio libraries** — Every audio operation goes through the raw browser API: `AudioContext`, `GainNode`, `AnalyserNode`, `AudioBufferSourceNode`, `MediaRecorder`. No wrappers. This makes the code more verbose and the failure modes more visible — which is the point.
+
+**Node tree architecture** — Rather than a flat list of tracks, sequences are organised in a tree. Folder nodes aggregate, instrument nodes generate, recorded nodes play back. This maps more closely to how complex arrangements actually grow.
+
+**Client-side persistence** — All project data lives in IndexedDB via Dexie. Project files exported as `.awp` are fflate-compressed bundles. Nothing ever touches a server.
+
+**MP3 encoding in-browser** — Export to MP3 runs via lamejs, entirely client-side, after an offline AudioContext renders the full mix.
 
 ---
 
@@ -68,12 +104,16 @@ Under the hood everything runs on the raw [Web Audio API](https://developer.mozi
 
 | Layer | Technology |
 |-------|-----------|
-| Framework | [Vue 3](https://vuejs.org/) — Composition API |
-| Language | [TypeScript 5](https://www.typescriptlang.org/) |
+| Framework | [Vue 3](https://vuejs.org/) — `<script setup>` Composition API |
+| Language | [TypeScript 5](https://www.typescriptlang.org/) (strict) |
 | Styling | [Tailwind CSS 4](https://tailwindcss.com/) + [DaisyUI 5](https://v5.daisyui.com/) |
 | Build | [Vite 6](https://vite.dev/) |
+| State | [Pinia](https://pinia.vuejs.org/) |
 | Persistence | [Dexie](https://dexie.org/) (IndexedDB wrapper) |
-| Icons | [Iconify / Material Design Icons](https://icon-sets.iconify.design/mdi/) |
+| Audio | Web Audio API — zero libraries |
+| MP3 encoding | [lamejs](https://github.com/zhuker/lamejs) |
+| Compression | [fflate](https://github.com/101arrowz/fflate) |
+| Icons | [Iconify / MDI](https://icon-sets.iconify.design/mdi/) |
 | CI / CD | GitHub Actions → GitHub Pages |
 | License | GPL-3.0 |
 
@@ -81,55 +121,57 @@ Under the hood everything runs on the raw [Web Audio API](https://developer.mozi
 
 ## Getting started
 
-### Prerequisites
-
-- [Node.js](https://nodejs.org/) 20+
-- [pnpm](https://pnpm.io/) 10+
-
-### Install & run
+**Requirements:** Node.js 20+, pnpm 10+
 
 ```bash
-# Install dependencies
 pnpm install
 
-# Start the dev server (http://localhost:5173)
-pnpm dev
+pnpm dev      # dev server at http://localhost:5173
+pnpm build    # type-check + bundle → dist/
+pnpm preview  # preview the production build locally
 ```
 
-### Build for production
-
-```bash
-# Type-check + bundle
-pnpm build
-
-# Preview the production build locally
-pnpm preview
-```
-
-The output lands in `dist/`. The project is automatically deployed to GitHub Pages on every push to `main` via the workflow in `.github/workflows/static.yml`.
+The project deploys automatically to GitHub Pages on every push to `main` via `.github/workflows/static.yml`.
 
 ---
 
 ## Browser compatibility
 
-Audaciously requires a modern browser with full Web Audio API support.
-
 | Feature | Chrome | Firefox | Safari |
 |---------|--------|---------|--------|
 | Playback & recording | ✅ | ✅ | ✅ |
+| Full feature set | ✅ | ✅ | ✅ |
 | Output device selection | ✅ 110+ | ❌ | ❌ |
 
-> **Tip:** Use headphones when recording with other tracks playing back. This eliminates acoustic feedback and lets you record with audio processing fully disabled for the cleanest overdubs.
+> **Recording tip:** Use headphones when overdubbing with playback. With audio processing off by default, acoustic feedback is the only enemy.
 
 ---
 
 ## Roadmap
 
-Things that are not yet implemented but are planned:
+v0.0.3 is a working experiment, not a finished tool. Things on the table:
 
-- **Audio filters** — fade in/out, equaliser, normalise, pitch shift, noise reduction
-- **Paste operations** — splice, fill, overwrite
-- **Scrolling and zooming** improvements on the timeline
+- **Audio filters** — equaliser, normalise, pitch shift, noise reduction
+- **Paste modes** — splice, fill, overwrite (see [docs/NOTES.md](docs/NOTES.md))
+- **Timeline improvements** — better scrolling, zoom, snapping
+- **More instruments** — the node architecture is ready for them
+
+Pull requests, issues, and "what if you tried..." questions are all welcome.
+
+---
+
+## Contributing / Experimenting
+
+Fork it. Break it. See what the browser does when you push it.
+
+The architecture is intentionally lean — factory functions over classes, raw Web Audio over library abstractions, workers for anything CPU-heavy. If you want to add an instrument, an effect node, or an entirely different audio primitive, there's room.
+
+```bash
+# Start here
+pnpm dev
+```
+
+Report bugs, propose ideas, or open a PR. This is v0.0.3 — there's a lot of road ahead.
 
 ---
 

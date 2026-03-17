@@ -65,9 +65,7 @@ export async function requestPersistence(): Promise<boolean> {
  * actual write to IndexedDB will throw `QuotaExceededError` if space is
  * genuinely insufficient.
  */
-export async function checkAvailableSpace(
-  neededBytes: number,
-): Promise<boolean> {
+export async function checkAvailableSpace(neededBytes: number): Promise<boolean> {
   const { used, quota } = await estimateStorage();
 
   if (quota === 0) {

@@ -1,11 +1,14 @@
 import { nanoid } from "nanoid";
-import type { AudioTrack } from "../audio/track";
-import type { BufferedAudioSequence } from "../audio/sequence";
-import { recordingSequenceType } from "../audio/sequence/recorded/index";
-import { createRecordedTrack } from "../audio/track/recorded/recorded-track";
-import { createRecordedSequence } from "../audio/sequence/recorded/recorded-sequence";
-import { createInstrumentTrack } from "../audio/track/instrument/instrument-track";
-import type { TrackRecord, SequenceRecord } from "./db";
+import type { InstrumentNode, RecordedNode } from "../../features/nodes";
+import type { FolderNode } from "../../features/nodes/folder/folder-node";
+import { createFolderNode } from "../../features/nodes/folder/folder-node";
+import { createInstrumentNode } from "../../features/nodes/instrument/instrument-node";
+import { createRecordedNode } from "../../features/nodes/recorded/recorded-node";
+import { createSegment } from "../../features/sequence/segment";
+import { createTrack } from "../../features/sequence/track";
+import type { NodeTreeJSON } from "../../stores/nodes";
+import type { SequenceJSON } from "../../stores/sequence";
+import type { NodeRecord, SegmentRecord, TrackRecord } from "./db";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -17,188 +20,231 @@ export interface AudioBlobRef {
 
 /** Flat DB-ready records produced by serialization. */
 export interface SerializedProjectData {
+  nodes: NodeRecord[];
   tracks: TrackRecord[];
-  sequences: SequenceRecord[];
-  /** AudioBuffers to be stored in the audioBlobs table. */
+  segments: SegmentRecord[];
+  /** AudioBuffers to be compressed and stored in the audioBlobs table. */
   audioBlobs: AudioBlobRef[];
 }
 
-/** Live domain objects produced by deserialization. */
+/** Live store JSON produced by deserialization. */
 export interface DeserializedProjectData {
-  tracks: AudioTrack<any>[];
+  nodesJSON: NodeTreeJSON;
+  sequenceJSON: SequenceJSON;
 }
 
-// ─── Serialize ────────────────────────────────────────────────────────────────
+// ─── Serialize nodes ──────────────────────────────────────────────────────────
 
 /**
- * Convert the player's live domain objects into flat DB records.
+ * Convert the node store's JSON snapshot into flat DB records.
  *
- * - Recorded tracks: each sequence's AudioBuffer is extracted with a fresh
- *   `audioBlobId` so the caller can persist it to the audioBlobs table.
- * - Instrument tracks: only note data / settings are stored. Sequences are
- *   NOT serialized because they are regenerable from notes + bpm + instrumentId.
+ * - FolderNodes: store childIds array.
+ * - RecordedNodes: extract the AudioBuffer into a separate AudioBlobRef; the
+ *   buffer is NOT stored in the NodeRecord itself.
+ * - InstrumentNodes: store note data / settings only. The synthesised buffer is
+ *   NOT stored because it is regenerable from notes + bpm + instrumentId.
  */
-export function serializeProject(
+export function serializeNodes(
   projectId: string,
-  tracks: Iterable<AudioTrack<any>>,
-): SerializedProjectData {
-  const trackRecords: TrackRecord[] = [];
-  const sequenceRecords: SequenceRecord[] = [];
+  nodesJSON: NodeTreeJSON,
+): { nodeRecords: NodeRecord[]; audioBlobs: AudioBlobRef[] } {
+  const nodeRecords: NodeRecord[] = [];
   const audioBlobs: AudioBlobRef[] = [];
-  let sortOrder = 0;
 
-  for (const track of tracks) {
-    const trackJSON = track.toJSON();
-    const trackRecord: TrackRecord = {
-      ...(trackJSON as unknown as TrackRecord),
-      projectId,
-      sortOrder: sortOrder++,
-    };
+  for (const node of Object.values(nodesJSON.nodesById)) {
+    if (node.kind === "folder") {
+      const folder = node as FolderNode;
+      nodeRecords.push({
+        id: folder.id,
+        projectId,
+        kind: "folder",
+        name: folder.name,
+        childIds: [...folder.childIds],
+      });
+    } else if (node.kind === "recorded") {
+      const recorded = node as RecordedNode;
+      let audioBlobId: string | undefined;
 
-    if (track.kind === "recorded") {
-      for (const seq of track.getSequences()) {
-        // Never persist transient live-capture sequences — they are replaced by
-        // the final RecordedSequence once recording finishes.
-        if (seq.type === recordingSequenceType) continue;
-
-        const buffered = seq as BufferedAudioSequence<any>;
-        const audioBlobId = nanoid();
-
-        sequenceRecords.push({
-          id: seq.id,
-          trackId: track.id,
-          projectId,
-          time: seq.time,
-          playbackRate: seq.playbackRate,
-          audioBlobId,
-        });
-
-        audioBlobs.push({ id: audioBlobId, buffer: buffered.buffer });
+      if (recorded.sourceBuffer) {
+        audioBlobId = nanoid();
+        audioBlobs.push({ id: audioBlobId, buffer: recorded.sourceBuffer });
       }
-    }
 
-    trackRecords.push(trackRecord);
+      nodeRecords.push({
+        id: recorded.id,
+        projectId,
+        kind: "recorded",
+        name: recorded.name,
+        effects: recorded.effects.length > 0 ? [...recorded.effects] : undefined,
+        audioBlobId,
+        isRecording: recorded.isRecording || undefined,
+      });
+    } else if (node.kind === "instrument") {
+      const instr = node as InstrumentNode;
+      nodeRecords.push({
+        id: instr.id,
+        projectId,
+        kind: "instrument",
+        name: instr.name,
+        effects: instr.effects.length > 0 ? [...instr.effects] : undefined,
+        instrumentId: instr.instrumentType,
+        bpm: instr.bpm,
+        timeSignature: { ...instr.timeSignature },
+        notes: instr.notes.length > 0 ? [...instr.notes] : undefined,
+        selectedNoteType: instr.selectedNoteType,
+        pitchScrollTop: instr.pitchScrollTop,
+        showWaveform: instr.showWaveform || undefined,
+        octaveRange: { ...instr.octaveRange },
+      });
+    }
   }
 
-  return { tracks: trackRecords, sequences: sequenceRecords, audioBlobs };
+  return { nodeRecords, audioBlobs };
 }
 
-// ─── Deserialize ──────────────────────────────────────────────────────────────
+// ─── Serialize sequence ───────────────────────────────────────────────────────
 
 /**
- * Reconstruct live domain objects from DB records.
+ * Convert the sequence store's JSON snapshot into flat DB records.
  *
- * **Must be called from within a Vue `effectScope()` or component `setup()`**
- * because `createInstrumentTrack` uses Vue reactivity internally.
- *
- * @param trackRecords  - Track rows from the DB, any order.
- * @param sequenceRecords - Sequence rows from the DB.
- * @param audioBuffers  - Map of `audioBlobId → AudioBuffer` (pre-deserialized).
+ * Produces TrackRecords (timeline rows) and SegmentRecords (node placements).
+ * The timelineEffects are NOT stored here; they live in the ProjectRecord.
  */
-export function deserializeProject(
-  trackRecords: TrackRecord[],
-  sequenceRecords: SequenceRecord[],
+export function serializeSequence(
+  projectId: string,
+  sequenceJSON: SequenceJSON,
+): { trackRecords: TrackRecord[]; segmentRecords: SegmentRecord[] } {
+  const trackRecords: TrackRecord[] = [];
+  const segmentRecords: SegmentRecord[] = [];
+
+  for (const track of sequenceJSON.tracks) {
+    trackRecords.push({
+      id: track.id,
+      projectId,
+      name: track.name,
+      height: track.height,
+      muted: track.muted,
+      locked: track.locked,
+      volume: track.volume,
+      balance: track.balance,
+      sortOrder: track.sortOrder,
+    });
+
+    for (const seg of track.segments) {
+      segmentRecords.push({
+        id: seg.id,
+        trackId: track.id,
+        projectId,
+        nodeId: seg.nodeId,
+        time: seg.time,
+        trimStart: seg.trimStart,
+        trimEnd: seg.trimEnd,
+      });
+    }
+  }
+
+  return { trackRecords, segmentRecords };
+}
+
+// ─── Deserialize nodes ────────────────────────────────────────────────────────
+
+/**
+ * Reconstruct the NodeTreeJSON from DB records and pre-deserialized AudioBuffers.
+ *
+ * @param nodeRecords   - NodeRecord rows from the DB (any order).
+ * @param rootIds       - Ordered root-level node IDs (from ProjectRecord.rootIds).
+ * @param audioBuffers  - Map of audioBlobId → AudioBuffer (pre-decompressed).
+ */
+export function deserializeNodes(
+  nodeRecords: NodeRecord[],
+  rootIds: string[],
   audioBuffers: Map<string, AudioBuffer>,
-): DeserializedProjectData {
+): Pick<NodeTreeJSON, "nodesById" | "rootIds"> {
+  const nodesById: Record<string, import("../../features/nodes").ProjectNode> = {};
+
+  for (const record of nodeRecords) {
+    if (record.kind === "folder") {
+      const node = createFolderNode(record.name, record.id);
+      if (record.childIds) {
+        node.childIds.push(...record.childIds);
+      }
+      nodesById[record.id] = node;
+    } else if (record.kind === "recorded") {
+      const node = createRecordedNode(record.name, record.id);
+      if (record.effects) node.effects = [...record.effects];
+      if (record.audioBlobId) {
+        node.sourceBuffer = audioBuffers.get(record.audioBlobId) ?? null;
+      }
+      nodesById[record.id] = node;
+    } else if (record.kind === "instrument") {
+      if (!record.instrumentId) continue; // Corrupt record — skip.
+
+      const node = createInstrumentNode(record.name, record.instrumentId, record.id);
+      if (record.effects) node.effects = [...record.effects];
+      if (record.bpm !== undefined) node.bpm = record.bpm;
+      if (record.timeSignature) node.timeSignature = { ...record.timeSignature };
+      if (record.notes) node.notes = [...record.notes];
+      if (record.selectedNoteType) node.selectedNoteType = record.selectedNoteType;
+      if (record.pitchScrollTop !== undefined) node.pitchScrollTop = record.pitchScrollTop;
+      if (record.showWaveform !== undefined) node.showWaveform = record.showWaveform;
+      if (record.octaveRange) node.octaveRange = { ...record.octaveRange };
+      nodesById[record.id] = node;
+    }
+  }
+
+  return {
+    nodesById,
+    rootIds: rootIds.length > 0 ? rootIds : Object.keys(nodesById),
+  };
+}
+
+// ─── Deserialize sequence ─────────────────────────────────────────────────────
+
+/**
+ * Reconstruct SequenceJSON tracks from DB records.
+ *
+ * @param trackRecords   - TrackRecord rows from the DB (any order).
+ * @param segmentRecords - SegmentRecord rows from the DB.
+ */
+export function deserializeSequence(
+  trackRecords: TrackRecord[],
+  segmentRecords: SegmentRecord[],
+): Pick<SequenceJSON, "tracks"> {
+  // Sort tracks by sortOrder for consistent display order.
   const sorted = [...trackRecords].sort((a, b) => a.sortOrder - b.sortOrder);
 
-  // Group sequences by track ID for efficient lookup.
-  const seqByTrack = new Map<string, SequenceRecord[]>();
-  for (const seq of sequenceRecords) {
-    const list = seqByTrack.get(seq.trackId);
+  // Group segments by track ID for efficient lookup.
+  const segsByTrack = new Map<string, SegmentRecord[]>();
+  for (const seg of segmentRecords) {
+    const list = segsByTrack.get(seg.trackId);
     if (list) {
-      list.push(seq);
+      list.push(seg);
     } else {
-      seqByTrack.set(seq.trackId, [seq]);
+      segsByTrack.set(seg.trackId, [seg]);
     }
   }
 
-  const tracks: AudioTrack<any>[] = [];
+  const tracks = sorted.map((record) => {
+    const track = createTrack(record.name, record.id);
+    track.height = record.height;
+    track.muted = record.muted;
+    track.locked = record.locked;
+    track.volume = record.volume;
+    track.balance = record.balance;
+    track.sortOrder = record.sortOrder;
 
-  for (const record of sorted) {
-    const track = deserializeTrack(record, seqByTrack, audioBuffers);
-    if (track) {
-      tracks.push(track);
-    }
-  }
+    const segs = segsByTrack.get(record.id) ?? [];
+    // Sort segments by time for consistent rendering order.
+    segs.sort((a, b) => a.time - b.time);
+    track.segments = segs.map((s) => {
+      const seg = createSegment(s.nodeId, s.time, s.id);
+      seg.trimStart = s.trimStart;
+      seg.trimEnd = s.trimEnd;
+      return seg;
+    });
+
+    return track;
+  });
 
   return { tracks };
-}
-
-// ─── Internals ────────────────────────────────────────────────────────────────
-
-function deserializeTrack(
-  record: TrackRecord,
-  seqByTrack: Map<string, SequenceRecord[]>,
-  audioBuffers: Map<string, AudioBuffer>,
-): AudioTrack<any> | null {
-  if (record.kind === "recorded") {
-    return deserializeRecordedTrack(record, seqByTrack, audioBuffers);
-  }
-
-  if (record.kind === "instrument") {
-    return deserializeInstrumentTrack(record);
-  }
-
-  return null;
-}
-
-function deserializeRecordedTrack(
-  record: TrackRecord,
-  seqByTrack: Map<string, SequenceRecord[]>,
-  audioBuffers: Map<string, AudioBuffer>,
-): AudioTrack<any> {
-  const track = createRecordedTrack(record.name, record.id);
-  applyCommonTrackProps(track, record);
-
-  const seqs = seqByTrack.get(record.id) ?? [];
-  for (const seqRecord of seqs) {
-    if (!seqRecord.audioBlobId) continue;
-
-    const buffer = audioBuffers.get(seqRecord.audioBlobId);
-    if (!buffer) continue;
-
-    const seq = createRecordedSequence(buffer, seqRecord.time, seqRecord.id);
-    seq.playbackRate = seqRecord.playbackRate ?? 1;
-    track.addSequence(seq);
-  }
-
-  return track;
-}
-
-function deserializeInstrumentTrack(
-  record: TrackRecord,
-): AudioTrack<any> | null {
-  if (!record.instrumentId) return null;
-
-  const track = createInstrumentTrack(
-    record.name,
-    record.instrumentId,
-    record.id,
-  );
-  applyCommonTrackProps(track, record);
-
-  // Apply instrument-specific state. Setting these synchronously ensures
-  // Vue batches the reactive updates into a single synth render.
-  if (record.bpm !== undefined) track.bpm = record.bpm;
-  if (record.timeSignature) track.timeSignature = record.timeSignature;
-  if (record.notes) track.notes = record.notes;
-  if (record.selectedNoteType) track.selectedNoteType = record.selectedNoteType;
-  if (record.pitchScrollTop !== undefined)
-    track.pitchScrollTop = record.pitchScrollTop;
-  if (record.showWaveform !== undefined)
-    track.showWaveform = record.showWaveform;
-  if (record.octaveRange) track.octaveRange = record.octaveRange;
-
-  return track;
-}
-
-function applyCommonTrackProps(
-  track: AudioTrack<any>,
-  record: TrackRecord,
-): void {
-  track.volume = record.volume;
-  track.balance = record.balance;
-  track.muted = record.muted;
-  track.locked = record.locked;
 }

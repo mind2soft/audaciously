@@ -14,14 +14,16 @@
  * and added to the player as a regular AudioTrack — no special treatment needed.
  */
 
-import SynthWorker from "../../workers/synth-processor?worker";
+import type { PlacedNoteID } from "../../features/nodes/instrument/instrument-node";
 import type {
-  SynthRequest,
-  SynthResponse,
   SynthError,
   SynthNote,
+  SynthRequest,
+  SynthResponse,
 } from "../../workers/synth-processor";
-import type { MusicInstrumentId } from "./instruments";
+import SynthWorker from "../../workers/synth-processor?worker";
+import type { AudioTrackID } from "../audio/track/track";
+import type { InstrumentPitchKey, MusicInstrumentType } from "./instruments";
 
 // ─── Minimal render options ───────────────────────────────────────────────────
 
@@ -30,12 +32,12 @@ import type { MusicInstrumentId } from "./instruments";
  * Keeping this minimal avoids coupling synthWorker to the full track type.
  */
 export interface SynthRenderOptions {
-  id: string;
-  instrumentId: MusicInstrumentId;
+  trackId: AudioTrackID;
+  instrumentType: MusicInstrumentType;
   bpm: number;
   notes: ReadonlyArray<{
-    id: string;
-    pitchId: string;
+    id: PlacedNoteID;
+    pitchKey: InstrumentPitchKey;
     startBeat: number;
     durationBeats: number;
   }>;
@@ -57,51 +59,40 @@ type PendingRender = {
 };
 
 /** trackId → latest pending promise */
-const pending = new Map<string, PendingRender>();
+const pending = new Map<AudioTrackID, PendingRender>();
 
 // ─── Response handler ─────────────────────────────────────────────────────────
 
-worker.addEventListener(
-  "message",
-  (evt: MessageEvent<SynthResponse | SynthError>) => {
-    const data = evt.data;
-    const entry = pending.get(data.trackId);
+worker.addEventListener("message", (evt: MessageEvent<SynthResponse | SynthError>) => {
+  const data = evt.data;
+  const entry = pending.get(data.trackId);
 
-    // Ignore stale responses (superseded by a newer seqNum).
-    if (entry?.seqNum !== data.seqNum) return;
+  // Ignore stale responses (superseded by a newer seqNum).
+  if (entry?.seqNum !== data.seqNum) return;
 
-    pending.delete(data.trackId);
+  pending.delete(data.trackId);
 
-    if ("error" in data) {
-      entry.reject(new Error(data.error));
-      return;
-    }
+  if ("error" in data) {
+    entry.reject(new Error(data.error));
+    return;
+  }
 
-    if (data.empty) {
-      // Signal "nothing to play" via a rejected promise so the caller can
-      // remove the AudioTrack from the player cleanly.
-      entry.reject(new SynthEmptyTrackSignal());
-      return;
-    }
+  if (data.empty) {
+    // Signal "nothing to play" via a rejected promise so the caller can
+    // remove the AudioTrack from the player cleanly.
+    entry.reject(new SynthEmptyTrackSignal());
+    return;
+  }
 
-    // Assemble the AudioBuffer from the transferred Float32Arrays.
-    // Use a detached OfflineAudioContext just to create the AudioBuffer with
-    // the correct sample rate.  This is instantaneous (no rendering).
-    const tmpCtx = new OfflineAudioContext(
-      2,
-      data.left.length,
-      DEFAULT_SAMPLE_RATE,
-    );
-    const audioBuffer = tmpCtx.createBuffer(
-      2,
-      data.left.length,
-      DEFAULT_SAMPLE_RATE,
-    );
-    audioBuffer.copyToChannel(data.left as Float32Array<ArrayBuffer>, 0);
-    audioBuffer.copyToChannel(data.right as Float32Array<ArrayBuffer>, 1);
-    entry.resolve(audioBuffer);
-  },
-);
+  // Assemble the AudioBuffer from the transferred Float32Arrays.
+  // Use a detached OfflineAudioContext just to create the AudioBuffer with
+  // the correct sample rate.  This is instantaneous (no rendering).
+  const tmpCtx = new OfflineAudioContext(2, data.left.length, DEFAULT_SAMPLE_RATE);
+  const audioBuffer = tmpCtx.createBuffer(2, data.left.length, DEFAULT_SAMPLE_RATE);
+  audioBuffer.copyToChannel(data.left as Float32Array<ArrayBuffer>, 0);
+  audioBuffer.copyToChannel(data.right as Float32Array<ArrayBuffer>, 1);
+  entry.resolve(audioBuffer);
+});
 
 // ─── Sentinel error class ─────────────────────────────────────────────────────
 
@@ -134,9 +125,9 @@ export interface SynthWorkerClient {
 }
 
 /** Per-client seqNum counters, keyed by trackId. */
-const seqNums = new Map<string, number>();
+const seqNums = new Map<AudioTrackID, number>();
 
-function nextSeqNum(trackId: string): number {
+function nextSeqNum(trackId: AudioTrackID): number {
   const n = (seqNums.get(trackId) ?? 0) + 1;
   seqNums.set(trackId, n);
   return n;
@@ -151,7 +142,7 @@ function nextSeqNum(trackId: string): number {
 export function createSynthWorkerClient(): SynthWorkerClient {
   return {
     render(options: SynthRenderOptions): Promise<AudioBuffer> {
-      const trackId = options.id;
+      const trackId = options.trackId;
       const seqNum = nextSeqNum(trackId);
 
       // Cancel (reject) any in-flight render for this track.
@@ -166,7 +157,7 @@ export function createSynthWorkerClient(): SynthWorkerClient {
 
         const notes: SynthNote[] = options.notes.map((n) => ({
           id: n.id,
-          pitchId: n.pitchId,
+          pitchKey: n.pitchKey,
           startBeat: n.startBeat,
           durationBeats: n.durationBeats,
         }));
@@ -174,7 +165,7 @@ export function createSynthWorkerClient(): SynthWorkerClient {
         const request: SynthRequest = {
           trackId,
           seqNum,
-          instrumentId: options.instrumentId,
+          instrumentType: options.instrumentType,
           bpm: options.bpm,
           sampleRate: options.sampleRate ?? DEFAULT_SAMPLE_RATE,
           notes,

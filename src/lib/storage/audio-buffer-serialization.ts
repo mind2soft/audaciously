@@ -11,9 +11,7 @@ export interface SerializedAudioBuffer {
 // ─── AudioBuffer ↔ SerializedAudioBuffer ──────────────────────────────────────
 
 /** Extract channel data and metadata from an AudioBuffer. */
-export function serializeAudioBuffer(
-  buffer: AudioBuffer,
-): SerializedAudioBuffer {
+export function serializeAudioBuffer(buffer: AudioBuffer): SerializedAudioBuffer {
   const channelData: Float32Array[] = [];
 
   for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
@@ -38,11 +36,7 @@ export function deserializeAudioBuffer(
   context: BaseAudioContext,
   data: SerializedAudioBuffer,
 ): AudioBuffer {
-  const buffer = context.createBuffer(
-    data.numberOfChannels,
-    data.length,
-    data.sampleRate,
-  );
+  const buffer = context.createBuffer(data.numberOfChannels, data.length, data.sampleRate);
 
   for (let ch = 0; ch < data.numberOfChannels; ch++) {
     buffer.copyToChannel(data.channelData[ch] as Float32Array<ArrayBuffer>, ch);

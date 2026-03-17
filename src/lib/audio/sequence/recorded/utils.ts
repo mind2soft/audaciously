@@ -1,8 +1,8 @@
-import type { RecordedSequence } from ".";
 import type { BufferedAudioSequence } from "..";
+import type { RecordedSequence } from ".";
 import { createRecordedSequence } from "./recorded-sequence";
 
-export function splitSequence<Kind>(
+export function splitSequence<Kind extends string>(
   sequence: BufferedAudioSequence<Kind>,
   splitTime: number,
 ): { left: RecordedSequence; right: RecordedSequence } {

@@ -1,6 +1,6 @@
-import type { MusicInstrumentId, NoteDuration } from "../music/instruments";
-import type { PlacedNote, TimeSignature } from "../audio/track/instrument";
-import type { AudioEffect } from "../audio/sequence";
+import type { AudioEffect } from "../../features/effects/types";
+import type { PlacedNote, TimeSignature } from "../../features/nodes/instrument/instrument-node";
+import type { MusicInstrumentType, NoteDuration } from "../music/instruments";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -57,7 +57,7 @@ export interface AwpTrackEntry {
   locked: boolean;
   sortOrder: number;
   // ── Instrument-specific ───────────────────────────────────────────────────
-  instrumentId?: MusicInstrumentId;
+  instrumentId?: MusicInstrumentType;
   bpm?: number;
   timeSignature?: TimeSignature;
   notes?: PlacedNote[];
@@ -157,16 +157,11 @@ function isVersionCompatible(version: string): boolean {
 
 // ─── Field Validators ─────────────────────────────────────────────────────────
 
-function validateProjectInfo(
-  project: Record<string, unknown>,
-  errors: string[],
-): void {
+function validateProjectInfo(project: Record<string, unknown>, errors: string[]): void {
   if (typeof project.name !== "string" || project.name.trim().length === 0) {
     errors.push("Project name is required.");
   } else if (project.name.length > MAX_PROJECT_NAME_LENGTH) {
-    errors.push(
-      `Project name exceeds maximum length of ${MAX_PROJECT_NAME_LENGTH} characters.`,
-    );
+    errors.push(`Project name exceeds maximum length of ${MAX_PROJECT_NAME_LENGTH} characters.`);
   }
 
   if (typeof project.description === "string") {
@@ -200,9 +195,7 @@ function validateProjectInfo(
     for (let i = 0; i < project.tags.length; i++) {
       const tag = project.tags[i];
       if (typeof tag === "string" && tag.length > MAX_TAG_LENGTH) {
-        errors.push(
-          `Project tag ${i} exceeds maximum length of ${MAX_TAG_LENGTH} characters.`,
-        );
+        errors.push(`Project tag ${i} exceeds maximum length of ${MAX_TAG_LENGTH} characters.`);
       }
     }
   }
@@ -215,11 +208,7 @@ function validateProjectInfo(
   }
 }
 
-function validateTrackEntry(
-  entry: unknown,
-  index: number,
-  errors: string[],
-): void {
+function validateTrackEntry(entry: unknown, index: number, errors: string[]): void {
   if (!entry || typeof entry !== "object") {
     errors.push(`Track ${index}: not an object.`);
     return;
@@ -242,10 +231,7 @@ function validateTrackEntry(
 
   // ── Instrument-specific validations ─────────────────────────────────────
   if (track.kind === "instrument") {
-    if (
-      Array.isArray(track.notes) &&
-      track.notes.length > MAX_NOTES_PER_TRACK
-    ) {
+    if (Array.isArray(track.notes) && track.notes.length > MAX_NOTES_PER_TRACK) {
       errors.push(
         `${prefix}: too many notes (${track.notes.length}). Maximum is ${MAX_NOTES_PER_TRACK}.`,
       );
@@ -253,10 +239,7 @@ function validateTrackEntry(
 
     if (track.timeSignature && typeof track.timeSignature === "object") {
       const ts = track.timeSignature as Record<string, unknown>;
-      if (
-        typeof ts.beatUnit !== "number" ||
-        !ALLOWED_BEAT_UNITS.includes(ts.beatUnit)
-      ) {
+      if (typeof ts.beatUnit !== "number" || !ALLOWED_BEAT_UNITS.includes(ts.beatUnit)) {
         errors.push(
           `${prefix}: timeSignature.beatUnit must be one of ${ALLOWED_BEAT_UNITS.join(", ")}.`,
         );
@@ -311,10 +294,7 @@ function validateSequenceEntry(
     const normalisedAudioFile = seq.audioFile.replace(/\\/g, "/");
     if (normalisedAudioFile.includes("\0")) {
       errors.push(`${prefix}: audioFile path contains null bytes.`);
-    } else if (
-      normalisedAudioFile.includes("../") ||
-      normalisedAudioFile.includes("./")
-    ) {
+    } else if (normalisedAudioFile.includes("../") || normalisedAudioFile.includes("./")) {
       errors.push(`${prefix}: audioFile path must not contain path traversal.`);
     } else if (!normalisedAudioFile.startsWith("audio/")) {
       errors.push(`${prefix}: audioFile path must start with "audio/".`);

@@ -1,19 +1,20 @@
-import { zip, type Zippable } from "fflate";
-import {
-  db,
-  type TrackRecord,
-  type SequenceRecord,
-  type AudioBlobRecord,
-} from "./db";
+import { type Zippable, zip } from "fflate";
 import {
   AWP_SCHEMA_VERSION,
+  type AwpAudioMeta,
   type AwpManifest,
   type AwpProjectInfo,
-  type AwpTrackEntry,
   type AwpSequenceEntry,
-  type AwpAudioMeta,
+  type AwpTrackEntry,
 } from "./awp-manifest";
 import { decompressBlobToFloat32Array } from "./compression";
+import {
+  type AudioBlobRecord,
+  db,
+  type NodeRecord,
+  type SegmentRecord,
+  type TrackRecord,
+} from "./db";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -31,11 +32,17 @@ export type ExportProgressCallback = (progress: ExportProgress) => void;
  * Export a project from IndexedDB as an `.awp` ZIP Blob.
  *
  * The ZIP contains:
- * - `manifest.json` — project metadata, track/sequence definitions
- * - `audio/<blobId>.pcm` — raw Float32 PCM data (interleaved channels)
+ * - `manifest.json` — project metadata, track/node/segment definitions
+ * - `audio/<blobId>.pcm` — raw Float32 PCM data (sequential channels)
  *
  * Audio blobs stored compressed in IndexedDB are decompressed first, then
  * written as raw PCM into the ZIP (fflate handles ZIP-level compression).
+ *
+ * Manifest track entries correspond to DB tracks. Each track entry's `kind`
+ * and instrument/sequence data come from the nodes referenced by that track's
+ * segments. If a track has segments referencing nodes of different kinds, all
+ * recorded segments are exported as sequences and instrument data is taken
+ * from the first instrument node found.
  *
  * Returns `null` if the project does not exist.
  */
@@ -48,35 +55,46 @@ export async function exportProject(
   const project = await db.projects.get(projectId);
   if (!project) return null;
 
-  const [trackRecords, sequenceRecords, audioBlobRecords] = await Promise.all([
+  const [trackRecords, segmentRecords, nodeRecords, audioBlobRecords] = await Promise.all([
     db.tracks.where("projectId").equals(projectId).toArray(),
-    db.sequences.where("projectId").equals(projectId).toArray(),
+    db.segments.where("projectId").equals(projectId).toArray(),
+    db.nodes.where("projectId").equals(projectId).toArray(),
     db.audioBlobs.where("projectId").equals(projectId).toArray(),
   ]);
 
   onProgress?.({ phase: "reading", progress: 1 });
 
-  // ── Decompress audio blobs → raw PCM ────────────────────────────────────
+  // ── Build lookup maps ────────────────────────────────────────────────────
 
-  onProgress?.({ phase: "decompressing", progress: 0 });
+  const nodeMap = new Map<string, NodeRecord>();
+  for (const node of nodeRecords) {
+    nodeMap.set(node.id, node);
+  }
 
   const audioBlobMap = new Map<string, AudioBlobRecord>();
   for (const rec of audioBlobRecords) {
     audioBlobMap.set(rec.id, rec);
   }
 
-  /** blobId → raw PCM bytes (channels interleaved as consecutive Float32Arrays). */
+  /** segments grouped by trackId */
+  const segsByTrack = groupBy(segmentRecords, (s) => s.trackId);
+
+  // ── Decompress audio blobs → raw PCM ────────────────────────────────────
+
+  onProgress?.({ phase: "decompressing", progress: 0 });
+
+  /** blobId → raw PCM bytes (channels sequential as consecutive Float32Arrays). */
   const rawPcmMap = new Map<string, Uint8Array>();
   const totalBlobs = audioBlobRecords.length;
-
   let blobsDone = 0;
+
   await Promise.all(
     audioBlobRecords.map(async (rec) => {
       const channels: Float32Array[] = [];
       for (const blob of rec.channelData) {
         channels.push(await decompressBlobToFloat32Array(blob));
       }
-      rawPcmMap.set(rec.id, interleaveChannels(channels));
+      rawPcmMap.set(rec.id, sequentialChannels(channels));
       blobsDone++;
       onProgress?.({
         phase: "decompressing",
@@ -85,17 +103,14 @@ export async function exportProject(
     }),
   );
 
-  // ── Build manifest ──────────────────────────────────────────────────────
+  // ── Build manifest ───────────────────────────────────────────────────────
 
   onProgress?.({ phase: "building", progress: 0 });
 
-  const seqByTrack = groupBy(sequenceRecords, (s) => s.trackId);
-  const sortedTracks = [...trackRecords].sort(
-    (a, b) => a.sortOrder - b.sortOrder,
-  );
+  const sortedTracks = [...trackRecords].sort((a, b) => a.sortOrder - b.sortOrder);
 
-  const manifestTracks: AwpTrackEntry[] = sortedTracks.map((track) =>
-    buildTrackEntry(track, seqByTrack.get(track.id) ?? [], audioBlobMap),
+  const manifestTracks: AwpTrackEntry[] = sortedTracks.flatMap((track) =>
+    buildTrackEntries(track, segsByTrack.get(track.id) ?? [], nodeMap, audioBlobMap),
   );
 
   const projectInfo: AwpProjectInfo = {
@@ -119,19 +134,15 @@ export async function exportProject(
 
   onProgress?.({ phase: "building", progress: 1 });
 
-  // ── Build ZIP ───────────────────────────────────────────────────────────
+  // ── Build ZIP ────────────────────────────────────────────────────────────
 
   onProgress?.({ phase: "zipping", progress: 0 });
 
   const files: Zippable = {
-    "manifest.json": new TextEncoder().encode(
-      JSON.stringify(manifest, null, 2),
-    ),
+    "manifest.json": new TextEncoder().encode(JSON.stringify(manifest, null, 2)),
   };
 
-  // Add raw PCM audio files — only blobs referenced by recorded-track sequences
-  // in the manifest. Instrument track audio is never exported (it's synthesized
-  // at runtime), so any orphaned blobs in the DB are intentionally excluded.
+  // Add raw PCM audio files — only blobs referenced in the manifest.
   const referencedBlobIds = new Set<string>();
   for (const trackEntry of manifestTracks) {
     for (const seq of trackEntry.sequences ?? []) {
@@ -155,13 +166,39 @@ export async function exportProject(
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function buildTrackEntry(
+/**
+ * Build one or more `AwpTrackEntry` objects for a DB track.
+ *
+ * In the v2 model, a single DB track can hold segments referencing different
+ * nodes. Since the AWP manifest format is kind-typed per entry, we group
+ * segments by their referenced node kind and emit one entry per kind group
+ * within the track.  In practice, most tracks will produce exactly one entry.
+ */
+function buildTrackEntries(
   track: TrackRecord,
-  sequences: SequenceRecord[],
+  segments: SegmentRecord[],
+  nodeMap: Map<string, NodeRecord>,
   audioBlobMap: Map<string, AudioBlobRecord>,
-): AwpTrackEntry {
-  const entry: AwpTrackEntry = {
-    kind: track.kind,
+): AwpTrackEntry[] {
+  // Partition segments by kind.
+  const recordedSegs: SegmentRecord[] = [];
+  const instrumentSegs: SegmentRecord[] = [];
+
+  for (const seg of segments) {
+    const node = nodeMap.get(seg.nodeId);
+    if (!node) continue; // orphaned segment — skip
+
+    if (node.kind === "recorded") {
+      recordedSegs.push(seg);
+    } else if (node.kind === "instrument") {
+      instrumentSegs.push(seg);
+    }
+    // folder nodes cannot be segments per spec; skip silently
+  }
+
+  const entries: AwpTrackEntry[] = [];
+
+  const baseFields = {
     name: track.name,
     volume: track.volume,
     balance: track.balance,
@@ -170,19 +207,11 @@ function buildTrackEntry(
     sortOrder: track.sortOrder,
   };
 
-  if (track.kind === "instrument") {
-    entry.instrumentId = track.instrumentId;
-    entry.bpm = track.bpm;
-    entry.timeSignature = track.timeSignature;
-    entry.notes = track.notes;
-    entry.selectedNoteType = track.selectedNoteType;
-    entry.pitchScrollTop = track.pitchScrollTop;
-    entry.showWaveform = track.showWaveform;
-  } else if (track.kind === "recorded") {
-    entry.sequences = sequences.map((seq): AwpSequenceEntry => {
-      const blobRec = seq.audioBlobId
-        ? audioBlobMap.get(seq.audioBlobId)
-        : undefined;
+  // Recorded entry — one entry combining all recorded segments on this track.
+  if (recordedSegs.length > 0) {
+    const seqEntries: AwpSequenceEntry[] = recordedSegs.map((seg) => {
+      const node = nodeMap.get(seg.nodeId)!;
+      const blobRec = node.audioBlobId ? audioBlobMap.get(node.audioBlobId) : undefined;
 
       const audioMeta: AwpAudioMeta = blobRec
         ? {
@@ -193,26 +222,63 @@ function buildTrackEntry(
         : { sampleRate: 44100, numberOfChannels: 1, lengthInFrames: 0 };
 
       return {
-        time: seq.time,
-        playbackRate: seq.playbackRate,
-        effects: seq.effects,
-        audioFile: `audio/${seq.audioBlobId ?? "unknown"}.pcm`,
+        time: seg.time,
+        playbackRate: 1,
+        effects: node.effects,
+        audioFile: `audio/${node.audioBlobId ?? "unknown"}.pcm`,
         audioMeta,
       };
     });
+
+    entries.push({
+      ...baseFields,
+      kind: "recorded",
+      sequences: seqEntries,
+    });
   }
 
-  return entry;
+  // Instrument entries — one entry per unique instrument node on this track.
+  // (Multiple instrument segments on one track would be rare, but handle it.)
+  const seenInstrumentNodes = new Set<string>();
+  for (const seg of instrumentSegs) {
+    const node = nodeMap.get(seg.nodeId);
+    if (!node || seenInstrumentNodes.has(node.id)) continue;
+    seenInstrumentNodes.add(node.id);
+
+    entries.push({
+      ...baseFields,
+      kind: "instrument",
+      instrumentId: node.instrumentId,
+      bpm: node.bpm,
+      timeSignature: node.timeSignature,
+      notes: node.notes,
+      selectedNoteType: node.selectedNoteType,
+      pitchScrollTop: node.pitchScrollTop,
+      showWaveform: node.showWaveform,
+    });
+  }
+
+  // If the track has no exportable segments, emit a minimal recorded entry so
+  // the track is preserved in the manifest.
+  if (entries.length === 0) {
+    entries.push({
+      ...baseFields,
+      kind: "recorded",
+      sequences: [],
+    });
+  }
+
+  return entries;
 }
 
 /**
- * Interleave multiple Float32Array channels into a single Uint8Array
- * of raw bytes (channel 0 bytes, then channel 1 bytes, etc.).
+ * Lay out multiple Float32Array channels as sequential byte runs into a single
+ * Uint8Array: all bytes for channel 0, then all bytes for channel 1, etc.
  *
- * This keeps the PCM format simple: the reader knows numberOfChannels and
- * lengthInFrames from the manifest, so it can split the bytes back out.
+ * The reader reconstructs channels using `numberOfChannels` and
+ * `lengthInFrames` from the manifest.
  */
-function interleaveChannels(channels: Float32Array[]): Uint8Array {
+function sequentialChannels(channels: Float32Array[]): Uint8Array {
   let totalBytes = 0;
   for (const ch of channels) {
     totalBytes += ch.byteLength;

@@ -4,11 +4,11 @@ import type { ProjectMetadata } from "../lib/storage/project-metadata";
 import {
   GENRE_SUGGESTIONS,
   TAG_SUGGESTIONS,
-  validateProjectName,
   validateAuthor,
-  validateGenre,
-  validateTags,
   validateDescription,
+  validateGenre,
+  validateProjectName,
+  validateTags,
 } from "../lib/storage/project-metadata";
 
 const props = defineProps<{
@@ -21,10 +21,7 @@ const emit = defineEmits<{
 
 // ── Field updates ───────────────────────────────────────────────────────────
 
-function update<K extends keyof ProjectMetadata>(
-  field: K,
-  value: ProjectMetadata[K],
-) {
+function update<K extends keyof ProjectMetadata>(field: K, value: ProjectMetadata[K]) {
   emit("update:modelValue", { ...props.modelValue, [field]: value });
 }
 
@@ -36,8 +33,7 @@ const showTagSuggestions = ref(false);
 const availableTagSuggestions = computed(() =>
   TAG_SUGGESTIONS.filter(
     (t) =>
-      !props.modelValue.tags.includes(t) &&
-      t.toLowerCase().includes(tagInput.value.toLowerCase()),
+      !props.modelValue.tags.includes(t) && t.toLowerCase().includes(tagInput.value.toLowerCase()),
   ),
 );
 
@@ -71,10 +67,7 @@ let tagBlurTimer: ReturnType<typeof setTimeout> | undefined;
 
 function handleTagBlur() {
   // Delay to allow click on suggestion before hiding.
-  tagBlurTimer = globalThis.setTimeout(
-    () => (showTagSuggestions.value = false),
-    150,
-  );
+  tagBlurTimer = globalThis.setTimeout(() => (showTagSuggestions.value = false), 150);
 }
 
 onUnmounted(() => {
@@ -88,9 +81,7 @@ const nameError = computed(() => validateProjectName(props.modelValue.name));
 const authorError = computed(() => validateAuthor(props.modelValue.author));
 const genreError = computed(() => validateGenre(props.modelValue.genre));
 const tagsError = computed(() => validateTags(props.modelValue.tags));
-const descriptionError = computed(() =>
-  validateDescription(props.modelValue.description),
-);
+const descriptionError = computed(() => validateDescription(props.modelValue.description));
 
 // W-15: Derived validity flag — requires at minimum a non-empty name and no
 // validation errors on any field.
@@ -117,6 +108,7 @@ defineExpose({ isValid });
       </div>
       <input
         type="text"
+        maxlength="64"
         class="input input-bordered w-full"
         :class="{ 'input-error': nameError }"
         placeholder="My awesome track"
@@ -215,7 +207,7 @@ defineExpose({ isValid });
             tagInput.length > 0 &&
             availableTagSuggestions.length > 0
           "
-          class="menu menu-sm bg-base-200 rounded-box shadow-lg absolute z-10 w-full mt-1 max-h-40 overflow-y-auto"
+          class="menu menu-sm bg-base-300 rounded-box shadow-lg absolute z-10 w-full mt-1 max-h-40 overflow-y-auto"
         >
           <li
             v-for="suggestion in availableTagSuggestions.slice(0, 8)"

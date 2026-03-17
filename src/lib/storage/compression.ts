@@ -10,11 +10,7 @@ import { deflate, inflate } from "fflate";
  * Returns a Blob ready for IndexedDB storage.
  */
 export function compressFloat32Array(data: Float32Array): Promise<Blob> {
-  const raw = new Uint8Array(
-    data.buffer as ArrayBuffer,
-    data.byteOffset,
-    data.byteLength,
-  );
+  const raw = new Uint8Array(data.buffer as ArrayBuffer, data.byteOffset, data.byteLength);
 
   return new Promise<Blob>((resolve, reject) => {
     deflate(raw, { level: 6 }, (err, compressed) => {
@@ -33,9 +29,7 @@ export function compressFloat32Array(data: Float32Array): Promise<Blob> {
  * Uses fflate's async inflate which runs in a web-worker pool to avoid
  * blocking the main thread during project loads.
  */
-export async function decompressBlobToFloat32Array(
-  blob: Blob,
-): Promise<Float32Array> {
+export async function decompressBlobToFloat32Array(blob: Blob): Promise<Float32Array> {
   const arrayBuffer = await blob.arrayBuffer();
   const compressed = new Uint8Array(arrayBuffer);
 
@@ -47,11 +41,7 @@ export async function decompressBlobToFloat32Array(
       }
 
       if (decompressed.byteLength % 4 !== 0) {
-        reject(
-          new Error(
-            "Decompressed data length is not aligned to 4 bytes (Float32)",
-          ),
-        );
+        reject(new Error("Decompressed data length is not aligned to 4 bytes (Float32)"));
         return;
       }
 

@@ -1,0 +1,59 @@
+<script setup lang="ts">
+/**
+ * EffectGain — panel for a single GainEffect.
+ *
+ * Props: effect: GainEffect
+ * Emits: update:effect(GainEffect), remove()
+ */
+import type { GainEffect } from "../../features/effects/types";
+
+const props = defineProps<{
+  effect: GainEffect;
+}>();
+
+const emit = defineEmits<{
+  "update:effect": [effect: GainEffect];
+  remove: [];
+}>();
+
+const onValueInput = (evt: Event) => {
+  const raw = (evt.target as HTMLInputElement).valueAsNumber;
+  const value = Math.max(0, Number.isNaN(raw) ? 0 : raw);
+  emit("update:effect", { ...props.effect, value });
+};
+</script>
+
+<template>
+  <div
+    class="flex items-center gap-2 px-2 py-1.5 text-xs"
+    :class="effect.enabled ? '' : 'opacity-50'"
+  >
+    <!-- Label -->
+    <span class="font-medium w-16 shrink-0">Gain</span>
+
+    <!-- Value slider -->
+    <input
+      type="range"
+      min="0"
+      max="3"
+      step="0.01"
+      :value="effect.value"
+      class="range range-xs flex-1 min-w-0"
+      :disabled="!effect.enabled"
+      aria-label="Gain value"
+      @input="onValueInput"
+    />
+
+    <!-- Numeric display / input -->
+    <input
+      type="number"
+      min="0"
+      step="0.01"
+      :value="effect.value.toFixed(2)"
+      class="input input-xs w-14 font-mono tabular-nums text-right"
+      :disabled="!effect.enabled"
+      aria-label="Gain value (numeric)"
+      @change="onValueInput"
+    />
+  </div>
+</template>

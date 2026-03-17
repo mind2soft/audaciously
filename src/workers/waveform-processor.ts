@@ -161,16 +161,14 @@ const linearPath = (
   } = options;
 
   const filteredData = getFilterData(framesData, samples);
-  const normalizeData = normalize
-    ? getNormalizeData(filteredData)
-    : filteredData;
+  const normalizeData = normalize ? getNormalizeData(filteredData) : filteredData;
 
   let path = ``;
 
-  const fixHeight = type != "bars" ? (height + top * 2) / 2 : height + top;
+  const fixHeight = type !== "bars" ? (height + top * 2) / 2 : height + top;
   const fixWidth = width / samples;
   const pathslength = paths.length;
-  const fixpathslength = type == "mirror" ? pathslength * 2 : pathslength;
+  const fixpathslength = type === "mirror" ? pathslength * 2 : pathslength;
 
   const normalizeDataLength = normalizeData.length;
 
@@ -178,7 +176,7 @@ const linearPath = (
     if (f > 0) {
       const pathlength = path.length;
       const lastvalue = path.charAt(pathlength - 1);
-      if (lastvalue == ";" || pathlength === 0) {
+      if (lastvalue === ";" || pathlength === 0) {
         path += " M 0 0 ;";
       } else {
         path += ";";
@@ -189,7 +187,7 @@ const linearPath = (
     let last_pos_y = -9999;
 
     for (let i = 0; i < samples; i++) {
-      const positive = type != "bars" ? (i % 2 ? 1 : -1) : 1;
+      const positive = type !== "bars" ? (i % 2 ? 1 : -1) : 1;
       let mirror = 1;
       for (let j = 0; j < fixpathslength; j++) {
         let k = j;
@@ -201,10 +199,7 @@ const linearPath = (
         paths[k].maxshow = paths[k].maxshow ?? 1;
         paths[k].normalize = paths[k].normalize ?? false;
         const normalizeDataValue = paths[k].normalize ? 1 : normalizeData[f][i];
-        if (
-          paths[k].minshow! <= normalizeData[f][i] &&
-          paths[k].maxshow! >= normalizeData[f][i]
-        ) {
+        if (paths[k].minshow! <= normalizeData[f][i] && paths[k].maxshow! >= normalizeData[f][i]) {
           const curPath = paths[k];
 
           switch (curPath.d) {
@@ -214,17 +209,16 @@ const linearPath = (
               const pos_y =
                 fixHeight +
                 ((normalizeDataValue * curPath.sy) / 100) *
-                  (type != "bars" ? height / 2 : height) *
+                  (type !== "bars" ? height / 2 : height) *
                   -positive *
                   mirror;
 
               //const end_pos_x = ((i+1) * fixWidth) - (fixWidth*(1-(curPath.ex/100))) + left;
-              const end_pos_x =
-                i * fixWidth + (fixWidth * curPath.ex) / 100 + left;
+              const end_pos_x = i * fixWidth + (fixWidth * curPath.ex) / 100 + left;
               const end_pos_y =
                 fixHeight +
                 ((normalizeDataValue * curPath.ey) / 100) *
-                  (type != "bars" ? height / 2 : height) *
+                  (type !== "bars" ? height / 2 : height) *
                   -positive *
                   mirror;
 
@@ -244,13 +238,12 @@ const linearPath = (
               const pos_y =
                 fixHeight +
                 ((normalizeDataValue * curPath.y) / 100) *
-                  (type != "bars" ? height / 2 : height) *
+                  (type !== "bars" ? height / 2 : height) *
                   -positive *
                   mirror;
 
               //const end_pos_x = ((i+1) * fixWidth) - (fixWidth*(1-(curPath.ex/100))) + left;
-              const end_pos_x =
-                i * fixWidth + (fixWidth * curPath.ex) / 100 + left;
+              const end_pos_x = i * fixWidth + (fixWidth * curPath.ex) / 100 + left;
               const end_pos_y = pos_y;
 
               if (pos_x !== last_pos_x || pos_y !== last_pos_y) {
@@ -269,7 +262,7 @@ const linearPath = (
               const pos_y =
                 fixHeight +
                 ((normalizeDataValue * curPath.sy) / 100) *
-                  (type != "bars" ? height / 2 : height) *
+                  (type !== "bars" ? height / 2 : height) *
                   -positive *
                   mirror;
 
@@ -277,7 +270,7 @@ const linearPath = (
               const end_pos_y =
                 fixHeight +
                 ((normalizeDataValue * curPath.ey) / 100) *
-                  (type != "bars" ? height / 2 : height) *
+                  (type !== "bars" ? height / 2 : height) *
                   -positive *
                   mirror;
 
@@ -295,23 +288,19 @@ const linearPath = (
             // Cubic Bézier Curve Commands
             case "C": {
               const pos_x = i * fixWidth + (fixWidth * curPath.sx) / 100 + left;
-              const pos_y =
-                fixHeight - ((fixHeight * curPath.sy) / 100) * positive;
+              const pos_y = fixHeight - ((fixHeight * curPath.sy) / 100) * positive;
 
-              const center_pos_x =
-                i * fixWidth + (fixWidth * curPath.x) / 100 + left;
+              const center_pos_x = i * fixWidth + (fixWidth * curPath.x) / 100 + left;
               const center_pos_y =
                 fixHeight +
                 ((normalizeDataValue * curPath.y) / 100) *
-                  (type != "bars" ? height : height * 2) *
+                  (type !== "bars" ? height : height * 2) *
                   -positive *
                   mirror;
 
               //const end_pos_x = ((i+1) * fixWidth) - (fixWidth*(1-(curPath.ex/100))) + left;
-              const end_pos_x =
-                i * fixWidth + (fixWidth * curPath.ex) / 100 + left;
-              const end_pos_y =
-                fixHeight - ((fixHeight * curPath.ey) / 100) * positive;
+              const end_pos_x = i * fixWidth + (fixWidth * curPath.ex) / 100 + left;
+              const end_pos_y = fixHeight - ((fixHeight * curPath.ey) / 100) * positive;
 
               if (pos_x !== last_pos_x || pos_y !== last_pos_y) {
                 path += `M ${pos_x} ${pos_y} `;
@@ -330,26 +319,24 @@ const linearPath = (
               const pos_y =
                 fixHeight +
                 ((normalizeDataValue * curPath.sy) / 100) *
-                  (type != "bars" ? height / 2 : height) *
+                  (type !== "bars" ? height / 2 : height) *
                   -positive *
                   mirror;
 
-              const center_pos_x =
-                i * fixWidth + (fixWidth * curPath.x) / 100 + left;
+              const center_pos_x = i * fixWidth + (fixWidth * curPath.x) / 100 + left;
               const center_pos_y =
                 fixHeight +
                 ((normalizeDataValue * curPath.y) / 100) *
-                  (type != "bars" ? height : height * 2) *
+                  (type !== "bars" ? height : height * 2) *
                   -positive *
                   mirror;
 
               //const end_pos_x = ((i+1) * fixWidth) - (fixWidth*(1-(curPath.ex/100))) + left;
-              const end_pos_x =
-                i * fixWidth + (fixWidth * curPath.ex) / 100 + left;
+              const end_pos_x = i * fixWidth + (fixWidth * curPath.ex) / 100 + left;
               const end_pos_y =
                 fixHeight +
                 ((normalizeDataValue * curPath.ey) / 100) *
-                  (type != "bars" ? height / 2 : height) *
+                  (type !== "bars" ? height / 2 : height) *
                   -positive *
                   mirror;
 
@@ -370,17 +357,16 @@ const linearPath = (
               const pos_y =
                 fixHeight +
                 ((normalizeDataValue * curPath.sy) / 100) *
-                  (type != "bars" ? height / 2 : height) *
+                  (type !== "bars" ? height / 2 : height) *
                   -positive *
                   mirror;
 
               //const end_pos_x = ((i+1) * fixWidth) - (fixWidth*(1-(curPath.ex/100))) + left;
-              const end_pos_x =
-                i * fixWidth + (fixWidth * curPath.ex) / 100 + left;
+              const end_pos_x = i * fixWidth + (fixWidth * curPath.ex) / 100 + left;
               const end_pos_y =
                 fixHeight +
                 ((normalizeDataValue * curPath.ey) / 100) *
-                  (type != "bars" ? height / 2 : height) *
+                  (type !== "bars" ? height / 2 : height) *
                   -positive *
                   mirror;
 
@@ -390,15 +376,15 @@ const linearPath = (
               const rx = (curPath.rx * fixWidth) / 100;
               const ry = (curPath.ry * fixWidth) / 100;
               let sweep = curPath.sweep;
-              if (positive == -1) {
-                if (sweep == 1) {
+              if (positive === -1) {
+                if (sweep === 1) {
                   sweep = 0;
                 } else {
                   sweep = 1;
                 }
               }
-              if (mirror == -1) {
-                if (sweep == 1) {
+              if (mirror === -1) {
+                if (sweep === 1) {
                   sweep = 0;
                 } else {
                   sweep = 1;
@@ -442,7 +428,7 @@ const getFilterData = (framesData: Float32Array[], samples: number) => {
     }
     const filteredDataBlock: number[] = [];
     for (let i = 0; i < samples; i++) {
-      let blockStart = blockSize * i; // the location of the first sample in the block
+      const blockStart = blockSize * i; // the location of the first sample in the block
       let sum = 0;
       for (let j = 0; j < blockSize; j++) {
         sum = sum + Math.abs(framesData[f][blockStart + j]); // find the sum of all the samples in the block
@@ -469,7 +455,7 @@ const getNormalizeData = (filteredData: number[][]): number[][] => {
   for (let i = 0; i < multipliers.length; i++) {
     if (multipliers[i] > globalMax) globalMax = multipliers[i];
   }
-  const maxMultiplier = Math.pow(globalMax, -1);
+  const maxMultiplier = globalMax ** -1;
 
   // All values were 0 — normalizing would produce Infinity; return unchanged
   if (maxMultiplier === Infinity) return filteredData;
@@ -486,8 +472,7 @@ self.addEventListener("message", (e: MessageEvent) => {
   if (e.origin && e.origin !== self.location.origin) return;
 
   const data = e.data as WaveformMessage;
-  if (!data || typeof data.id !== "string" || !Array.isArray(data.framesData))
-    return;
+  if (!data || typeof data.id !== "string" || !Array.isArray(data.framesData)) return;
 
   signals.get(data.id)?.abort();
 
@@ -496,11 +481,7 @@ self.addEventListener("message", (e: MessageEvent) => {
 
     signals.set(data.id, signal);
 
-    const path = linearPath(
-      data.framesData,
-      data.options || ({} as LinearPathOptions),
-      signal,
-    );
+    const path = linearPath(data.framesData, data.options || ({} as LinearPathOptions), signal);
 
     if (path && !signal.isAborted) {
       postMessage({

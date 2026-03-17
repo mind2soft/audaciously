@@ -1,26 +1,24 @@
 import {
-  saveProject,
-  loadProject,
-  listProjects,
+  deleteNodeRecord,
   deleteProject,
+  deleteSegmentRecord,
+  deleteTrackRecord,
   duplicateProject,
   getProjectSize,
+  listProjects,
+  loadProject,
+  saveProject,
   updateProjectMetadata,
-  upsertTrackRecord,
-  deleteTrackRecord,
-  upsertSequenceRecord,
-  deleteSequenceRecord,
   upsertAudioBlob,
+  upsertNodeRecord,
+  upsertSegmentRecord,
+  upsertTrackRecord,
 } from "./project-repository";
-import {
-  estimateStorage,
-  requestPersistence,
-  checkAvailableSpace,
-} from "./storage-quota";
+import { checkAvailableSpace, estimateStorage, requestPersistence } from "./storage-quota";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type { ProjectSummary, LoadedProject } from "./project-repository";
+export type { LoadedProject, ProjectSummary } from "./project-repository";
 export type { StorageEstimateResult } from "./storage-quota";
 
 /** Facade combining project repository and storage-quota operations. */
@@ -35,10 +33,12 @@ export interface StorageService {
   updateProjectMetadata: typeof updateProjectMetadata;
 
   // Granular ops (used by auto-save dirty state processing)
+  upsertNodeRecord: typeof upsertNodeRecord;
+  deleteNodeRecord: typeof deleteNodeRecord;
   upsertTrackRecord: typeof upsertTrackRecord;
   deleteTrackRecord: typeof deleteTrackRecord;
-  upsertSequenceRecord: typeof upsertSequenceRecord;
-  deleteSequenceRecord: typeof deleteSequenceRecord;
+  upsertSegmentRecord: typeof upsertSegmentRecord;
+  deleteSegmentRecord: typeof deleteSegmentRecord;
   upsertAudioBlob: typeof upsertAudioBlob;
 
   // Storage quota
@@ -59,10 +59,12 @@ export function createStorageService(): StorageService {
     duplicateProject,
     getProjectSize,
     updateProjectMetadata,
+    upsertNodeRecord,
+    deleteNodeRecord,
     upsertTrackRecord,
     deleteTrackRecord,
-    upsertSequenceRecord,
-    deleteSequenceRecord,
+    upsertSegmentRecord,
+    deleteSegmentRecord,
     upsertAudioBlob,
     estimateStorage,
     requestPersistence,

@@ -32,12 +32,12 @@ export interface AudioPlayer extends Emitter<AudioPlayerEventMap> {
   currentTime: number;
   volume: number;
 
-  addTrack(track: AudioTrack<any>, insertIndex?: number): void;
+  addTrack(track: AudioTrack<string>, insertIndex?: number): void;
   countTracks(): number;
-  setTrack(track: AudioTrack<any>, index: number): void;
-  removeTrack(track: AudioTrack<any>): boolean;
-  getTracks(): Iterable<AudioTrack<any>>;
-  setTracks(tracks: AudioTrack<any>[]): void;
+  setTrack(track: AudioTrack<string>, index: number): void;
+  removeTrack(track: AudioTrack<string>): boolean;
+  getTracks(): Iterable<AudioTrack<string>>;
+  setTracks(tracks: AudioTrack<string>[]): void;
 
   /**
    * Moves the track at `fromIndex` to `toIndex` without stopping or resetting
@@ -141,7 +141,7 @@ interface AudioPlayerNodes {
 
 interface AudioPlayerInternal {
   state: AudioPlayerState;
-  tracks: AudioTrack<any>[];
+  tracks: AudioTrack<string>[];
   volume: number;
   audioContext?: AudioContext;
   nodes?: AudioPlayerNodes;
@@ -161,12 +161,10 @@ const createPlayer = (): AudioPlayer => {
     extraDurationCallbacks: new Set(),
   };
 
-  const { dispatchEvent, ...emitter } = createEmitter<AudioPlayerEventMap>(
-    (event) => {
-      event.player = player;
-      return event;
-    },
-  );
+  const { dispatchEvent, ...emitter } = createEmitter<AudioPlayerEventMap>((event) => {
+    event.player = player;
+    return event;
+  });
 
   function getCurrentTime() {
     if (internal.state !== "playing") {
@@ -177,8 +175,7 @@ const createPlayer = (): AudioPlayer => {
       return internal.pauseTime;
     }
 
-    const elapsed =
-      (internal.audioContext?.currentTime ?? 0) - internal.resumeTime;
+    const elapsed = (internal.audioContext?.currentTime ?? 0) - internal.resumeTime;
     const maxTime = getTotalDuration();
     return Math.min(internal.pauseTime + elapsed, maxTime);
   }
@@ -187,7 +184,7 @@ const createPlayer = (): AudioPlayer => {
     let trackIndex = internal.tracks.length;
     while (--trackIndex >= 0) {
       const track = internal.tracks[trackIndex];
-      if (isFinite(track.duration)) {
+      if (Number.isFinite(track.duration)) {
         totalDuration = Math.max(track.duration, totalDuration);
       }
     }
@@ -276,9 +273,7 @@ const createPlayer = (): AudioPlayer => {
         analyser: {
           invalidated: true,
           node: analyserNode,
-          data: new Float32Array(
-            analyserNode.frequencyBinCount,
-          ) as Float32Array<ArrayBuffer>,
+          data: new Float32Array(analyserNode.frequencyBinCount) as Float32Array<ArrayBuffer>,
           audioFrame: internal.audioContext.createBuffer(
             1,
             analyserNode.frequencyBinCount,
@@ -310,8 +305,7 @@ const createPlayer = (): AudioPlayer => {
       const currentTime = internal.audioContext?.currentTime ?? 0;
 
       internal.state = "paused";
-      internal.pauseTime =
-        internal.pauseTime + currentTime - internal.resumeTime;
+      internal.pauseTime = internal.pauseTime + currentTime - internal.resumeTime;
 
       for (const track of internal.tracks) {
         track.stop();
@@ -344,8 +338,7 @@ const createPlayer = (): AudioPlayer => {
     } else {
       const currentTime = internal.audioContext?.currentTime ?? 0;
 
-      internal.pauseTime =
-        internal.pauseTime + currentTime - internal.resumeTime;
+      internal.pauseTime = internal.pauseTime + currentTime - internal.resumeTime;
     }
 
     internal.resumeTime = 0;

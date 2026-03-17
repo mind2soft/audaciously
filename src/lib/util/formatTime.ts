@@ -28,7 +28,7 @@ export function formatTimeScale(seconds: number): string {
 }
 
 export function formatTime(seconds: number): string {
-  if (isNaN(seconds) || !isFinite(seconds)) {
+  if (Number.isNaN(seconds) || !Number.isFinite(seconds)) {
     return "--:--";
   }
 

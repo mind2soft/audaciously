@@ -1,19 +1,16 @@
 import { unzip } from "fflate";
 import { nanoid } from "nanoid";
-import {
-  db,
-  type ProjectRecord,
-  type TrackRecord,
-  type SequenceRecord,
-  type AudioBlobRecord,
-} from "./db";
-import {
-  validateManifest,
-  type AwpManifest,
-  type AwpTrackEntry,
-} from "./awp-manifest";
-import { checkAvailableSpace } from "./storage-quota";
+import { type AwpManifest, type AwpTrackEntry, validateManifest } from "./awp-manifest";
 import { compressFloat32Array } from "./compression";
+import {
+  type AudioBlobRecord,
+  db,
+  type NodeRecord,
+  type ProjectRecord,
+  type SegmentRecord,
+  type TrackRecord,
+} from "./db";
+import { checkAvailableSpace } from "./storage-quota";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -41,6 +38,12 @@ export type ImportOutcome = ImportResult | ImportError;
  * 5. Compresses audio channel data via fflate worker pool before storage.
  * 6. Writes everything in a single Dexie transaction.
  *
+ * For each manifest track entry:
+ * - Instrument entry → one NodeRecord (instrument kind) + one TrackRecord +
+ *   one SegmentRecord at time=0.
+ * - Recorded entry → one TrackRecord, and for each sequence entry: one
+ *   NodeRecord (recorded kind) + one AudioBlobRecord + one SegmentRecord.
+ *
  * Returns the new project ID on success, or an error message on failure.
  */
 export async function importProject(file: File): Promise<ImportOutcome> {
@@ -50,13 +53,14 @@ export async function importProject(file: File): Promise<ImportOutcome> {
 
     await estimateSizeAndCheckQuota(entries);
 
-    const { projectRecord, trackRecords, sequenceRecords, audioBlobRecords } =
+    const { projectRecord, nodeRecords, trackRecords, segmentRecords, audioBlobRecords } =
       await buildRecordsWithFreshIds(manifest, entries);
 
     await writeToDatabase(
       projectRecord,
+      nodeRecords,
       trackRecords,
-      sequenceRecords,
+      segmentRecords,
       audioBlobRecords,
     );
 
@@ -69,7 +73,7 @@ export async function importProject(file: File): Promise<ImportOutcome> {
   }
 }
 
-// ─── Import Helpers ──────────────────────────────────────────────────────────────────
+// ─── Import Helpers ───────────────────────────────────────────────────────────
 
 async function unzipFile(file: File): Promise<Record<string, Uint8Array>> {
   const MAX_AWP_FILE_SIZE = 512 * 1024 * 1024; // 512 MB
@@ -108,9 +112,7 @@ function parseManifest(entries: Record<string, Uint8Array>): AwpManifest {
   return manifestData as AwpManifest;
 }
 
-async function estimateSizeAndCheckQuota(
-  entries: Record<string, Uint8Array>,
-): Promise<boolean> {
+async function estimateSizeAndCheckQuota(entries: Record<string, Uint8Array>): Promise<boolean> {
   let totalRawBytes = 0;
   for (const key of Object.keys(entries)) {
     if (key.startsWith("audio/")) {
@@ -131,15 +133,17 @@ async function buildRecordsWithFreshIds(
   entries: Record<string, Uint8Array>,
 ): Promise<{
   projectRecord: ProjectRecord;
+  nodeRecords: NodeRecord[];
   trackRecords: TrackRecord[];
-  sequenceRecords: SequenceRecord[];
+  segmentRecords: SegmentRecord[];
   audioBlobRecords: AudioBlobRecord[];
 }> {
   const projectId = nanoid();
   const now = new Date();
 
+  const nodeRecords: NodeRecord[] = [];
   const trackRecords: TrackRecord[] = [];
-  const sequenceRecords: SequenceRecord[] = [];
+  const segmentRecords: SegmentRecord[] = [];
   const audioBlobRecords: AudioBlobRecord[] = [];
 
   for (const trackEntry of manifest.tracks) {
@@ -147,9 +151,37 @@ async function buildRecordsWithFreshIds(
 
     trackRecords.push(buildTrackRecord(projectId, trackId, trackEntry));
 
-    if (trackEntry.kind === "recorded" && trackEntry.sequences) {
+    if (trackEntry.kind === "instrument") {
+      // One instrument node + one segment at time=0.
+      const nodeId = nanoid();
+
+      nodeRecords.push({
+        id: nodeId,
+        projectId,
+        kind: "instrument",
+        name: trackEntry.name,
+        instrumentId: trackEntry.instrumentId,
+        bpm: trackEntry.bpm,
+        timeSignature: trackEntry.timeSignature,
+        notes: trackEntry.notes,
+        selectedNoteType: trackEntry.selectedNoteType,
+        pitchScrollTop: trackEntry.pitchScrollTop,
+        showWaveform: trackEntry.showWaveform,
+      });
+
+      segmentRecords.push({
+        id: nanoid(),
+        trackId,
+        projectId,
+        nodeId,
+        time: 0,
+        trimStart: 0,
+        trimEnd: 0,
+      });
+    } else if (trackEntry.kind === "recorded" && trackEntry.sequences) {
+      // One NodeRecord + AudioBlobRecord + SegmentRecord per sequence entry.
       for (const seqEntry of trackEntry.sequences) {
-        const seqId = nanoid();
+        const nodeId = nanoid();
         const audioBlobId = nanoid();
 
         // Defence-in-depth: assert audioFile path is safe even after manifest validation.
@@ -159,24 +191,16 @@ async function buildRecordsWithFreshIds(
 
         const pcmBytes = entries[seqEntry.audioFile];
         if (!pcmBytes) {
-          throw new Error(
-            `Missing audio file "${seqEntry.audioFile}" referenced in manifest.`,
-          );
+          throw new Error(`Missing audio file "${seqEntry.audioFile}" referenced in manifest.`);
         }
 
-        // Split raw PCM bytes back into per-channel Float32Arrays and compress.
-        const { numberOfChannels, lengthInFrames, sampleRate } =
-          seqEntry.audioMeta;
+        const { numberOfChannels, lengthInFrames, sampleRate } = seqEntry.audioMeta;
 
         if (sampleRate < 8000 || sampleRate > 384_000) {
           throw new Error(`Invalid sampleRate ${sampleRate}.`);
         }
 
-        const channelData = await compressChannels(
-          pcmBytes,
-          numberOfChannels,
-          lengthInFrames,
-        );
+        const channelData = await compressChannels(pcmBytes, numberOfChannels, lengthInFrames);
 
         audioBlobRecords.push({
           id: audioBlobId,
@@ -187,14 +211,23 @@ async function buildRecordsWithFreshIds(
           channelData,
         });
 
-        sequenceRecords.push({
-          id: seqId,
+        nodeRecords.push({
+          id: nodeId,
+          projectId,
+          kind: "recorded",
+          name: trackEntry.name,
+          audioBlobId,
+          effects: seqEntry.effects,
+        });
+
+        segmentRecords.push({
+          id: nanoid(),
           trackId,
           projectId,
+          nodeId,
           time: seqEntry.time,
-          playbackRate: seqEntry.playbackRate,
-          effects: seqEntry.effects,
-          audioBlobId,
+          trimStart: 0,
+          trimEnd: 0,
         });
       }
     }
@@ -206,9 +239,13 @@ async function buildRecordsWithFreshIds(
     0,
   );
 
+  // rootIds = all top-level nodeRecords (no folder nesting in AWP format).
+  const rootIds = nodeRecords.map((n) => n.id);
+
   return {
+    nodeRecords,
     trackRecords,
-    sequenceRecords,
+    segmentRecords,
     audioBlobRecords,
     projectRecord: {
       id: projectId,
@@ -223,30 +260,29 @@ async function buildRecordsWithFreshIds(
       durationSeconds: manifest.project.durationSeconds ?? 0,
       bpm: manifest.project.bpm,
       sampleRate: manifest.project.sampleRate,
+      rootIds,
+      timelineEffects: [],
     },
   };
 }
 
 async function writeToDatabase(
   projectRecord: ProjectRecord,
+  nodeRecords: NodeRecord[],
   trackRecords: TrackRecord[],
-  sequenceRecords: SequenceRecord[],
+  segmentRecords: SegmentRecord[],
   audioBlobRecords: AudioBlobRecord[],
 ): Promise<void> {
   try {
     await db.transaction(
       "rw",
-      db.projects,
-      db.tracks,
-      db.sequences,
-      db.audioBlobs,
+      [db.projects, db.nodes, db.tracks, db.segments, db.audioBlobs],
       async () => {
         await db.projects.put(projectRecord);
+        if (nodeRecords.length > 0) await db.nodes.bulkPut(nodeRecords);
         if (trackRecords.length > 0) await db.tracks.bulkPut(trackRecords);
-        if (sequenceRecords.length > 0)
-          await db.sequences.bulkPut(sequenceRecords);
-        if (audioBlobRecords.length > 0)
-          await db.audioBlobs.bulkPut(audioBlobRecords);
+        if (segmentRecords.length > 0) await db.segments.bulkPut(segmentRecords);
+        if (audioBlobRecords.length > 0) await db.audioBlobs.bulkPut(audioBlobRecords);
       },
     );
   } catch (err) {
@@ -260,34 +296,18 @@ async function writeToDatabase(
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function buildTrackRecord(
-  projectId: string,
-  trackId: string,
-  entry: AwpTrackEntry,
-): TrackRecord {
-  const record: TrackRecord = {
+function buildTrackRecord(projectId: string, trackId: string, entry: AwpTrackEntry): TrackRecord {
+  return {
     id: trackId,
     projectId,
-    kind: entry.kind,
     name: entry.name,
+    height: 64, // default track height
     volume: entry.volume ?? 1,
     balance: entry.balance ?? 0,
     muted: entry.muted ?? false,
     locked: entry.locked ?? false,
     sortOrder: entry.sortOrder ?? 0,
   };
-
-  if (entry.kind === "instrument") {
-    record.instrumentId = entry.instrumentId;
-    record.bpm = entry.bpm;
-    record.timeSignature = entry.timeSignature;
-    record.notes = entry.notes;
-    record.selectedNoteType = entry.selectedNoteType;
-    record.pitchScrollTop = entry.pitchScrollTop;
-    record.showWaveform = entry.showWaveform;
-  }
-
-  return record;
 }
 
 /**

@@ -1,38 +1,36 @@
 import { nanoid } from "nanoid";
+import type { ProjectNodeID } from "../../../features/nodes/node";
 import { createEmitter } from "../../emitter";
+import { type AudioSequence, trackPropertySymbol } from "../sequence/index";
 import { checkSequenceOverlap } from "../sequence/utils";
-import type {
-  AudioTrack,
-  AudioTrackDispatch,
-  AudioTrackEventMap,
-  AudioTrackJSON,
-} from "./index";
-import { trackPropertySymbol, type AudioSequence } from "../sequence/index";
+import type { AudioTrack, AudioTrackDispatch, AudioTrackEventMap, AudioTrackJSON } from "./index";
 
-interface AudioTrackInternal {
-  id: string;
+export type AudioTrackID = string;
+
+interface AudioTrackInternal<TrackKind extends string> {
+  id: ProjectNodeID;
   locked: boolean;
   muted: boolean;
   volume: number;
   balance: number;
-  sequences: AudioSequence<any, any>[];
+  sequences: AudioSequence<TrackKind, string>[];
   activeGain?: GainNode;
   activePanner?: StereoPannerNode;
 }
 
-type AudioTrackSupplemental<Kind, Track extends AudioTrack<Kind>> = (
-  base: AudioTrack<Kind>,
-  dispatchEvent: AudioTrackDispatch<Kind>,
-) => Omit<Track, keyof AudioTrack<Kind>>;
+type AudioTrackSupplemental<TrackKind extends string, Track extends AudioTrack<TrackKind>> = (
+  base: AudioTrack<TrackKind>,
+  dispatchEvent: AudioTrackDispatch<TrackKind>,
+) => Omit<Track, keyof AudioTrack<TrackKind>>;
 
-export const createAudioTrack = <Kind, Track extends AudioTrack<Kind>>(
-  kind: Kind,
+export const createAudioTrack = <TrackKind extends string, Track extends AudioTrack<TrackKind>>(
+  kind: TrackKind,
   initialName: string,
-  supplmental?: AudioTrackSupplemental<Kind, Track>,
-  id?: string,
+  supplmental?: AudioTrackSupplemental<TrackKind, Track>,
+  id?: AudioTrackID,
 ): Track => {
   let name = initialName;
-  const internal: AudioTrackInternal = {
+  const internal: AudioTrackInternal<TrackKind> = {
     id: id ?? nanoid(),
     locked: false,
     muted: false,
@@ -41,12 +39,10 @@ export const createAudioTrack = <Kind, Track extends AudioTrack<Kind>>(
     sequences: [],
   };
 
-  const { dispatchEvent, ...emitter } = createEmitter<AudioTrackEventMap<Kind>>(
-    (event) => {
-      event.track = track;
-      return event;
-    },
-  );
+  const { dispatchEvent, ...emitter } = createEmitter<AudioTrackEventMap<TrackKind>>((event) => {
+    event.track = track;
+    return event;
+  });
 
   const handleSequenceStop = () => {
     const anyPlaying = internal.sequences.some((seq) => seq.isPlaying);
@@ -66,12 +62,12 @@ export const createAudioTrack = <Kind, Track extends AudioTrack<Kind>>(
     dispatchEvent({ type: "change" });
   };
 
-  const track: AudioTrack<Kind> = {
+  const track: AudioTrack<TrackKind> = {
     get id() {
       return internal.id;
     },
 
-    get kind(): Kind {
+    get kind(): TrackKind {
       return kind;
     },
 
@@ -144,7 +140,7 @@ export const createAudioTrack = <Kind, Track extends AudioTrack<Kind>>(
       dispatchEvent({ type: "change" });
     },
 
-    addSequence(sequence) {
+    addSequence<SV extends string>(sequence: AudioSequence<TrackKind, SV>) {
       if (sequence.track) {
         throw new Error("sequence already in a track");
       }
@@ -157,7 +153,7 @@ export const createAudioTrack = <Kind, Track extends AudioTrack<Kind>>(
 
       sequence[trackPropertySymbol] = track;
 
-      internal.sequences.push(sequence);
+      internal.sequences.push(sequence as unknown as AudioSequence<TrackKind, string>);
       internal.sequences.sort((a, b) => a.time - b.time);
 
       sequence.addEventListener("stop", handleSequenceStop);
@@ -168,15 +164,17 @@ export const createAudioTrack = <Kind, Track extends AudioTrack<Kind>>(
     countSequences() {
       return internal.sequences.length;
     },
-    getSequence(id) {
-      return internal.sequences.find((seq) => id === seq.id);
+    getSequence<SV extends string>(id: string): AudioSequence<TrackKind, SV> | undefined {
+      return internal.sequences.find((seq) => id === seq.id) as unknown as
+        | AudioSequence<TrackKind, SV>
+        | undefined;
     },
-    *getSequences() {
+    *getSequences<SV extends string>(): Iterable<AudioSequence<TrackKind, SV>> {
       for (const sequence of internal.sequences) {
-        yield sequence;
+        yield sequence as unknown as AudioSequence<TrackKind, SV>;
       }
     },
-    removeSequence(sequence) {
+    removeSequence<SV extends string>(sequence: AudioSequence<TrackKind, SV> | string) {
       const seqId = typeof sequence === "string" ? sequence : sequence.id;
       const seqIndex = internal.sequences.findIndex((s) => s.id === seqId);
       const foundSeq = seqIndex >= 0;
@@ -282,7 +280,7 @@ export const createAudioTrack = <Kind, Track extends AudioTrack<Kind>>(
 
   const supplementalProps = supplmental?.(
     track,
-    dispatchEvent as unknown as AudioTrackDispatch<Kind>,
+    dispatchEvent as unknown as AudioTrackDispatch<TrackKind>,
   );
 
   // Use Object.defineProperties so that getter/setter pairs from the
@@ -292,9 +290,7 @@ export const createAudioTrack = <Kind, Track extends AudioTrack<Kind>>(
   const result = Object.create(null) as Track;
   Object.defineProperties(result, {
     ...Object.getOwnPropertyDescriptors(track),
-    ...(supplementalProps
-      ? Object.getOwnPropertyDescriptors(supplementalProps)
-      : {}),
+    ...(supplementalProps ? Object.getOwnPropertyDescriptors(supplementalProps) : {}),
   });
 
   return result;

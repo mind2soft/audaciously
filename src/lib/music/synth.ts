@@ -15,20 +15,7 @@
 
 /** Map from pitch id (e.g. "C4", "A#3") to MIDI note number. */
 const PITCH_ID_TO_MIDI: Record<string, number> = (() => {
-  const noteNames = [
-    "C",
-    "C#",
-    "D",
-    "D#",
-    "E",
-    "F",
-    "F#",
-    "G",
-    "G#",
-    "A",
-    "A#",
-    "B",
-  ];
+  const noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
   const map: Record<string, number> = {};
   // MIDI 0 = C-1 in this convention (C4 = MIDI 60)
   for (let octave = 2; octave <= 6; octave++) {
@@ -42,7 +29,7 @@ const PITCH_ID_TO_MIDI: Record<string, number> = (() => {
 
 /** Convert MIDI note number to Hz. */
 function midiToHz(midi: number): number {
-  return 440 * Math.pow(2, (midi - 69) / 12);
+  return 440 * 2 ** ((midi - 69) / 12);
 }
 
 /**
@@ -106,10 +93,7 @@ export function playPianoNote(
 
 // ─── Drums ────────────────────────────────────────────────────────────────────
 
-function createNoiseBuffer(
-  ctx: BaseAudioContext,
-  durationSec: number,
-): AudioBuffer {
+function createNoiseBuffer(ctx: BaseAudioContext, durationSec: number): AudioBuffer {
   const sampleRate = ctx.sampleRate;
   const length = Math.ceil(sampleRate * durationSec);
   const buf = ctx.createBuffer(1, length, sampleRate);
@@ -120,11 +104,7 @@ function createNoiseBuffer(
   return buf;
 }
 
-function playKick(
-  ctx: BaseAudioContext,
-  output: AudioNode,
-  startTime: number,
-): void {
+function playKick(ctx: BaseAudioContext, output: AudioNode, startTime: number): void {
   // Kick: sine wave pitched from ~160 Hz down to ~40 Hz
   const osc = ctx.createOscillator();
   osc.type = "sine";
@@ -141,11 +121,7 @@ function playKick(
   osc.stop(startTime + 0.36);
 }
 
-function playSnare(
-  ctx: BaseAudioContext,
-  output: AudioNode,
-  startTime: number,
-): void {
+function playSnare(ctx: BaseAudioContext, output: AudioNode, startTime: number): void {
   // Snare: noise burst + tuned oscillator
   const noiseBuf = createNoiseBuffer(ctx, 0.3);
   const noiseSource = ctx.createBufferSource();

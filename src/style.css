@@ -1,6 +1,8 @@
 @import "tailwindcss";
 
-@config '../tailwind.config.js';
+@plugin "@iconify/tailwind4" {
+  prefixes: mdi, file-icons;
+}
 @plugin "daisyui";
 
 @plugin "daisyui/theme" {
