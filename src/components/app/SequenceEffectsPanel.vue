@@ -7,10 +7,12 @@
 
 import { computed } from "vue";
 import type { AudioEffect } from "../../features/effects/types";
+import { usePlayerStore } from "../../stores/player";
 import { useSequenceStore } from "../../stores/sequence";
 import EffectsPipeline from "../controls/EffectsPipeline.vue";
 
 const sequence = useSequenceStore();
+const player = usePlayerStore();
 
 const effects = computed(() => sequence.timelineEffects);
 const maxDuration = computed(() => sequence.totalDuration || undefined);
@@ -25,6 +27,7 @@ function onUpdateEffects(next: AudioEffect[]): void {
     <EffectsPipeline
       :effects="effects"
       :maxDuration="maxDuration"
+      :currentTime="player.currentTime"
       sourceLabel="Mix"
       sourceIcon="mdi--mixer"
       @update:effects="onUpdateEffects"

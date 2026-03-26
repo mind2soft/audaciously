@@ -3,10 +3,12 @@ import { computed } from "vue";
 import type { AudioEffect } from "../../../features/effects";
 import type { RecordedNode } from "../../../features/nodes";
 import { useNodesStore } from "../../../stores/nodes";
+import { usePlayerStore } from "../../../stores/player";
 import EffectsPipeline from "../../controls/EffectsPipeline.vue";
 
 const props = defineProps<{ node: RecordedNode }>();
 const nodes = useNodesStore();
+const player = usePlayerStore();
 
 const bufferDuration = computed(() => props.node.sourceBuffer?.duration);
 
@@ -21,6 +23,7 @@ function onUpdateEffects(effects: AudioEffect[]): void {
       :key="node.id"
       :effects="node.effects"
       :maxDuration="bufferDuration"
+      :currentTime="player.currentTime"
       sourceLabel="Recorded"
       sourceIcon="mdi--microphone-outline"
       @update:effects="onUpdateEffects"

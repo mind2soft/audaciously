@@ -114,6 +114,18 @@ Currently: **recorded** and **instrument**. Adding:
 
 ---
 
+## Agent-Assisted Features
+
+Opt-in agent workflows layered on top of existing node and sequence primitives. No server required — processing targets the browser or a locally-running model where possible.
+
+**Instrument node assist** — an agent that helps configure a new instrument node by suggesting sample mappings, velocity layers, and playback parameters based on the role the node is intended to fill (e.g. lead, pad, bass, percussion). The agent works from the existing node model and does not require external plugin support.
+
+**Recorded audio enhancement assist** — an agent-guided workflow for improving a recorded node's audio quality. Covers denoising (using a captured noise profile), normalisation, EQ curve suggestions, and gain staging recommendations. Surfaced contextually per node rather than requiring manual effect chain assembly.
+
+**Audio tracks voice alignment on sequence** — agent-assisted timing alignment of a vocal or melodic recorded node against a reference track on the sequence. Detects drift and micro-timing mismatches, then proposes or applies offset corrections at the sequence level — no manual warp markers needed.
+
+---
+
 ## Not planned
 
 - A server or backend of any kind
