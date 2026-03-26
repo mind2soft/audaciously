@@ -59,11 +59,14 @@ const props = withDefaults(
   defineProps<{
     effects: AudioEffect[];
     maxDuration?: number;
+    /** Current playhead position in seconds, forwarded to VolumeEffect for add/remove. */
+    currentTime?: number;
     sourceLabel: string;
     sourceIcon?: string;
   }>(),
   {
     maxDuration: undefined,
+    currentTime: undefined,
     sourceIcon: undefined,
   },
 );
@@ -904,6 +907,8 @@ function effectIcon(effect: AudioEffect): string {
         <EffectVolume
           v-else-if="selectedEffect.type === 'volume'"
           :effect="selectedEffect as VolumeEffect"
+          :currentTime="currentTime"
+          :duration="maxDuration"
           @update:effect="updateEffectById(selectedEffect!.id, $event)"
         />
       </template>

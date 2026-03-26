@@ -11,6 +11,7 @@ import type { AudioEffect } from "../../features/effects";
 import type { InstrumentNode, RecordedNode } from "../../features/nodes";
 import type { MusicInstrumentType } from "../../lib/music/instruments";
 import { useNodesStore } from "../../stores/nodes";
+import { usePlayerStore } from "../../stores/player";
 import EffectsPipeline from "../controls/EffectsPipeline.vue";
 import FolderNodeProperties from "./node-properties/FolderNodeProperties.vue";
 import InstrumentNodeProperties from "./node-properties/InstrumentNodeProperties.vue";
@@ -18,6 +19,7 @@ import PianoNodeProperties from "./node-properties/PianoNodeProperties.vue";
 import RecordedNodeProperties from "./node-properties/RecordedNodeProperties.vue";
 
 const nodes = useNodesStore();
+const player = usePlayerStore();
 
 const selectedNode = computed(() => nodes.selectedNode);
 
@@ -172,6 +174,7 @@ watch(confirmDelete, async (val) => {
           :key="selectedInstrument.id"
           :effects="selectedInstrument.effects"
           :maxDuration="bufferDuration"
+          :currentTime="player.currentTime"
           :sourceLabel="instrumentSourceLabel"
           :sourceIcon="instrumentSourceIcon"
           @update:effects="onUpdateEffects"

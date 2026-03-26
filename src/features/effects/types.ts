@@ -55,13 +55,21 @@ export interface SplitEffect extends AudioEffectBase {
   right: AudioEffect[];
 }
 
+/** Interpolation curve applied from this step to the next. */
+export type VolumeTransition = "linear" | "ease-in" | "ease-out" | "ease-in-out";
+
 export interface VolumeKeyframe {
-  time: number; // 0..1 normalized position in the audio
-  value: number; // 0..2 gain multiplier
+  /** Seconds from the start of the clip. The first keyframe is always at 0. */
+  time: number;
+  /** Gain multiplier: 0 = silence, 1 = unity, 2 = +6 dB. */
+  value: number;
+  /** How to transition from this step to the next. Default: 'linear'. */
+  curve: VolumeTransition;
 }
 
 export interface VolumeEffect extends AudioEffectBase {
   type: "volume";
+  /** Always sorted by time. The first keyframe is always at time=0 and is immovable. */
   keyframes: VolumeKeyframe[];
 }
 
