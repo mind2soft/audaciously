@@ -22,9 +22,9 @@ import {
 } from "../../../lib/zoom-constants";
 import { useNodesStore } from "../../../stores/nodes";
 import ButtonGroup, { type ButtonGroupItem } from "../../controls/ButtonGroup.vue";
-import PianoRoll, { PIANO_ROLL_LABEL_WIDTH } from "../../controls/PianoRollCanvas.vue";
-import ScrollableTimeline from "../../controls/ScrollableTimeline.vue";
-import ZoomToolbar from "../../controls/ZoomToolbar.vue";
+import PianoRoll, { PIANO_ROLL_LABEL_WIDTH } from "../../controls/piano-roll/PianoRollCanvas.vue";
+import ScrollableTimeline from "../../controls/timeline/ScrollableTimeline.vue";
+import ZoomToolbar from "../../controls/timeline/ZoomToolbar.vue";
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 

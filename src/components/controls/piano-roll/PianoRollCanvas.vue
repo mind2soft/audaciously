@@ -1,37 +1,44 @@
 <script lang="ts">
 /**
- * Module-level export so parent components (DrumNodeView) can read the label
+ * Module-level export so parent components (PianoNodeView) can read the label
  * width and align their own header columns accordingly.
  */
-export const DRUM_ROLL_LABEL_WIDTH = 80;
+export const PIANO_ROLL_LABEL_WIDTH = 44;
 </script>
 
 <script setup lang="ts">
 /**
- * DrumRollCanvas — canvas-based drum note editor for an InstrumentNode.
+ * PianoRollCanvas — canvas-based piano note editor for an InstrumentNode.
  *
- * Replaces the DOM-based DrumRoll.vue with a single <canvas> element per roll.
- * Place tool is handled inline (toggle hit on/off) — same pattern as DrumRoll.vue.
+ * Replaces the DOM-based PianoRoll.vue with a single <canvas> element per roll.
+ * - Eliminates sub-pixel aliasing from CSS repeating-linear-gradient.
+ * - Constant-time rendering: only draws notes in the visible viewport.
+ * - Single rAF render loop driven by watch() on all reactive deps.
+ *
+ * Props / Emits match PianoRoll.vue exactly (drop-in replacement).
  */
 
 import { computed, ref, onMounted, onBeforeUnmount, watch, inject } from "vue";
-import { nanoid } from "nanoid";
-import { DRUMS_INSTRUMENT } from "../../lib/music/instruments";
+import {
+  PIANO_INSTRUMENT,
+  filterPitchesByOctaveRange,
+} from "../../../lib/music/instruments";
 import {
   getSecondsPerBeat,
   getNoteDurationBeats,
-} from "../../lib/audio/track/instrument/utils";
-import { baseSecondWidthInPixels } from "../../lib/util/formatTime";
-import type { InstrumentNode, PlacedNote } from "../../features/nodes";
-import type { PianoRollToolId } from "../../lib/piano-roll/tool-types";
-import { scrollableTimelineKey } from "../../lib/scrollable-timeline";
-import { computeSnapBeats } from "../../lib/piano-roll/note-utils";
-import { useDrumPreview } from "../../composables/useDrumPreview";
-import { usePanTool } from "../../composables/usePanTool";
-import { useCopyTool } from "../../composables/useCopyTool";
-import { useCutTool } from "../../composables/useCutTool";
-import { usePasteTool } from "../../composables/usePasteTool";
-import { resolveColor } from "../../lib/util/resolveColor";
+} from "../../../lib/audio/track/instrument/utils";
+import { baseSecondWidthInPixels } from "../../../lib/util/formatTime";
+import type { InstrumentNode, PlacedNote } from "../../../features/nodes";
+import type { PianoRollToolId } from "../../../lib/piano-roll/tool-types";
+import { scrollableTimelineKey } from "../../../lib/scrollable-timeline";
+import { computeSnapBeats } from "../../../lib/piano-roll/note-utils";
+import { useNotePreview } from "../../../composables/useNotePreview";
+import { usePlaceTool } from "../../../composables/usePlaceTool";
+import { usePanTool } from "../../../composables/usePanTool";
+import { useCopyTool } from "../../../composables/useCopyTool";
+import { useCutTool } from "../../../composables/useCutTool";
+import { usePasteTool } from "../../../composables/usePasteTool";
+import { resolveColor } from "../../../lib/util/resolveColor";
 import {
   beatToX,
   drawGrid,
@@ -40,18 +47,18 @@ import {
   drawBeatLine,
   drawBand,
   drawPlayhead,
-} from "../../composables/useRollCanvasRenderer";
-import DrumRollKeys from "./DrumRollKeys.vue";
+} from "../../../composables/useRollCanvasRenderer";
+import PianoRollKeys from "./PianoRollKeys.vue";
 
-const ROW_HEIGHT_PX = DRUMS_INSTRUMENT.rowHeight;
-const LABEL_WIDTH_PX = DRUM_ROLL_LABEL_WIDTH;
+const NOTE_HEIGHT_PX = PIANO_INSTRUMENT.rowHeight;
+const LABEL_WIDTH_PX = PIANO_ROLL_LABEL_WIDTH;
 
 // ── Props / emits ─────────────────────────────────────────────────────────────
 
 const props = defineProps<{
   node: InstrumentNode;
   zoomRatio?: number;
-  activeTool?: PianoRollToolId;
+  activeTool: PianoRollToolId;
   currentTime?: number;
   readonly?: boolean;
 }>();
@@ -93,15 +100,22 @@ const beatsPerMeasure = computed(
 
 // ── Pitches ───────────────────────────────────────────────────────────────────
 
-const pitches = DRUMS_INSTRUMENT.pitches;
-const pitchesRef = computed(() => pitches);
-const totalGridHeight = pitches.length * ROW_HEIGHT_PX;
+const pitches = computed(() =>
+  filterPitchesByOctaveRange(PIANO_INSTRUMENT.pitches, props.node.octaveRange),
+);
+
+const totalGridHeight = computed(() => pitches.value.length * NOTE_HEIGHT_PX);
 
 /** O(1) pitch-key → row-index lookup */
 const pitchIndexMap = computed(() => {
   const m = new Map<string, number>();
-  pitches.forEach((p, i) => m.set(p.key, i));
+  pitches.value.forEach((p, i) => m.set(p.key, i));
   return m;
+});
+
+const visibleNotes = computed(() => {
+  const ids = new Set(pitches.value.map((p) => p.key));
+  return props.node.notes.filter((n) => ids.has(n.pitchKey));
 });
 
 // ── Snap ──────────────────────────────────────────────────────────────────────
@@ -117,25 +131,33 @@ const snapBeats = computed(() =>
   computeSnapBeats(noteDurationBeats.value, beatsPerMeasure.value),
 );
 
-// ── Drum preview ──────────────────────────────────────────────────────────────
+// ── Note preview ──────────────────────────────────────────────────────────────
 
-const { playHit } = useDrumPreview();
+const notePreview = useNotePreview();
 
 // ── Coordinate callbacks (passed to tool composables) ─────────────────────────
 
+/**
+ * Converts viewport clientX → unsnapped beat.
+ * Canvas has no translateX, so `offsetBeat` is added explicitly.
+ */
 function clientXToBeat(clientX: number): number {
   const rect = canvasRef.value?.getBoundingClientRect();
   if (!rect) return 0;
   return offsetBeat.value + (clientX - rect.left) / pxPerBeat.value;
 }
 
+/**
+ * Converts viewport clientY → pitch row index.
+ * rect.top is negative when the parent div is scrolled down — correct.
+ */
 function clientYToPitchIdx(clientY: number): number {
   const rect = canvasRef.value?.getBoundingClientRect();
   if (!rect) return 0;
   const py = clientY - rect.top;
   return Math.max(
     0,
-    Math.min(pitches.length - 1, Math.floor(py / ROW_HEIGHT_PX)),
+    Math.min(pitches.value.length - 1, Math.floor(py / NOTE_HEIGHT_PX)),
   );
 }
 
@@ -145,20 +167,23 @@ const allNotes = computed(() => props.node.notes);
 
 const toolCtxBase = {
   notes: allNotes,
-  pitches: pitchesRef,
+  pitches,
   pxPerBeat,
   snapBeats,
   noteDurationBeats,
   beatsPerMeasure,
-  rowHeightPx: ROW_HEIGHT_PX,
+  rowHeightPx: NOTE_HEIGHT_PX,
   clientXToBeat,
+  clientYToPitchIdx,
   scrollRef:
     timelineCtx?.scrollEl ?? ref<HTMLDivElement | undefined>(undefined),
   emitNotes: (notes: PlacedNote[]) => emit("update:notes", notes),
+  onPlace: (pitchId: string) => notePreview.playNote(pitchId),
 };
 
 // ── Tool composables ──────────────────────────────────────────────────────────
 
+const placeTool = usePlaceTool(toolCtxBase);
 const panTool = usePanTool(toolCtxBase);
 const copyTool = useCopyTool({
   ...toolCtxBase,
@@ -170,51 +195,67 @@ const cutTool = useCutTool({
 });
 const pasteTool = usePasteTool(toolCtxBase);
 
-// ── Inline place-tool state ───────────────────────────────────────────────────
-
-const hoverStartBeat = ref<number | null>(null);
-const hoverPitchId = ref<string | null>(null);
-
-function rawBeatToStartBeat(rawBeat: number): number {
-  const snap = snapBeats.value;
-  const snapped = Math.floor((rawBeat + Number.EPSILON) / snap) * snap;
-  return Math.max(0, Number(snapped.toFixed(6)));
-}
-
-function hitTestDrumNote(rawBeat: number, pitchKey: string): PlacedNote | null {
-  for (const note of props.node.notes) {
-    if (
-      note.pitchKey === pitchKey &&
-      rawBeat >= note.startBeat &&
-      rawBeat < note.startBeat + note.durationBeats
-    ) {
-      return note;
-    }
-  }
-  return null;
-}
-
 // ── Display notes (pan preview override) ─────────────────────────────────────
 
 const displayNotes = computed(() => {
   if (props.activeTool === "pan" && panTool.previewNotes.value) {
-    return panTool.previewNotes.value;
+    const ids = new Set(pitches.value.map((p) => p.key));
+    return panTool.previewNotes.value.filter((n) => ids.has(n.pitchKey));
   }
-  return props.node.notes;
+  return visibleNotes.value;
 });
 
 // ── Active cursor ─────────────────────────────────────────────────────────────
 
 const activeCursor = computed(() => {
   if (props.readonly) return "not-allowed";
-  const tool = props.activeTool ?? "place";
-  if (tool === "zoom-select") return "crosshair";
-  if (tool === "place") return "crosshair";
-  if (tool === "pan") return panTool.cursor;
-  if (tool === "copy") return copyTool.cursor;
-  if (tool === "cut") return cutTool.cursor;
+  if (props.activeTool === "zoom-select") return "crosshair";
+  if (props.activeTool === "place") return placeTool.cursor;
+  if (props.activeTool === "pan") return panTool.cursor;
+  if (props.activeTool === "copy") return copyTool.cursor;
+  if (props.activeTool === "cut") return cutTool.cursor;
   return pasteTool.cursor;
 });
+
+// ── Mouse event dispatch ──────────────────────────────────────────────────────
+
+function dispatch<K extends "onMousedown" | "onMousemove" | "onMouseleave">(
+  method: K,
+  ...args: Parameters<ReturnType<typeof usePlaceTool>[K]>
+): void {
+  const tool =
+    props.activeTool === "place"
+      ? placeTool
+      : props.activeTool === "pan"
+        ? panTool
+        : props.activeTool === "copy"
+          ? copyTool
+          : props.activeTool === "cut"
+            ? cutTool
+            : pasteTool;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (tool[method] as (...a: any[]) => void)(...args);
+}
+
+function onMousedown(evt: MouseEvent): void {
+  if (props.readonly) return;
+  if (props.activeTool === "zoom-select") {
+    onZoomMousedown(evt);
+    return;
+  }
+  dispatch("onMousedown", evt);
+}
+
+function onMousemove(evt: MouseEvent): void {
+  if (props.readonly) return;
+  if (props.activeTool === "zoom-select") return;
+  dispatch("onMousemove", evt);
+}
+
+function onMouseleave(): void {
+  if (props.activeTool === "zoom-select") return;
+  dispatch("onMouseleave");
+}
 
 // ── Zoom-select tool ──────────────────────────────────────────────────────────
 
@@ -254,91 +295,6 @@ function onZoomMousedown(evt: MouseEvent): void {
   document.addEventListener("mousemove", onZoomDocMousemove);
   document.addEventListener("mouseup", onZoomDocMouseup, { once: true });
 }
-
-// ── Mouse event dispatch ──────────────────────────────────────────────────────
-
-function dispatchTool<K extends "onMousedown" | "onMousemove" | "onMouseleave">(
-  method: K,
-  ...args: Parameters<ReturnType<typeof usePanTool>[K]>
-): void {
-  const tool =
-    props.activeTool === "pan"
-      ? panTool
-      : props.activeTool === "copy"
-        ? copyTool
-        : props.activeTool === "cut"
-          ? cutTool
-          : pasteTool;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (tool[method] as (...a: any[]) => void)(...args);
-}
-
-const onMousedown = (evt: MouseEvent) => {
-  if (evt.button !== 0) return;
-  if (props.readonly) return;
-  evt.preventDefault();
-
-  const activeTool = props.activeTool ?? "place";
-
-  if (activeTool === "zoom-select") {
-    onZoomMousedown(evt);
-    return;
-  }
-
-  if (activeTool === "place") {
-    const rawBeat = clientXToBeat(evt.clientX);
-    const pitchId = pitches[clientYToPitchIdx(evt.clientY)]?.key;
-    if (!pitchId) return;
-
-    const existing = hitTestDrumNote(rawBeat, pitchId);
-    if (existing) {
-      emit(
-        "update:notes",
-        props.node.notes.filter((n) => n.id !== existing.id),
-      );
-    } else {
-      const startBeat = rawBeatToStartBeat(rawBeat);
-      const newNote: PlacedNote = {
-        id: nanoid(),
-        startBeat,
-        durationBeats: noteDurationBeats.value,
-        pitchKey: pitchId,
-      };
-      emit("update:notes", [...props.node.notes, newNote]);
-      playHit(pitchId);
-    }
-  } else {
-    dispatchTool("onMousedown", evt);
-  }
-};
-
-const onMousemove = (evt: MouseEvent) => {
-  if (props.readonly) return;
-
-  const activeTool = props.activeTool ?? "place";
-
-  if (activeTool === "zoom-select") return;
-
-  if (activeTool === "place") {
-    hoverStartBeat.value = rawBeatToStartBeat(clientXToBeat(evt.clientX));
-    hoverPitchId.value = pitches[clientYToPitchIdx(evt.clientY)]?.key ?? null;
-  } else {
-    hoverStartBeat.value = null;
-    hoverPitchId.value = null;
-    dispatchTool("onMousemove", evt);
-  }
-};
-
-const onMouseleave = () => {
-  hoverStartBeat.value = null;
-  hoverPitchId.value = null;
-
-  const activeTool = props.activeTool ?? "place";
-  if (activeTool === "zoom-select") return;
-  if (activeTool !== "place") {
-    dispatchTool("onMouseleave");
-  }
-};
 
 // ── rAF render scheduling ─────────────────────────────────────────────────────
 
@@ -391,10 +347,10 @@ function doRender(): void {
     offsetBeat: ob,
     pxPerBeat: ppb,
     beatsPerMeasure: bpm_,
-    rowHeightPx: ROW_HEIGHT_PX,
-    pitches,
-    drawBlackKeyTints: false,
-    blackKeyTintColor: "",
+    rowHeightPx: NOTE_HEIGHT_PX,
+    pitches: pitches.value,
+    drawBlackKeyTints: true,
+    blackKeyTintColor: "rgba(0,0,0,0.12)",
   });
 
   // ── Pass 2: Notes ──────────────────────────────────────────────────────────
@@ -410,10 +366,7 @@ function doRender(): void {
     );
   } else if (props.activeTool === "pan" && panTool.isDragging.value) {
     panTool.draggedIds.value.forEach((id) =>
-      colorOverrides.set(
-        id,
-        resolveColor("--color-secondary", { opacity: 0.6 }),
-      ),
+      colorOverrides.set(id, resolveColor("--color-primary", { opacity: 0.6 })),
     );
   }
 
@@ -424,33 +377,33 @@ function doRender(): void {
     pitchIndexMap: pitchIndexMap.value,
     offsetBeat: ob,
     pxPerBeat: ppb,
-    rowHeightPx: ROW_HEIGHT_PX,
-    noteHeightPx: ROW_HEIGHT_PX - 2,
-    defaultColor: secondaryColor,
+    rowHeightPx: NOTE_HEIGHT_PX,
+    noteHeightPx: NOTE_HEIGHT_PX - 1,
+    defaultColor: primaryColor,
     colorOverrides,
   });
 
   // ── Pass 3: Tool overlays ──────────────────────────────────────────────────
 
   // Place tool: hover preview
-  if (
-    (props.activeTool === "place" || !props.activeTool) &&
-    hoverStartBeat.value !== null &&
-    hoverPitchId.value !== null
-  ) {
-    const rowIdx = pitchIndexMap.value.get(hoverPitchId.value);
+  if (props.activeTool === "place" && placeTool.hoverPreviewNote.value) {
+    const pn = placeTool.hoverPreviewNote.value;
+    const rowIdx = pitchIndexMap.value.get(pn.pitchKey);
     if (rowIdx !== undefined) {
-      const x = beatToX(hoverStartBeat.value, ob, ppb);
-      const nw = Math.max(4, noteDurationBeats.value * ppb);
-      const y = rowIdx * ROW_HEIGHT_PX + 1;
+      const x = beatToX(pn.startBeat, ob, ppb);
+      const nw = Math.max(2, pn.durationBeats * ppb);
+      const y = rowIdx * NOTE_HEIGHT_PX + 1;
+      const hasOverlap = placeTool.hoverHasOverlap.value;
       drawNoteOutline({
         ctx: ctx2d,
         x,
         y,
         w: nw,
-        h: ROW_HEIGHT_PX - 2,
-        fillColor: resolveColor("--color-secondary", { opacity: 0.5 }),
-        strokeColor: secondaryColor,
+        h: NOTE_HEIGHT_PX - 2,
+        fillColor: hasOverlap
+          ? resolveColor("--color-warning", { opacity: 0.5 })
+          : resolveColor("--color-primary", { opacity: 0.5 }),
+        strokeColor: hasOverlap ? warningColor : primaryColor,
         opacity: 0.7,
       });
     }
@@ -462,14 +415,14 @@ function doRender(): void {
       const rowIdx = pitchIndexMap.value.get(ghost.pitchKey);
       if (rowIdx === undefined) continue;
       const x = beatToX(ghost.startBeat, ob, ppb);
-      const nw = Math.max(4, ghost.durationBeats * ppb);
-      const y = rowIdx * ROW_HEIGHT_PX + 1;
+      const nw = Math.max(2, ghost.durationBeats * ppb);
+      const y = rowIdx * NOTE_HEIGHT_PX + 1;
       drawNoteOutline({
         ctx: ctx2d,
         x,
         y,
         w: nw,
-        h: ROW_HEIGHT_PX - 2,
+        h: NOTE_HEIGHT_PX - 2,
         fillColor: resolveColor("--color-secondary", { opacity: 0.4 }),
         strokeColor: secondaryColor,
         opacity: 0.75,
@@ -477,7 +430,7 @@ function doRender(): void {
     }
   }
 
-  // Beat-line indicator
+  // Beat-line indicator (pan, paste, copy hover, cut hover)
   {
     let beatLineVal: number | null = null;
     let beatLineColor = accentColor;
@@ -546,14 +499,15 @@ const resizeObserver = new ResizeObserver(scheduleRender);
 
 watch(
   () => [
+    pitches.value,
     displayNotes.value,
     pxPerBeat.value,
     offsetBeat.value,
     beatsPerMeasure.value,
     props.currentTime,
     props.activeTool,
-    hoverStartBeat.value,
-    hoverPitchId.value,
+    placeTool.hoverPreviewNote.value,
+    placeTool.hoverHasOverlap.value,
     panTool.beatLine.value,
     panTool.isDragging.value,
     panTool.draggedIds.value,
@@ -595,16 +549,16 @@ onBeforeUnmount(() => {
   >
     <!-- ── Roll body ──────────────────────────────────────────────────────── -->
     <div class="flex-1 flex overflow-y-auto overflow-x-hidden">
-      <!-- Row labels -->
-      <DrumRollKeys
+      <!-- Left pitch labels -->
+      <PianoRollKeys
         :pitches="pitches"
-        :row-height-px="ROW_HEIGHT_PX"
+        :row-height-px="NOTE_HEIGHT_PX"
         :width-px="LABEL_WIDTH_PX"
         :disabled="readonly"
       />
 
       <!-- Canvas -->
-      <div class="relative flex-1 min-w-0 overflow-hidden">
+      <div class="relative flex-1 min-w-0 overflow-y-visible">
         <canvas
           ref="canvasRef"
           class="block w-full"

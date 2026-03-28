@@ -21,8 +21,8 @@
  */
 
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { formatPixelToTime, formatTimeScale } from "../../lib/util/formatTime";
-import { generateTicks } from "../../lib/util/tickMarks";
+import { formatPixelToTime, formatTimeScale } from "../../../lib/util/formatTime";
+import { generateTicks } from "../../../lib/util/tickMarks";
 
 const props = defineProps<{
   durationSeconds: number;

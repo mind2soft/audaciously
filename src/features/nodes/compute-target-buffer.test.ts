@@ -14,14 +14,14 @@
 
 import { describe, expect, test } from "vitest";
 import { processEffectPipeline } from "../effects/dsp/pipeline";
-import type { DspContext } from "../effects/dsp/types";
+import { createSingleShotContext } from "../effects/dsp/types";
 import type { AudioEffect, VolumeEffect } from "../effects/types";
 
 const SAMPLE_RATE = 44100;
 
 describe("compute-target-buffer integration (worker code path)", () => {
   test("volume effect with non-unity keyframes modifies the buffer", () => {
-    // Arrange — simulate what effectWorker.ts does on receipt of a request
+    // Arrange — simulate what effect-processor.ts does on receipt of a request
     const lengthSamples = SAMPLE_RATE; // 1 second
     const channels: Float32Array[] = [
       new Float32Array(lengthSamples).fill(1),
@@ -39,17 +39,13 @@ describe("compute-target-buffer integration (worker code path)", () => {
         ],
       } satisfies VolumeEffect,
     ];
-    const ctx: DspContext = {
-      sampleRate: SAMPLE_RATE,
-      duration: lengthSamples / SAMPLE_RATE,
-      offset: 0,
-    };
+    const ctx = createSingleShotContext(SAMPLE_RATE, lengthSamples / SAMPLE_RATE);
 
     // Act — same call as effect-processor.ts line 103
-    const completed = processEffectPipeline(channels, effects, ctx, () => false);
+    const result = processEffectPipeline(channels, effects, ctx, () => false);
 
     // Assert
-    expect(completed).toBe(true);
+    expect(result.completed).toBe(true);
 
     // Start should be near 0
     expect(channels[0][0]).toBeCloseTo(0, 2);
@@ -83,15 +79,11 @@ describe("compute-target-buffer integration (worker code path)", () => {
         keyframes: [{ time: 0, value: 0, curve: "linear" }],
       } satisfies VolumeEffect,
     ];
-    const ctx: DspContext = {
-      sampleRate: SAMPLE_RATE,
-      duration: lengthSamples / SAMPLE_RATE,
-      offset: 0,
-    };
+    const ctx = createSingleShotContext(SAMPLE_RATE, lengthSamples / SAMPLE_RATE);
 
-    const completed = processEffectPipeline(channels, effects, ctx, () => false);
+    const result = processEffectPipeline(channels, effects, ctx, () => false);
 
-    expect(completed).toBe(true);
+    expect(result.completed).toBe(true);
     for (let i = 0; i < lengthSamples; i++) {
       expect(channels[0][i]).toBeCloseTo(0.7, 5);
     }
@@ -123,15 +115,11 @@ describe("compute-target-buffer integration (worker code path)", () => {
 
     // Step 3: process (worker execution)
     const channels: Float32Array[] = [new Float32Array(lengthSamples).fill(1)];
-    const ctx: DspContext = {
-      sampleRate: SAMPLE_RATE,
-      duration: lengthSamples / SAMPLE_RATE,
-      offset: 0,
-    };
+    const ctx = createSingleShotContext(SAMPLE_RATE, lengthSamples / SAMPLE_RATE);
 
-    const completed = processEffectPipeline(channels, cloned, ctx, () => false);
+    const result = processEffectPipeline(channels, cloned, ctx, () => false);
 
-    expect(completed).toBe(true);
+    expect(result.completed).toBe(true);
     // All samples should be 0.5 (constant gain of 0.5)
     for (let i = 0; i < lengthSamples; i++) {
       expect(channels[0][i]).toBeCloseTo(0.5, 5);

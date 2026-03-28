@@ -21,6 +21,8 @@ The directions below are being actively explored, not promised. This list is not
 
 ---
 
+**Audio Node overlay** — overlay an audio node on top of the other to sync notes.
+
 ## Recording
 
 **Loop recording / Punch-in** — record only over a selected region without disturbing the rest of the track. Essential for fixing mistakes without re-recording entire takes.

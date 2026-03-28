@@ -5,6 +5,7 @@ import { describe, expect, test } from "vitest";
 import type { AudioEffect, VolumeEffect } from "../types";
 import { processEffectPipeline } from "./pipeline";
 import type { DspContext } from "./types";
+import { createSingleShotContext } from "./types";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -17,7 +18,7 @@ function constantBuffer(lengthSamples: number, value = 1): Float32Array[] {
 
 function makeCtx(channels: Float32Array[]): DspContext {
   const length = channels[0]?.length ?? 0;
-  return { sampleRate: SAMPLE_RATE, duration: length / SAMPLE_RATE, offset: 0 };
+  return createSingleShotContext(SAMPLE_RATE, length / SAMPLE_RATE);
 }
 
 // ── Tests ────────────────────────────────────────────────────────────────────
@@ -27,9 +28,9 @@ describe("processEffectPipeline", () => {
     const channels = constantBuffer(1000, 0.7);
     const ctx = makeCtx(channels);
 
-    const completed = processEffectPipeline(channels, [], ctx, neverCancel);
+    const result = processEffectPipeline(channels, [], ctx, neverCancel);
 
-    expect(completed).toBe(true);
+    expect(result.completed).toBe(true);
     for (let i = 0; i < channels[0].length; i++) {
       expect(channels[0][i]).toBeCloseTo(0.7, 5);
     }
@@ -45,9 +46,9 @@ describe("processEffectPipeline", () => {
       keyframes: [{ time: 0, value: 0.5, curve: "linear" }],
     };
 
-    const completed = processEffectPipeline(channels, [effect], ctx, neverCancel);
+    const result = processEffectPipeline(channels, [effect], ctx, neverCancel);
 
-    expect(completed).toBe(true);
+    expect(result.completed).toBe(true);
     // All samples should be halved
     for (let i = 0; i < channels[0].length; i++) {
       expect(channels[0][i]).toBeCloseTo(0.5, 5);
@@ -64,9 +65,9 @@ describe("processEffectPipeline", () => {
       keyframes: [{ time: 0, value: 0, curve: "linear" }],
     };
 
-    const completed = processEffectPipeline(channels, [effect], ctx, neverCancel);
+    const result = processEffectPipeline(channels, [effect], ctx, neverCancel);
 
-    expect(completed).toBe(true);
+    expect(result.completed).toBe(true);
     for (let i = 0; i < channels[0].length; i++) {
       expect(channels[0][i]).toBeCloseTo(1, 5);
     }

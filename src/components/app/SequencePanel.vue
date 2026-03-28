@@ -28,10 +28,10 @@ import { useNodesStore } from "../../stores/nodes";
 import { usePlayerStore } from "../../stores/player";
 import { useSequenceStore } from "../../stores/sequence";
 import { useTimelineStore } from "../../stores/timeline";
-import SegmentBlock from "../controls/SegmentBlock.vue";
-import TimelineRuler from "../controls/TimelineRuler.vue";
-import TrackRow from "../controls/TrackRow.vue";
-import ZoomControl from "../controls/ZoomControl.vue";
+import SegmentBlock from "../controls/timeline/SegmentBlock.vue";
+import TimelineRuler from "../controls/timeline/TimelineRuler.vue";
+import TrackRow from "../controls/timeline/TrackRow.vue";
+import ZoomControl from "../controls/timeline/ZoomControl.vue";
 import ScrollArea from "../layout/ScrollArea.vue";
 
 const sequence = useSequenceStore();

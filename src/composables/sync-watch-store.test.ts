@@ -5,7 +5,7 @@
 // This exercises the EXACT reactive chain:
 //   useAudioPipeline.targetBuffer (shallowRef)
 //     → watch(targetBuffer, ...) — the sync watch
-//       → store._setInstrumentTargetBuffer / _setRecordedTargetBuffer
+//       → store.setTargetBuffer
 //
 // Mocks the pipeline via useAudioPipeline with a mock processFn to avoid
 // web worker instantiation.
@@ -36,7 +36,7 @@ function fakeBuffer(tag: string, duration = 1): FakeAudioBuffer {
 function mockProcessFn(
   source: AudioBuffer,
   effects: AudioEffect[],
-  _nodeId: string,
+  _signal: AbortSignal,
 ): Promise<AudioBuffer> {
   const enabled = effects.filter((e) => e.enabled);
   if (enabled.length === 0) return Promise.resolve(source);
@@ -63,26 +63,25 @@ describe("sync watch → store (instrument node pattern)", () => {
     const node = createInstrumentNode("Test Piano", "piano", "test-node-1");
     nodesStore.nodesById.set(node.id, node);
 
-    // Replicate the exact pattern from useInstrumentNode lines 121-135:
+    // Replicate the exact pattern from useRecordedNode:
     //   const rawBuffer = shallowRef(...)
     //   const effects = computed(() => nodeRef.value?.effects ?? [])
-    //   const { targetBuffer } = useAudioPipeline(rawBuffer, effects, nodeId, { processFn })
-    //   watch(targetBuffer, (buffer) => { nodesStore._setInstrumentTargetBuffer(id, buffer) })
+    //   const { targetBuffer } = useAudioPipeline(rawBuffer, effects, { processFn })
+    //   watch(targetBuffer, (buffer) => { nodesStore.setTargetBuffer(id, buffer) })
 
     const rawBuffer = shallowRef<AudioBuffer | null>(null);
-    const nodeId = ref("test-node-1");
     const effects = computed(() => {
       const n = nodesStore.nodesById.get("test-node-1");
       return n?.kind === "instrument" ? ((n as any).effects ?? []) : [];
     });
 
-    const { targetBuffer } = useAudioPipeline(rawBuffer, effects, nodeId, {
+    const { targetBuffer } = useAudioPipeline(rawBuffer, effects, {
       processFn: mockProcessFn,
     });
 
-    // This is the EXACT sync watch from useInstrumentNode line 132
+    // This is the sync watch pattern from useRecordedNode
     watch(targetBuffer, (buffer) => {
-      nodesStore._setInstrumentTargetBuffer("test-node-1", buffer);
+      nodesStore.setTargetBuffer("test-node-1", buffer);
     });
 
     // Act — simulate synth render producing a raw buffer (no effects)
@@ -109,19 +108,18 @@ describe("sync watch → store (instrument node pattern)", () => {
     nodesStore.nodesById.set(node.id, node);
 
     const rawBuffer = shallowRef<AudioBuffer | null>(null);
-    const nodeId = ref("test-node-2");
     const effects = computed(() => {
       const n = nodesStore.nodesById.get("test-node-2");
       return n?.kind === "instrument" ? ((n as any).effects ?? []) : [];
     });
 
-    const { targetBuffer } = useAudioPipeline(rawBuffer, effects, nodeId, {
+    const { targetBuffer } = useAudioPipeline(rawBuffer, effects, {
       processFn: mockProcessFn,
     });
 
-    // Sync watch — same as useInstrumentNode line 132
+    // Sync watch
     watch(targetBuffer, (buffer) => {
-      nodesStore._setInstrumentTargetBuffer("test-node-2", buffer);
+      nodesStore.setTargetBuffer("test-node-2", buffer);
     });
 
     // Act — simulate synth render
@@ -146,19 +144,18 @@ describe("sync watch → store (instrument node pattern)", () => {
     nodesStore.nodesById.set(node.id, node);
 
     const rawBuffer = shallowRef<AudioBuffer | null>(fakeBuffer("raw") as unknown as AudioBuffer);
-    const nodeId = ref("test-node-3");
     const effects = computed(() => {
       const n = nodesStore.nodesById.get("test-node-3");
       return n?.kind === "instrument" ? ((n as any).effects ?? []) : [];
     });
 
-    const { targetBuffer } = useAudioPipeline(rawBuffer, effects, nodeId, {
+    const { targetBuffer } = useAudioPipeline(rawBuffer, effects, {
       processFn: mockProcessFn,
     });
 
     // Sync watch
     watch(targetBuffer, (buffer) => {
-      nodesStore._setInstrumentTargetBuffer("test-node-3", buffer);
+      nodesStore.setTargetBuffer("test-node-3", buffer);
     });
 
     // Wait for initial pipeline bake
@@ -194,16 +191,15 @@ describe("sync watch → store (instrument node pattern)", () => {
     const rawBuffer = shallowRef<AudioBuffer | null>(
       fakeBuffer("initial-raw") as unknown as AudioBuffer,
     );
-    const nodeId = ref("test-node-4");
     const effects = ref<AudioEffect[]>([]); // no effects
 
-    const { targetBuffer } = useAudioPipeline(rawBuffer, effects, nodeId, {
+    const { targetBuffer } = useAudioPipeline(rawBuffer, effects, {
       processFn: mockProcessFn,
     });
 
     // Sync watch — NO immediate:true (matches production code)
     watch(targetBuffer, (buffer) => {
-      nodesStore._setInstrumentTargetBuffer("test-node-4", buffer);
+      nodesStore.setTargetBuffer("test-node-4", buffer);
     });
 
     // Let Vue flush watchers

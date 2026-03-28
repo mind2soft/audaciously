@@ -21,8 +21,8 @@
  */
 
 import { computed, inject, onBeforeUnmount, onMounted, ref, useId, watch, watchEffect } from "vue";
-import { createWaveformProcessor } from "../../lib/audio/waveform";
-import { scrollableTimelineKey } from "../../lib/scrollable-timeline";
+import { createWaveformProcessor } from "../../../lib/audio/waveform";
+import { scrollableTimelineKey } from "../../../lib/scrollable-timeline";
 
 const props = defineProps<{
   buffer: AudioBuffer;

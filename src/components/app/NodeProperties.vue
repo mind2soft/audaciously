@@ -11,7 +11,7 @@ import type { AudioEffect } from "../../features/effects";
 import type { InstrumentNode, RecordedNode } from "../../features/nodes";
 import type { MusicInstrumentType } from "../../lib/music/instruments";
 import { useNodesStore } from "../../stores/nodes";
-import EffectsPipeline from "../controls/EffectsPipeline.vue";
+import EffectsPipeline from "../controls/effects/EffectsPipeline.vue";
 import FolderNodeProperties from "./node-properties/FolderNodeProperties.vue";
 import InstrumentNodeProperties from "./node-properties/InstrumentNodeProperties.vue";
 import PianoNodeProperties from "./node-properties/PianoNodeProperties.vue";

@@ -1,12 +1,14 @@
 // composables/useRecordedNode.ts
 // useRecordedNode — reactive effect-bake loop for a RecordedNode.
 //
-// Delegates entirely to useAudioPipeline:
+// Delegates to useAudioPipeline:
 //   sourceBuffer (from store) + effects → pipeline → targetBuffer
 //
 // A watch syncs pipeline.targetBuffer back to the store via
-// _setRecordedTargetBuffer.  When sourceBuffer is null (no recording yet),
+// setTargetBuffer.  When sourceBuffer is null (no recording yet),
 // the pipeline propagates null through to targetBuffer automatically.
+//
+// Cancellation is handled by useAudioPipeline via AbortController.
 //
 // Usage:
 //   // In the app-level useAllNodes composable (not in individual views):
@@ -42,8 +44,9 @@ export function useRecordedNode(nodeRef: Ref<RecordedNode | null>): {
 
   // ── Effect pipeline (sourceBuffer + effects → targetBuffer) ────────────────
 
-  const { targetBuffer, isProcessing } = useAudioPipeline(sourceBuffer, effects, nodeId, {
+  const { targetBuffer, isProcessing } = useAudioPipeline(sourceBuffer, effects, {
     processFn: computeTargetBuffer,
+    nodeId,
   });
 
   // ── Sync pipeline output → store ───────────────────────────────────────────
@@ -52,7 +55,7 @@ export function useRecordedNode(nodeRef: Ref<RecordedNode | null>): {
     targetBuffer,
     (buffer) => {
       const id = nodeRef.value?.id;
-      if (id) nodesStore._setRecordedTargetBuffer(id, buffer);
+      if (id) nodesStore.setTargetBuffer(id, buffer);
     },
     { immediate: true },
   );

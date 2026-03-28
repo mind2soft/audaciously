@@ -19,7 +19,7 @@
  */
 
 import { onBeforeUnmount, ref } from "vue";
-import type { Track } from "../../features/sequence/track";
+import type { Track } from "../../../features/sequence/track";
 
 const props = defineProps<{
   track: Track;

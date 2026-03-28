@@ -5,7 +5,7 @@
  * Props: effect: FadeInEffect, maxDuration: number (seconds)
  * Emits: update:effect(FadeInEffect), remove()
  */
-import type { FadeCurve, FadeInEffect } from "../../features/effects/types";
+import type { FadeCurve, FadeInEffect } from "../../../features/effects/types";
 
 const props = defineProps<{
   effect: FadeInEffect;

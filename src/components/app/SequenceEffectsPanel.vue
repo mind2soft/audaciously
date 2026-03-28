@@ -11,7 +11,7 @@ import { PlaybackContextKey } from "../../composables/usePlaybackContext";
 import type { AudioEffect } from "../../features/effects/types";
 import { usePlayerStore } from "../../stores/player";
 import { useSequenceStore } from "../../stores/sequence";
-import EffectsPipeline from "../controls/EffectsPipeline.vue";
+import EffectsPipeline from "../controls/effects/EffectsPipeline.vue";
 
 const sequence = useSequenceStore();
 

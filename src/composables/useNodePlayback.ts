@@ -14,6 +14,7 @@
 
 import { onUnmounted, type Ref, ref, watch } from "vue";
 import type { InstrumentNode, RecordedNode } from "../features/nodes";
+import { useNodesStore } from "../stores/nodes";
 
 // ── Public types ───────────────────────────────────────────────────────────────
 
@@ -216,8 +217,25 @@ export function useNodePlayback(
     stop();
   });
 
+  // When targetBuffer is re-baked (effects changed) during playback, hot-swap
+  // the buffer by restarting from the current position.
+  const nodesStore = useNodesStore();
+  const unsubBuffer = nodesStore.onTargetBufferChange((id: string, _buffer: AudioBuffer | null) => {
+    if (state.value !== "playing") return;
+    if (nodeRef.value?.id !== id) return;
+    // Capture cursor, then restart with the new buffer.
+    const pos = currentTime.value;
+    stop();
+    resumeFrom = pos;
+    currentTime.value = pos;
+    play().catch(() => {
+      /* buffer swap failed — stay stopped */
+    });
+  });
+
   onUnmounted(() => {
     stop();
+    unsubBuffer();
   });
 
   return { state, currentTime, play, pause, stop, seek };

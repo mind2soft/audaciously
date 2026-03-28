@@ -22,5 +22,13 @@ export interface ProjectNodeBase<NodeKind extends ProjectNodeKind> {
   readonly kind: NodeKind;
 }
 
+export interface ProjectNodeWithOutput {
+  /**
+   * The node's audio buffer with applied effects pre-baked, ready for playback.
+   * Never persisted — recomputed on demand by the relevant composable (useRecordedNode or useInstrumentNode).
+   */
+  targetBuffer: AudioBuffer | null;
+}
+
 /** Union of all concrete node types. */
 export type ProjectNode = FolderNode | RecordedNode | InstrumentNode<MusicInstrumentType>;

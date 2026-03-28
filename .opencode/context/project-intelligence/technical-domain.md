@@ -1,113 +1,113 @@
-<!-- Context: project-intelligence/technical | Priority: critical | Version: 2.0 | Updated: 2026-03-13 -->
+<!-- Context: project-intelligence/technical | Priority: critical | Version: 3.0 | Updated: 2026-03-28 -->
 
 # Technical Domain — Audaciously
 
 **Purpose**: Tech stack, architecture, and development patterns for this browser-based DAW.
-**Last Updated**: 2026-03-13
+**Last Updated**: 2026-03-28
 
 ## Quick Reference
-**Update Triggers**: New lib added | Pattern changes | Store protocol changes | Audio API changes
+**Update Triggers**: New lib added | Pattern changes | Store protocol changes | Audio pipeline changes
 **Audience**: Developers, AI agents
 
 ---
 
 ## Primary Stack
 
-| Layer | Technology | Version |
-|-------|-----------|---------|
-| Framework | Vue 3 (`<script setup>`) | ^3.5 |
-| Language | TypeScript (strict) | ^5.9 |
-| Build | Vite | ^6.4 |
-| Styling | Tailwind CSS 4 + DaisyUI 5 | ^4.2 / 5.0-beta |
-| State | Pinia | ^3 |
-| Persistence | Dexie (IndexedDB) | — |
-| Audio | Web Audio API (browser-native) | — |
-| MP3 encoding | lamejs | — |
-| Compression | fflate (.awp project files) | — |
-| IDs | nanoid | ^5.1 |
-| Icons | Iconify / MDI | — |
+| Layer | Technology | Version | Rationale |
+|-------|-----------|---------|-----------|
+| Framework | Vue 3 (`<script setup>` + Composition API) | ^3.5.31 | SFC reactivity, provide/inject for context |
+| Language | TypeScript (strict) | ^5.9.3 | `noUnusedLocals`, `noUnusedParameters`, `noFallthroughCasesInSwitch` |
+| State | Pinia (composition-style) | ^2.3.0 | `defineStore("name", () => {})` — no Options API |
+| Build | Vite | ^6.4.1 | Fast HMR, native ESM |
+| Type check | vue-tsc | ^2.2.12 | `vue-tsc -b && vite build` must pass clean |
+| Styling | Tailwind CSS 4 + DaisyUI 5 beta | ^4.2.2 / 5.0.0-beta.7 | Utility-first + component classes |
+| Lint/Format | Biome (sole tool) | 2.4.7 | 2-space indent, double quotes, semicolons, 100 char line width |
+| Tests | Vitest (co-located) | ^4.1.2 | `.test.ts` files next to source |
+| Storage | Dexie (IndexedDB) | ^4.4.1 | All persistence local-only |
+| Audio | Raw Web Audio API | — | No wrappers, no third-party audio libs |
+| Workers | Native Web Workers (4) | — | synth, effect, waveform, mp3-encoder |
+| Encoding | lamejs (MP3), fflate (compression) | — | Client-side export |
+| IDs | nanoid | ^5.1.7 | All nodes, notes, segments |
+| Icons | Iconify (MDI + file-icons) | — | Via `@iconify/tailwind4` |
+| Git hooks | Husky | ^9.1.7 | Pre-commit checks |
+| Package mgr | pnpm (workspace) | — | `pnpm build` before committing |
 
 ---
 
 ## Core Architecture — Node Tree
 
-The app uses a **node-based architecture**. Everything on the timeline is a reference to a node.
-
 ```ts
 // src/features/nodes/node.ts
 type ProjectNode = FolderNode | RecordedNode | InstrumentNode;
+
+// Nodes with audio output implement:
+interface ProjectNodeWithOutput {
+  targetBuffer: AudioBuffer | null;
+}
 ```
 
-Nodes live in a Pinia store (`useNodesStore`). Timeline segments reference nodes by ID — never copies.
+- **FolderNode** — pure grouping, no audio, not on timeline
+- **InstrumentNode** — notes + synth params → synthesized on the fly
+- **RecordedNode** — immutable `AudioBuffer` from `MediaRecorder`
+- Timeline segments reference nodes by ID — never copies
 
 ---
 
-## State Management (Pinia)
+## Audio Effect Pipeline (Consolidated)
 
-All global state lives in `src/stores/`. Stores are setup-style (no Options API).
+Single `processEffects.ts` module — ONE worker, ONE exported function. 30s threshold is internal.
 
 ```ts
-export const useNodesStore = defineStore("nodes", () => {
-  // state as refs, actions as plain functions
-  return { /* public surface only */ };
-});
+// src/lib/audio/processEffects.ts
+export async function processEffects(
+  source: AudioBuffer, effects: AudioEffect[], signal: AbortSignal, nodeId?: string
+): Promise<AudioBuffer>
 ```
 
----
+- **Cancellation**: `AbortController`/`AbortSignal` — no generation counters, no main-thread seqNum
+- **Worker**: `src/workers/effect-processor.ts` — per-nodeId seqNum (lightweight optimization only)
+- **DSP effects**: Independent importable modules, pure math on `Float32Array[]`
+- **Proxy stripping**: `JSON.parse(JSON.stringify(effects.value))` before worker postMessage
 
-## Vue Component Pattern
-
-`<script setup>` SFCs. Props and emits typed inline. Use Pinia stores directly — no `inject` for data.
-
-```vue
-<script setup lang="ts">
-const props = defineProps<{ node: InstrumentNode }>();
-const emit = defineEmits<{ "update:notes": [notes: PlacedNote[]] }>();
-// composables, computed, event handlers
-</script>
-<template>...</template>
+```ts
+// DSP module signature — no Web Audio dependency
+export function processVolumeEffect(
+  channels: Float32Array[], effect: VolumeEffect, ctx: DspContext, isCancelled: () => boolean
+): boolean
 ```
 
 ---
 
 ## Composable Pattern
 
-All tools and reusable logic use `useX(ctx)` factory composables — never classes.
+Factory composables — never classes. `useX()` or `useXTool(ctx)`.
 
 ```ts
-export interface XToolContext { /* typed inputs — refs, emits, computed */ }
-
-export function useXTool(ctx: XToolContext) {
-  // refs, computed, handlers
-  onUnmounted(() => { /* cleanup: RAF loops, global event listeners */ });
-  return { cursor, onMousedown, onMousemove, onMouseleave };
-}
-export type XTool = ReturnType<typeof useXTool>;
+export function useAudioPipeline(
+  sourceBuffer: Ref<AudioBuffer | null>,
+  effects: Ref<ReadonlyArray<AudioEffect>>,
+  options: UseAudioPipelineOptions,
+): UseAudioPipelineReturn { /* AbortController, watch, onScopeDispose cleanup */ }
 ```
+
+- `onUnmounted` / `onScopeDispose` for cleanup (RAF loops, listeners, AbortControllers)
+- `provide/inject` for playback context sharing (not prop-threading)
+- Store notifications via listener pattern (`onTargetBufferChange`)
 
 ---
 
-## Pure Helpers (`src/lib/`)
+## Vue Component Pattern
 
-All reusable logic extracted to `src/lib/` as pure functions — no side effects, no Vue imports.
-
-```ts
-// src/lib/piano-roll/note-utils.ts
-export function cutNotesInRange(notes: PlacedNote[], start: number, end: number): CutResult { ... }
+```vue
+<script setup lang="ts">
+const props = defineProps<{ node: InstrumentNode }>();
+const emit = defineEmits<{ "update:notes": [notes: PlacedNote[]] }>();
+const store = useNodesStore();
+</script>
+<template>
+  <div class="rounded-lg border p-4"><!-- DaisyUI + Tailwind --></div>
+</template>
 ```
-
----
-
-## Piano Roll Tools
-
-Tools are discriminated by `PianoRollToolId = "place" | "pan" | "copy" | "cut" | "paste"`.
-
-Key rules:
-- **Immutable note arrays** — mutations return new arrays; `ctx.emitNotes(newArray)` never mutates in place
-- **Snap semantics** — `snapBeatFloor` for placement; `snapBeatRound` for selection/pan/paste boundaries
-- **Cut gap-close** — shift snapped to `max(durationBeats)` of shifted notes; guards against 0-shift
-- **Clipboard** — `localStorage`-backed, cross-tab sync via `storage` event, typed `ClipboardEntry` discriminated union
-- **Beat line colours** — pan: `--color-accent` | copy: `--color-info` | paste: `--color-secondary` | cut: `--color-warning`
 
 ---
 
@@ -115,36 +115,62 @@ Key rules:
 
 | Type | Convention | Example |
 |------|-----------|---------|
-| Composables | `camelCase` file | `useCutTool.ts`, `usePianoClipboard.ts` |
-| Vue components | `PascalCase` file | `PianoRoll.vue`, `PianoNodeView.vue` |
-| Lib modules | `kebab-case` file | `note-utils.ts`, `tool-types.ts` |
-| Store files | `camelCase` file | `nodes.ts`, `player.ts` |
-| Types / interfaces | PascalCase noun | `PlacedNote`, `InstrumentNode`, `ClipboardEntry` |
-| Store actions | verb + noun | `setInstrumentNotes`, `addFolderNode` |
-| IDs | `nanoid()` | all nodes, notes, segments |
-
-No classes — factory composables only.
+| TS files | kebab-case | `compute-target-buffer.ts` |
+| Vue files | PascalCase | `ButtonGroup.vue`, `NodeTree.vue` |
+| Components | PascalCase | `<NodeTreeItem>` |
+| Composables | `use` prefix, camelCase | `useAudioPipeline.ts` |
+| Stores | `use` prefix + `Store` | `useNodesStore` |
+| Functions | camelCase | `processVolumeEffect`, `createFolderNode` |
+| Types/Interfaces | PascalCase | `ProjectNodeWithOutput`, `DspContext` |
+| Constants | SCREAMING_SNAKE | `CHECK_INTERVAL`, `CURVE_CP` |
+| Workers | kebab-case `-processor` suffix | `effect-processor.ts` |
+| Tests | co-located `.test.ts` | `pipeline.test.ts` |
+| Feature dirs | kebab-case | `effects/dsp/`, `nodes/instrument/` |
 
 ---
 
 ## Code Standards
 
-- TypeScript strict — no `any` except explicitly cast in event dispatch
-- Immutable note arrays — never mutate `PlacedNote[]` in place
-- All beat positions clamped: `Math.max(0, ...)`
-- All user input to notes passes through snap helpers before committing
-- No OS clipboard — `localStorage` only (privacy + cross-tab sync)
-- `onUnmounted` cleanup — all composables remove RAF loops and global event listeners
-- `nanoid()` for all new IDs
+- **Factory functions over classes** — no `class` keyword
+- **Raw Web Audio API** — no wrappers, no audio libs
+- **Biome only** — no ESLint, no Prettier
+- **TypeScript strict** — zero `any` except explicitly cast event dispatch
+- **Immutable note arrays** — mutations return new arrays
+- **DSP effects are independent modules** — pure math on `Float32Array`, no Web Audio
+- **AbortController for cancellation** — standard API, one controller per regeneration cycle
+- **Co-located tests** — not in separate `tests/` dir
+- **pnpm only** — `pnpm build` before committing
+- **Emoji-prefixed commits**
+- **No logging-based debugging** — write tests (QA approach)
+- **`vue-tsc -b && vite build` must pass clean**
 
 ---
 
 ## Security / Constraints
 
-- Pure browser app — no server, no user-generated HTML, no eval
-- No external network requests at runtime
-- Audio output routed through master `GainNode` → `AnalyserNode` → `destination`
-- No OS clipboard access — internal clipboard via `localStorage` only
+- **Client-only SPA** — no server, no auth, no runtime network requests
+- **GPL-3.0-only** license
+- **IndexedDB via Dexie** — all persistence local-only
+- **localStorage** for clipboard (cross-tab, per-origin)
+- **Structured clone safety** — strip reactive proxies before worker transfer
+- **No eval, no innerHTML** — standard Vue template security model
+- **Audio routed through master GainNode -> AnalyserNode -> destination**
+
+---
+
+## Project Structure
+
+```
+src/
+  components/        # Vue SFCs — app/, controls/{effects,piano-roll,drum-roll,timeline,audio}/
+  composables/       # useX() factory composables (co-located tests)
+  features/          # Domain logic — effects/, nodes/, playback/, sequence/
+    effects/dsp/     # Pure DSP modules (Float32Array math, no Web Audio)
+  lib/               # Pure helpers — audio/, music/, piano-roll/, storage/, util/
+  stores/            # Pinia stores — nodes, player, project, sequence, timeline
+  workers/           # Web Workers — effect, synth, waveform, mp3-encoder
+docs/                # Developer notes, architecture docs
+```
 
 ---
 
@@ -152,14 +178,19 @@ No classes — factory composables only.
 
 | Pattern | File |
 |---------|------|
-| Node union type | `src/features/nodes/node.ts` |
-| InstrumentNode | `src/features/nodes/instrument/instrument-node.ts` |
-| Pinia store example | `src/stores/nodes.ts` |
-| Tool ID discriminated union | `src/lib/piano-roll/tool-types.ts` |
-| Pure note helpers | `src/lib/piano-roll/note-utils.ts` |
-| Clipboard composable | `src/composables/usePianoClipboard.ts` |
-| Cut tool composable | `src/composables/useCutTool.ts` |
-| Copy tool composable | `src/composables/useCopyTool.ts` |
-| Piano roll component | `src/components/controls/PianoRoll.vue` |
-| Node view component | `src/components/app/node-views/PianoNodeView.vue` |
-| Build config | `tsconfig.app.json`, `vite.config.ts` |
+| Node types + union | `src/features/nodes/node.ts` |
+| Pinia store (composition) | `src/stores/nodes.ts` |
+| Audio pipeline composable | `src/composables/useAudioPipeline.ts` |
+| Consolidated effect processor | `src/lib/audio/processEffects.ts` |
+| DSP types + chunk context | `src/features/effects/dsp/types.ts` |
+| DSP volume automation | `src/features/effects/dsp/volume.ts` |
+| Effect worker | `src/workers/effect-processor.ts` |
+| Synth worker | `src/workers/synth-processor.ts` |
+| Node playback (hot-swap) | `src/composables/useNodePlayback.ts` |
+| Build config | `tsconfig.app.json`, `vite.config.ts`, `biome.json` |
+
+## Related Files
+
+- `decisions-log.md` — Architecture decisions with rationale
+- `living-notes.md` — Active issues, debt, gotchas
+- `navigation.md` — Quick overview

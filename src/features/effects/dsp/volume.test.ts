@@ -5,6 +5,7 @@
 import { describe, expect, test } from "vitest";
 import type { VolumeEffect } from "../types";
 import type { DspContext } from "./types";
+import { createSingleShotContext } from "./types";
 import { processVolumeEffect } from "./volume";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -24,7 +25,7 @@ function stereoBuffer(lengthSamples: number, value = 1): Float32Array[] {
 
 function makeCtx(channels: Float32Array[]): DspContext {
   const length = channels[0]?.length ?? 0;
-  return { sampleRate: SAMPLE_RATE, duration: length / SAMPLE_RATE, offset: 0 };
+  return createSingleShotContext(SAMPLE_RATE, length / SAMPLE_RATE);
 }
 
 function makeVolumeEffect(keyframes: VolumeEffect["keyframes"], enabled = true): VolumeEffect {

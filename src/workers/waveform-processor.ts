@@ -195,11 +195,12 @@ const linearPath = (
           k = j - pathslength;
           mirror = -1;
         }
-        paths[k].minshow = paths[k].minshow ?? 0;
-        paths[k].maxshow = paths[k].maxshow ?? 1;
-        paths[k].normalize = paths[k].normalize ?? false;
-        const normalizeDataValue = paths[k].normalize ? 1 : normalizeData[f][i];
-        if (paths[k].minshow! <= normalizeData[f][i] && paths[k].maxshow! >= normalizeData[f][i]) {
+        const curPath = paths[k];
+        curPath.minshow = curPath.minshow ?? 0;
+        curPath.maxshow = curPath.maxshow ?? 1;
+        curPath.normalize = curPath.normalize ?? false;
+        const normalizeDataValue = curPath.normalize ? 1 : normalizeData[f][i];
+        if (curPath.minshow <= normalizeData[f][i] && curPath.maxshow >= normalizeData[f][i]) {
           const curPath = paths[k];
 
           switch (curPath.d) {

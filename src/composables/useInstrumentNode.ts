@@ -1,33 +1,29 @@
 // composables/useInstrumentNode.ts
-// useInstrumentNode — reactive synth render + effect-bake loop for an InstrumentNode.
+// useInstrumentNode — single-watcher reactive pipeline for an InstrumentNode.
 //
-// Architecture: two-stage pipeline.
+// Architecture: ONE watcher, ONE AbortController.
 //
-//   Stage 1 — Synth watcher (this file):
-//     Watches notes, bpm, timeSignature, instrumentType.
-//     Calls synthClient.render() → writes result to a local `rawBuffer` shallowRef.
-//     Changes to effects do NOT trigger a synth re-render.
+//   Watches ALL inputs: notes, bpm, timeSignature, instrumentType, effects.
+//   Any change triggers the full cycle:
+//     1. Abort the previous cycle (if any)
+//     2. Synth render → raw AudioBuffer
+//     3. Effect processing → baked AudioBuffer
+//     4. Store update → targetBuffer written to store
 //
-//   Stage 2 — Effect pipeline (useAudioPipeline):
-//     Watches rawBuffer + effects → bakes effects via computeTargetBuffer worker
-//     → writes result to pipeline.targetBuffer.
-//
-//   A final watch syncs pipeline.targetBuffer → store._setInstrumentTargetBuffer.
-//
-// This separation fixes the bug where effect-only edits triggered full synth
-// re-renders, causing cascading seqNum cancellations that prevented the
-// effect-baked buffer from ever reaching the store.
+//   This eliminates the two-stage architecture (separate synth watcher +
+//   useAudioPipeline) that caused coordination bugs with long tracks.
+//   Cancellation is purely AbortController-based — no generation counters.
 //
 // Usage:
 //   // In the app-level useAllNodes composable (not in individual views):
 //   useInstrumentNode(instrumentNodeRef)
 
-import { computed, type Ref, ref, shallowRef, watch } from "vue";
+import { onScopeDispose, type Ref, ref, watch } from "vue";
+import type { AudioEffect } from "../features/effects/types";
 import type { InstrumentNode } from "../features/nodes";
 import { computeTargetBuffer } from "../features/nodes/compute-target-buffer";
 import { createSynthWorkerClient, SynthEmptyTrackSignal } from "../lib/music/synthWorker";
 import { useNodesStore } from "../stores/nodes";
-import { useAudioPipeline } from "./useAudioPipeline";
 
 // ── Module-level synth client ─────────────────────────────────────────────────
 // One client is sufficient for the whole application — the underlying worker
@@ -37,16 +33,10 @@ const synthClient = createSynthWorkerClient();
 // ── Composable ─────────────────────────────────────────────────────────────────
 
 /**
- * Registers a two-stage reactive pipeline on the given InstrumentNode reference.
+ * Registers a single-watcher reactive pipeline on the given InstrumentNode.
  *
- * Stage 1 — Synth render:
- *   When `notes`, `bpm`, `timeSignature`, or `instrumentType` change, invokes
- *   the synth worker to regenerate the raw AudioBuffer into a local shallowRef.
- *
- * Stage 2 — Effect bake (delegated to useAudioPipeline):
- *   When `rawBuffer` or `effects` change, bakes effects into targetBuffer.
- *
- * A final watch syncs targetBuffer → store._setInstrumentTargetBuffer.
+ * When ANY input changes (notes, bpm, timeSignature, instrumentType, effects),
+ * aborts the previous cycle and runs: synth render → effect bake → store update.
  *
  * @param nodeRef - Reactive ref pointing to the InstrumentNode to watch.
  *                  When set to null, no render is triggered.
@@ -57,16 +47,12 @@ export function useInstrumentNode(nodeRef: Ref<InstrumentNode | null>): {
   isComputing: Ref<boolean>;
 } {
   const nodesStore = useNodesStore();
+  const isComputing = ref(false);
 
-  // ── Stage 1: Synth render → rawBuffer ──────────────────────────────────────
+  // ONE AbortController per regeneration cycle.
+  let controller: AbortController | null = null;
 
-  const rawBuffer = shallowRef<AudioBuffer | null>(null);
-  const isSynthRendering = ref(false);
-
-  // Monotonically-increasing counter to discard stale synth results.
-  let synthGeneration = 0;
-
-  // Watch ONLY synth-relevant fields — NOT effects.
+  // Single watcher covering ALL inputs.
   watch(
     () => {
       const node = nodeRef.value;
@@ -84,63 +70,65 @@ export function useInstrumentNode(nodeRef: Ref<InstrumentNode | null>): {
           startBeat: n.startBeat,
           durationBeats: n.durationBeats,
         })),
+        // Snapshot effects for deep comparison (strips Vue reactive proxies).
+        effects: JSON.parse(JSON.stringify(node.effects)) as AudioEffect[],
       };
     },
     async (curr) => {
-      if (!curr) return;
+      // Abort any in-progress cycle.
+      if (controller) controller.abort();
 
-      const gen = ++synthGeneration;
-      isSynthRendering.value = true;
+      if (!curr) {
+        controller = null;
+        isComputing.value = false;
+        return;
+      }
+
+      // Fresh controller for this cycle.
+      controller = new AbortController();
+      const { signal } = controller;
+
+      isComputing.value = true;
 
       try {
-        const buffer = await synthClient.render({
+        // ── Step 1: Synth render ──────────────────────────────────────────
+        const rawBuffer = await synthClient.render({
           trackId: curr.id,
           instrumentType: curr.instrumentType,
           bpm: curr.bpm,
           notes: curr.notes,
         });
 
-        if (gen !== synthGeneration) return; // Superseded during render.
+        if (signal.aborted) return;
 
-        rawBuffer.value = buffer;
+        // ── Step 2: Effect processing ─────────────────────────────────────
+        const targetBuffer = await computeTargetBuffer(rawBuffer, curr.effects, signal, curr.id);
+
+        if (signal.aborted) return;
+
+        // ── Step 3: Store update ──────────────────────────────────────────
+        nodesStore.setTargetBuffer(curr.id, targetBuffer);
       } catch (err) {
+        if (signal.aborted) return;
+
         if (err instanceof SynthEmptyTrackSignal) {
-          // No notes → clear raw buffer so pipeline propagates null to target.
-          if (gen === synthGeneration) rawBuffer.value = null;
+          // No notes → clear target buffer.
+          nodesStore.setTargetBuffer(curr.id, null);
           return;
         }
-        // Superseded renders (seqNum mismatch) reject with a generic Error.
-        // Silently retain the previous rawBuffer.
+
+        // Worker error — retain previous targetBuffer so playback continues.
       } finally {
-        if (gen === synthGeneration) isSynthRendering.value = false;
+        if (!signal.aborted) isComputing.value = false;
       }
     },
     { deep: true, immediate: true },
   );
 
-  // ── Stage 2: Effect pipeline (rawBuffer + effects → targetBuffer) ──────────
-
-  const nodeId = computed(() => nodeRef.value?.id ?? "");
-  const effects = computed(() => nodeRef.value?.effects ?? []);
-
-  const { targetBuffer, isProcessing } = useAudioPipeline(rawBuffer, effects, nodeId, {
-    processFn: computeTargetBuffer,
+  // Abort any in-flight cycle when the enclosing effect scope is disposed.
+  onScopeDispose(() => {
+    controller?.abort();
   });
-
-  // ── Sync pipeline output → store ───────────────────────────────────────────
-
-  watch(
-    targetBuffer,
-    (buffer) => {
-      const id = nodeRef.value?.id;
-      if (id) nodesStore._setInstrumentTargetBuffer(id, buffer);
-    },
-    { immediate: true },
-  );
-
-  // ── Combined computing state ───────────────────────────────────────────────
-
-  const isComputing = computed(() => isSynthRendering.value || isProcessing.value);
 
   return { isComputing };
 }
