@@ -10,7 +10,7 @@
  * No business logic — all state lives in Pinia stores.
  */
 
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, provide, ref, watch } from "vue";
 import AppHeader from "./components/app/AppHeader.vue";
 import NodePanel from "./components/app/NodePanel.vue";
 import NodeProperties from "./components/app/NodeProperties.vue";
@@ -25,8 +25,12 @@ import SplitPanel from "./components/layout/SplitPanel.vue";
 import ProjectMetadataForm from "./components/ProjectMetadataForm.vue";
 import SettingsDialog from "./components/SettingsDialog.vue";
 import { useAllNodes } from "./composables/useAllNodes";
+import { useNodePlayback } from "./composables/useNodePlayback";
+import { NodePlaybackContextKey, PlaybackContextKey } from "./composables/usePlaybackContext";
+import type { InstrumentNode, RecordedNode } from "./features/nodes";
 import type { ProjectMetadata } from "./lib/storage/project-metadata";
 import { createDefaultMetadata } from "./lib/storage/project-metadata";
+import { useNodesStore } from "./stores/nodes";
 import { useProjectStore } from "./stores/project";
 
 const project = useProjectStore();
@@ -34,6 +38,21 @@ const project = useProjectStore();
 // Wire reactive buffer-recompute loops for ALL nodes in the tree so every
 // node maintains a live targetBuffer regardless of which node is selected.
 useAllNodes();
+
+// ── Node playback context ─────────────────────────────────────────────────────
+// A single useNodePlayback instance is created here — the only ancestor of
+// both NodeView (waveform/piano/drum controls) and NodeProperties (EffectVolume).
+// Both subtrees inject the same instance so seeking in one is visible in the other.
+
+const nodes = useNodesStore();
+const selectedNodeRef = computed((): RecordedNode | InstrumentNode | null => {
+  const n = nodes.selectedNode;
+  return n?.kind === "recorded" || n?.kind === "instrument" ? n : null;
+});
+
+const nodePlayback = useNodePlayback(selectedNodeRef);
+provide(PlaybackContextKey, { currentTime: nodePlayback.currentTime, seek: nodePlayback.seek });
+provide(NodePlaybackContextKey, nodePlayback);
 
 // ── Metadata dialog state ─────────────────────────────────────────────────────
 // stagedMetadata is a local copy so edits don't mutate the store until confirmed.

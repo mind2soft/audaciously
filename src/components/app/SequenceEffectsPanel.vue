@@ -5,14 +5,24 @@
  * Wraps controls/EffectsPipeline and wires it to useSequenceStore.timelineEffects.
  */
 
-import { computed } from "vue";
+import { storeToRefs } from "pinia";
+import { computed, provide } from "vue";
+import { PlaybackContextKey } from "../../composables/usePlaybackContext";
 import type { AudioEffect } from "../../features/effects/types";
 import { usePlayerStore } from "../../stores/player";
 import { useSequenceStore } from "../../stores/sequence";
 import EffectsPipeline from "../controls/EffectsPipeline.vue";
 
 const sequence = useSequenceStore();
+
+// Provide playback context so EffectVolume in the subtree reads from the
+// global timeline player when editing sequence-level effects.
 const player = usePlayerStore();
+const { currentTime: playerTime } = storeToRefs(player);
+provide(PlaybackContextKey, {
+  currentTime: playerTime,
+  seek: (t: number) => player.seek(t),
+});
 
 const effects = computed(() => sequence.timelineEffects);
 const maxDuration = computed(() => sequence.totalDuration || undefined);
@@ -27,7 +37,6 @@ function onUpdateEffects(next: AudioEffect[]): void {
     <EffectsPipeline
       :effects="effects"
       :maxDuration="maxDuration"
-      :currentTime="player.currentTime"
       sourceLabel="Mix"
       sourceIcon="mdi--mixer"
       @update:effects="onUpdateEffects"

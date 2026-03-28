@@ -8,9 +8,9 @@
  *   Row 3  Player controls: [play] [separator] [note buttons + BPM] [flex-1] [tools] [divider] [ZoomToolbar]
  */
 
-import { computed, onMounted, onUnmounted, ref } from "vue";
-import { useNodePlayback } from "../../../composables/useNodePlayback";
+import { computed, inject, onMounted, onUnmounted, ref } from "vue";
 import { usePianoClipboard } from "../../../composables/usePianoClipboard";
+import { NodePlaybackContextKey, nullNodePlayback } from "../../../composables/usePlaybackContext";
 import type { InstrumentNode } from "../../../features/nodes";
 import type { NoteDuration } from "../../../lib/music/instruments";
 import { NOTE_TYPE_LIST } from "../../../lib/music/instruments";
@@ -33,8 +33,9 @@ const props = defineProps<{ node: InstrumentNode }>();
 // ── Stores / composables ──────────────────────────────────────────────────────
 
 const nodes = useNodesStore();
-const nodeRef = computed(() => props.node);
 // targetBuffer recompute is handled app-wide by useAllNodes() in App.vue.
+// The single useNodePlayback instance is created in App.vue and provided via
+// NodePlaybackContextKey so this view and EffectVolume share the same cursor.
 
 const {
   state: previewState,
@@ -42,7 +43,7 @@ const {
   play: previewPlay,
   pause: previewPause,
   seek: previewSeek,
-} = useNodePlayback(nodeRef);
+} = inject(NodePlaybackContextKey, nullNodePlayback);
 
 // ── Zoom & scroll ─────────────────────────────────────────────────────────────
 
