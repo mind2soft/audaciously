@@ -59,14 +59,11 @@ const props = withDefaults(
   defineProps<{
     effects: AudioEffect[];
     maxDuration?: number;
-    /** Current playhead position in seconds, forwarded to VolumeEffect for add/remove. */
-    currentTime?: number;
     sourceLabel: string;
     sourceIcon?: string;
   }>(),
   {
     maxDuration: undefined,
-    currentTime: undefined,
     sourceIcon: undefined,
   },
 );
@@ -184,6 +181,7 @@ onBeforeUnmount(() => {
 type EffectMenuItem = {
   type: AudioEffectType;
   label: string;
+  icon: string;
   disabled?: boolean;
 };
 
@@ -196,24 +194,25 @@ const activeDropdownItems = computed((): EffectMenuItem[] => {
   if (ac.row === "main") {
     // Stereo connector — all types, split disabled if already present
     return [
-      { type: "fadeIn", label: "Fade In" },
-      { type: "fadeOut", label: "Fade Out" },
-      { type: "volume", label: "Volume Automation" },
-      { type: "gain", label: "Gain" },
-      { type: "balance", label: "Balance" },
+      { type: "fadeIn", label: "Fade In", icon: "mdi--chart-bell-curve-cumulative" },
+      { type: "fadeOut", label: "Fade Out", icon: "mdi--chart-bell-curve" },
+      { type: "volume", label: "Volume Automation", icon: "mdi--waveform" },
+      { type: "gain", label: "Gain", icon: "mdi--volume-high" },
+      { type: "balance", label: "Balance", icon: "mdi--pan-horizontal" },
       {
         type: "split",
         label: "Split Audio",
+        icon: "mdi--source-fork",
         disabled: splitAlreadyPresent.value,
       },
     ];
   } else {
     // Mono sub-row — only mono-compatible effects
     return [
-      { type: "fadeIn", label: "Fade In" },
-      { type: "fadeOut", label: "Fade Out" },
-      { type: "volume", label: "Volume Automation" },
-      { type: "gain", label: "Gain" },
+      { type: "fadeIn", label: "Fade In", icon: "mdi--chart-bell-curve-cumulative" },
+      { type: "fadeOut", label: "Fade Out", icon: "mdi--chart-bell-curve" },
+      { type: "volume", label: "Volume Automation", icon: "mdi--waveform" },
+      { type: "gain", label: "Gain", icon: "mdi--volume-high" },
     ];
   }
 });
@@ -860,11 +859,16 @@ function effectIcon(effect: AudioEffect): string {
         <ul class="menu menu-xs py-1">
           <li v-for="opt in activeDropdownItems" :key="opt.type">
             <button
-              class="text-xs"
+              class="text-xs flex items-center gap-1.5"
               :class="opt.disabled ? 'opacity-40 cursor-not-allowed' : ''"
               :disabled="opt.disabled"
               @click="addEffect(opt.type)"
             >
+              <i
+                class="iconify size-3 shrink-0"
+                :class="opt.icon"
+                aria-hidden="true"
+              />
               {{ opt.label }}
             </button>
           </li>
@@ -907,7 +911,6 @@ function effectIcon(effect: AudioEffect): string {
         <EffectVolume
           v-else-if="selectedEffect.type === 'volume'"
           :effect="selectedEffect as VolumeEffect"
-          :currentTime="currentTime"
           :duration="maxDuration"
           @update:effect="updateEffectById(selectedEffect!.id, $event)"
         />

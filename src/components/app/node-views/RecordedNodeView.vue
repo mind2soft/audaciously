@@ -16,8 +16,8 @@
  * node   The RecordedNode to display / record into.
  */
 
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
-import { useNodePlayback } from "../../../composables/useNodePlayback";
+import { computed, inject, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { NodePlaybackContextKey, nullNodePlayback } from "../../../composables/usePlaybackContext";
 import type { RecordedNode } from "../../../features/nodes";
 import { recorder } from "../../../lib/audio/recorder-singleton";
 import { ZOOM_PX_PER_MIN_MS } from "../../../lib/zoom-constants";
@@ -80,8 +80,9 @@ function onZoomSelect(startTime: number, endTime: number): void {
 
 // ── Node playback ─────────────────────────────────────────────────────────────
 
-const nodeRef = computed(() => props.node);
 // targetBuffer recompute is handled app-wide by useAllNodes() in App.vue.
+// The single useNodePlayback instance is created in App.vue and provided via
+// NodePlaybackContextKey so this view and EffectVolume share the same cursor.
 const {
   state: previewState,
   currentTime: previewTime,
@@ -89,7 +90,7 @@ const {
   pause: previewPause,
   stop: previewStop,
   seek: previewSeek,
-} = useNodePlayback(nodeRef);
+} = inject(NodePlaybackContextKey, nullNodePlayback);
 
 // ── Recording state ───────────────────────────────────────────────────────────
 
