@@ -5,7 +5,7 @@
  * Props: effect: BalanceEffect
  * Emits: update:effect(BalanceEffect), remove()
  */
-import type { BalanceEffect } from "../../features/effects/types";
+import type { BalanceEffect } from "../../../features/effects/types";
 
 const props = defineProps<{
   effect: BalanceEffect;

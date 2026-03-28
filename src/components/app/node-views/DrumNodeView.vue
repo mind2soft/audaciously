@@ -22,9 +22,9 @@ import {
 } from "../../../lib/zoom-constants";
 import { useNodesStore } from "../../../stores/nodes";
 import ButtonGroup, { type ButtonGroupItem } from "../../controls/ButtonGroup.vue";
-import DrumRoll, { DRUM_ROLL_LABEL_WIDTH } from "../../controls/DrumRollCanvas.vue";
-import ScrollableTimeline from "../../controls/ScrollableTimeline.vue";
-import ZoomToolbar from "../../controls/ZoomToolbar.vue";
+import DrumRoll, { DRUM_ROLL_LABEL_WIDTH } from "../../controls/drum-roll/DrumRollCanvas.vue";
+import ScrollableTimeline from "../../controls/timeline/ScrollableTimeline.vue";
+import ZoomToolbar from "../../controls/timeline/ZoomToolbar.vue";
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 

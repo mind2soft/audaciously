@@ -2,6 +2,10 @@
 // Pure-DSP volume automation processor — keyframe-based gain with bezier
 // interpolation between steps.
 //
+// Chunk-aware: uses globalOffset so each chunk processes samples starting at
+// the correct timeline position.  Uses binary search to find the initial
+// keyframe segment when globalOffset > 0.
+//
 // The bezier control points mirror the CSS cubic-bezier() values used in
 // EffectVolume.vue so the SVG preview and the rendered audio match exactly.
 
@@ -60,6 +64,27 @@ function bezierY(t: number, p1y: number, p2y: number): number {
   return 3 * mt * mt * t * p1y + 3 * mt * t * t * p2y + t * t * t;
 }
 
+// ── Segment lookup ────────────────────────────────────────────────────────────
+
+/**
+ * Binary search for the keyframe segment containing `time`.
+ * Returns the index of the keyframe at or before `time`.
+ * Used when globalOffset > 0 to skip O(n) linear scan for the starting segment.
+ */
+function findSegment(kfs: VolumeKeyframe[], time: number): number {
+  if (time <= kfs[0].time) return 0;
+  if (time >= kfs[kfs.length - 1].time) return kfs.length - 1;
+
+  let lo = 0;
+  let hi = kfs.length - 1;
+  while (lo < hi - 1) {
+    const mid = (lo + hi) >>> 1;
+    if (kfs[mid].time <= time) lo = mid;
+    else hi = mid;
+  }
+  return lo;
+}
+
 // ── Main processor ────────────────────────────────────────────────────────────
 
 /** Cancellation-check interval (must be a power of 2 for fast bitwise test). */
@@ -71,6 +96,9 @@ const CHECK_INTERVAL = 8192;
  * Walks through the buffer sample-by-sample, tracking the current keyframe
  * segment.  For each sample the gain multiplier is interpolated from the
  * surrounding keyframes using the segment's transition curve.
+ *
+ * Chunk-aware: when `ctx.globalOffset > 0`, times are computed relative to
+ * the full buffer and the initial segment is found via binary search.
  *
  * Returns `false` if cancelled (caller should discard the buffer).
  */
@@ -96,15 +124,14 @@ export function processVolumeEffect(
   const totalSamples = channels[0]?.length ?? 0;
   const invSR = 1 / ctx.sampleRate;
 
-  // Segment index tracks position in the sorted keyframe list — advances
-  // monotonically so the overall complexity is O(samples + keyframes).
-  let segIdx = 0;
+  // Use binary search when starting mid-buffer (chunked processing).
+  let segIdx = ctx.globalOffset > 0 ? findSegment(kfs, ctx.globalOffset) : 0;
 
   for (let i = 0; i < totalSamples; i++) {
     // Periodic cancellation check (every CHECK_INTERVAL samples).
     if ((i & (CHECK_INTERVAL - 1)) === 0 && isCancelled()) return false;
 
-    const time = i * invSR;
+    const time = ctx.globalOffset + i * invSR;
 
     // Advance to the correct segment.
     while (segIdx < kfs.length - 2 && time >= kfs[segIdx + 1].time) {

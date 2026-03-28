@@ -3,7 +3,7 @@ import { computed } from "vue";
 import type { AudioEffect } from "../../../features/effects";
 import type { RecordedNode } from "../../../features/nodes";
 import { useNodesStore } from "../../../stores/nodes";
-import EffectsPipeline from "../../controls/EffectsPipeline.vue";
+import EffectsPipeline from "../../controls/effects/EffectsPipeline.vue";
 
 const props = defineProps<{ node: RecordedNode }>();
 const nodes = useNodesStore();

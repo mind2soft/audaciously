@@ -1,6 +1,8 @@
+<!-- Context: project-intelligence/decisions | Priority: high | Version: 2.0 | Updated: 2026-03-28 -->
+
 # Decisions Log — Audaciously
 
-> Record major architectural and business decisions with full context. This prevents "why was this done?" debates.
+> Major architectural decisions with full context. Prevents "why was this done?" debates.
 
 **Last Updated**: 2026-03-28
 
@@ -10,51 +12,153 @@
 
 **Date**: 2026-03-28
 **Status**: Decided
-**Owner**: Yanick Rochon
 
 ### Context
 
-The effect pipeline processes an entire AudioBuffer in one pass inside a Web Worker. At 48 kHz stereo, a 45-minute buffer is ~1 GB. The browser must allocate this plus a processed copy (~2 GB peak), and stream ~6 GB through the CPU for a 3-effect chain. Mobile tabs OOM-kill well before that. Even on desktop, this exhausts available memory for multi-track projects.
-
-The project intent is to push the browser to its limits — long-form audio support is a natural goal, not a nice-to-have.
+At 48 kHz stereo, a 45-minute buffer is ~1 GB. Processing requires source + output copy (~2 GB peak), plus ~6 GB throughput for a 3-effect chain. Mobile tabs OOM-kill. The project intent is to push the browser to its limits.
 
 ### Decision
 
-Implement a 3-phase architecture:
-
-1. **Phase 1 — Chunked stateful pipeline** (pure TS): Split long buffers into N-second chunks, process sequentially with state carried between chunks. Memory stays bounded at ~50 MB regardless of duration.
-2. **Phase 2 — Wasm DSP modules** (Rust/wasm-pack): Implement FFT-class effects (noise reduction, pitch shift, convolution reverb) in Wasm with SIMD. These slot into the chunked pipeline from Phase 1.
-3. **Phase 3 — AudioWorklet real-time path**: Load the same Wasm modules in AudioWorkletProcessor for live effect processing during playback.
+3-phase architecture:
+1. **Phase 1 — Chunked stateful pipeline** (pure TS): Split long buffers into N-second chunks, process sequentially with state carried between chunks. Memory bounded at ~50 MB.
+2. **Phase 2 — Wasm DSP modules** (Rust/wasm-pack): FFT-class effects (noise reduction, pitch shift, reverb) in Wasm with SIMD.
+3. **Phase 3 — AudioWorklet real-time path**: Same Wasm modules in AudioWorkletProcessor for live processing.
 
 ### Rationale
 
-- Memory is the immediate blocker (Phase 1). Compute performance only matters for effects that don't exist yet (Phase 2).
-- Chunking is prerequisite infrastructure — Wasm modules need a chunked pipeline to operate within memory bounds on long audio.
-- AudioWorklet naturally delivers 128-sample chunks, so the chunked protocol maps directly (Phase 3).
-- Phases are independent deliverables: each is useful on its own, each unlocks the next.
-
-### Alternatives Considered
-
-| Alternative | Pros | Cons | Why Rejected |
-|-------------|------|------|-------------|
-| Wasm-only (no chunking) | Better compute for heavy effects | Doesn't solve memory — still loads entire buffer | Memory is the immediate blocker, not compute |
-| OffscreenCanvas / streaming | Avoids holding full buffer | Web Audio API requires complete AudioBuffer for playback; can't stream partial results | API limitation |
-| Process in AudioWorklet directly | Real-time, no worker needed | AudioWorklet has no access to full buffer; only processes live audio | Doesn't work for offline baking |
-| SharedArrayBuffer between threads | Zero-copy chunk sharing | Requires COOP/COEP headers; breaks many hosting setups | Deployment constraint too restrictive |
-| Do nothing, limit to short audio | No work required | Contradicts project intent ("push the browser to its limits") | Rejected by project philosophy |
-
-### Impact
-
-- **Positive**: Unlocks arbitrarily long audio; bounded memory; foundation for Wasm effects and real-time AudioWorklet; no regression for short buffers (single-shot path preserved)
-- **Negative**: Touches every DSP module (DspContext extension); adds protocol complexity to worker; chunked processing is slower than single-shot for short buffers (threshold routing mitigates this)
-- **Risk**: Chunk boundary artifacts (fade/volume discontinuities) if global positioning math is wrong — mitigated by comprehensive tests comparing chunked vs single-shot output
+Memory is the immediate blocker. Chunking is prerequisite for Wasm. AudioWorklet delivers 128-sample chunks — maps directly. Each phase is independently useful.
 
 ### Related
 
-- [Architecture document](../../docs/architecture/chunked-pipeline.md)
-- [Roadmap: Audio Processing](../../docs/roadmap.md)
-- [Roadmap: Low-Level / Platform](../../docs/roadmap.md)
-- [Phase 1 task breakdown](../../.tmp/tasks/chunked-pipeline/)
+- `docs/architecture/chunked-pipeline.md`
+
+---
+
+## Decision: Consolidated Worker Architecture (Single processEffects)
+
+**Date**: 2026-03-28
+**Status**: Decided
+
+### Context
+
+The pipeline previously had two separate modules: `effectWorker.ts` (single-shot, <30s) and `chunkOrchestrator.ts` (chunked, >=30s), each with their own worker instance. This created:
+- Two code paths for the same operation
+- Separate seqNum namespaces that couldn't coordinate
+- Unnecessary complexity in `compute-target-buffer.ts` choosing between paths
+
+### Decision
+
+Consolidate into single `processEffects.ts` — ONE worker instance, ONE exported function. The 30s threshold is an internal implementation detail, not an API boundary.
+
+### Rationale
+
+- One function to call, one worker to manage, one cancellation path
+- AbortController handles cancellation — no main-thread seqNum maps needed
+- Worker-internal seqNum kept only as lightweight optimization per nodeId
+- Eliminated `effectWorker.ts` and `chunkOrchestrator.ts` entirely
+
+### Alternatives Considered
+
+| Alternative | Why Rejected |
+|-------------|-------------|
+| Keep two workers, add coordination | More complexity, same result |
+| Single worker but two exported functions | Still exposes threshold to callers |
+
+### Related
+
+- `src/lib/audio/processEffects.ts`
+- `src/workers/effect-processor.ts`
+
+---
+
+## Decision: Sparse Array Fix (>=30s Bug Root Cause)
+
+**Date**: 2026-03-28
+**Status**: Decided
+
+### Context
+
+`new Array(numChunks)` creates a sparse array with holes. `.every((c) => c !== undefined)` skips holes in sparse arrays — so after receiving just the first chunk, `.every()` returned `true`, calling `stitchChunks` with mostly-empty slots. The `for...of` loop yielded `undefined` for missing chunks, throwing `TypeError`.
+
+This was the root cause of the >=30s bug. Not a cancellation problem.
+
+### Decision
+
+Use `Array.from({ length: numChunks })` to create a dense array with actual `undefined` values that `.every()` properly tests.
+
+### Impact
+
+- **Positive**: Fixes all tracks >=30s; zero behavioral change for short tracks
+- **Risk**: None — `Array.from` is universally supported
+
+---
+
+## Decision: AbortController for Pipeline Cancellation
+
+**Date**: 2026-03-28
+**Status**: Decided
+
+### Context
+
+The pipeline used generation counters to discard stale results. This required coordinating counter state across composables, workers, and the store. Race conditions were hard to reason about.
+
+### Decision
+
+Standard `AbortController`/`AbortSignal` — one controller per regeneration cycle:
+
+```ts
+if (controller) controller.abort();
+controller = new AbortController();
+try {
+  result = await processEffects(source, effects, controller.signal, nodeId);
+} catch { /* ignore if aborted */ }
+```
+
+### Rationale
+
+- Standard platform API, well-understood semantics
+- No shared mutable state between caller and callee
+- `onScopeDispose(() => controller?.abort())` for automatic cleanup
+- Worker-internal seqNum kept only as optimization (not for correctness)
+
+### Related
+
+- `src/composables/useAudioPipeline.ts`
+- `src/composables/useInstrumentNode.ts`
+
+---
+
+## Decision: targetBuffer Change Notification
+
+**Date**: 2026-03-28
+**Status**: Decided
+
+### Context
+
+When effects are re-baked during node preview playback, the node's `targetBuffer` updates in the store but the playing `AudioBufferSourceNode` still references the old buffer. Users don't hear effect changes until they stop and restart playback.
+
+### Decision
+
+Add listener pattern to `setTargetBuffer` in the nodes store:
+
+```ts
+type TargetBufferListener = (id: string, buffer: AudioBuffer | null) => void;
+const listeners = new Set<TargetBufferListener>();
+function onTargetBufferChange(fn: TargetBufferListener): () => void { /* subscribe/unsubscribe */ }
+```
+
+`useNodePlayback` subscribes and hot-swaps: stop → restore cursor → play with new buffer.
+
+### Rationale
+
+- Decoupled — store doesn't know about playback
+- Listener returns unsubscribe function — clean lifecycle
+- Hot-swap preserves cursor position for seamless UX
+
+### Related
+
+- `src/stores/nodes.ts` — `onTargetBufferChange`, `setTargetBuffer`
+- `src/composables/useNodePlayback.ts` — subscriber
 
 ---
 
@@ -62,41 +166,18 @@ Implement a 3-phase architecture:
 
 **Date**: 2026-03-13
 **Status**: Decided
-**Owner**: Yanick Rochon
 
 ### Context
 
-The original `useInstrumentNode` bundled synth rendering and effect baking in a single watcher. Every effect edit triggered a full synth re-render, causing cascading seqNum cancellations that prevented the effect-baked buffer from ever reaching the store. Users heard raw synth output with no volume changes applied.
+Original `useInstrumentNode` bundled synth rendering and effect baking in a single watcher. Every effect edit triggered a full synth re-render, causing cascading cancellations.
 
 ### Decision
 
-Create a reusable `useAudioPipeline` composable that separates concerns:
-
-- **Stage 1** (synth watcher in useInstrumentNode): watches notes/bpm/instrument → produces `rawBuffer`
-- **Stage 2** (useAudioPipeline): watches rawBuffer + effects → produces `targetBuffer` via worker
-- Sync watch propagates `targetBuffer` → store
-
-Both `useInstrumentNode` and `useRecordedNode` delegate Stage 2 to `useAudioPipeline` with an injected `processFn` for testability.
-
-### Rationale
-
-- Effect-only edits no longer trigger synth re-renders
-- The pipeline composable is reusable across node types
-- Injectable `processFn` enables Vitest testing without Worker/AudioContext
-- Generation-based stale cancellation prevents race conditions
-
-### Alternatives Considered
-
-| Alternative | Pros | Cons | Why Rejected |
-|-------------|------|------|-------------|
-| Fix watcher in-place | Less code change | Still couples synth+effects; same race conditions | Fundamental architecture problem |
-| Debounce only | Quick fix | Doesn't fix the root cause (effects triggering synth) | Band-aid |
-
-### Impact
-
-- **Positive**: Volume automation now works; clean separation; testable; reusable
-- **Negative**: Larger refactor; two composable files instead of one
-- **Risk**: Vue reactive proxy arrays reaching postMessage (fixed by JSON.parse(JSON.stringify()) in watcher getter)
+Reusable `useAudioPipeline` composable separates concerns:
+- **useInstrumentNode**: watches notes/bpm/instrument → `rawBuffer`
+- **useAudioPipeline**: watches rawBuffer + effects → `targetBuffer` via worker
+- Both `useInstrumentNode` and `useRecordedNode` delegate to `useAudioPipeline`
+- Injectable `processFn` for testability
 
 ### Related
 
@@ -110,43 +191,18 @@ Both `useInstrumentNode` and `useRecordedNode` delegate Stage 2 to `useAudioPipe
 
 **Date**: 2026-03-28
 **Status**: Decided
-**Owner**: Yanick Rochon
 
 ### Context
 
-Vue 3's `ref<Map>` deeply wraps all objects with reactive Proxies. The `useAudioPipeline` watcher creates an effects snapshot using `effects.value.map(e => ({ ...e }))`, but spread only creates a shallow copy — nested arrays (e.g. `keyframes` on VolumeEffect) remain reactive Proxy objects.
-
-When the effects reach `worker.postMessage()`, the structured clone algorithm must serialize these Proxies. If serialization fails (DataCloneError), the promise silently rejects and the pipeline retains the previous buffer — the user hears unmodified audio.
+Vue 3's `ref<Map>` wraps nested objects with reactive Proxies. Spread creates shallow copies — nested arrays like `keyframes` remain Proxy objects. `worker.postMessage()` silently fails on Proxies.
 
 ### Decision
 
-Use `JSON.parse(JSON.stringify(effects.value))` in the watcher getter to deep-clone all reactive proxies into plain objects before they reach the processing function.
-
-### Rationale
-
-- `JSON.parse(JSON.stringify(...))` traverses all getters, producing guaranteed-plain objects
-- Zero reactive proxy remnants at any nesting depth
-- Simple, universally understood, no utility imports needed
-- The effects array is small (typically 1–5 items) — serialization cost is negligible
-
-### Alternatives Considered
-
-| Alternative | Pros | Cons | Why Rejected |
-|-------------|------|------|-------------|
-| `toRaw()` from Vue | Official API | Only strips top-level proxy, not nested | Doesn't fix nested keyframes |
-| `structuredClone()` | Handles more types | Still fails on Proxy objects (same as postMessage) | Doesn't solve the problem |
-| Deep `toRaw()` recursive | Strips all proxies | No built-in; must write recursive walker | Over-engineered for this case |
-| `klona` or similar library | Fast deep clone | New dependency for a one-line fix | Unnecessary |
-
-### Impact
-
-- **Positive**: Eliminates silent postMessage failures; volume automation works
-- **Negative**: JSON round-trip is marginally slower than spread (irrelevant for <5 objects)
-- **Risk**: None — effects are plain serializable data (no functions, no circular refs)
+`JSON.parse(JSON.stringify(effects.value))` in the watcher getter strips all proxies before worker transfer.
 
 ### Related
 
-- `src/composables/useAudioPipeline.ts` (line 78)
+- `src/composables/useAudioPipeline.ts`
 
 ---
 
@@ -154,4 +210,5 @@ Use `JSON.parse(JSON.stringify(effects.value))` in the watcher getter to deep-cl
 
 | Decision | Date | Replaced By | Why |
 |----------|------|-------------|-----|
-| (none yet) | — | — | — |
+| Two separate worker instances | 2026-03 | Consolidated single processEffects | Unnecessary complexity |
+| Generation counters for cancellation | 2026-03 | AbortController | Simpler, standard API |

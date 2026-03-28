@@ -23,10 +23,10 @@ import { recorder } from "../../../lib/audio/recorder-singleton";
 import { ZOOM_PX_PER_MIN_MS } from "../../../lib/zoom-constants";
 import { useNodesStore } from "../../../stores/nodes";
 import { usePlayerStore } from "../../../stores/player";
-import AudioAnalyzerView from "../../controls/AudioAnalyzerView.vue";
-import ScrollableTimeline from "../../controls/ScrollableTimeline.vue";
-import WaveformView from "../../controls/WaveformView.vue";
-import ZoomToolbar from "../../controls/ZoomToolbar.vue";
+import AudioAnalyzerView from "../../controls/audio/AudioAnalyzerView.vue";
+import WaveformView from "../../controls/audio/WaveformView.vue";
+import ScrollableTimeline from "../../controls/timeline/ScrollableTimeline.vue";
+import ZoomToolbar from "../../controls/timeline/ZoomToolbar.vue";
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 

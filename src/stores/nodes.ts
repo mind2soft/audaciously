@@ -16,6 +16,7 @@ import {
 import type { FolderNode, InstrumentNode, ProjectNode, RecordedNode } from "../features/nodes";
 import { createFolderNode, createInstrumentNode, createRecordedNode } from "../features/nodes";
 import type { PlacedNote, TimeSignature } from "../features/nodes/instrument/instrument-node";
+import type { ProjectNodeWithOutput } from "../features/nodes/node";
 import type { MusicInstrumentType, NoteDuration, OctaveRange } from "../lib/music/instruments";
 
 // ── Serialization types ────────────────────────────────────────────────────────
@@ -26,12 +27,19 @@ export interface NodeTreeJSON {
   selectedNodeId: string | null;
 }
 
+// ── Target buffer change notification ─────────────────────────────────────────
+
+export type TargetBufferListener = (id: string, buffer: AudioBuffer | null) => void;
+
 // ── Store ─────────────────────────────────────────────────────────────────────
 
 export const useNodesStore = defineStore("nodes", () => {
   // ── State ─────────────────────────────────────────────────────────────────
   /** All nodes by id. */
   const nodesById = ref<Map<string, ProjectNode>>(new Map());
+  /** Listeners notified whenever setTargetBuffer writes a new buffer. */
+  const targetBufferListeners = new Set<TargetBufferListener>();
+
   /** Ordered root-level node ids (top-level of the tree). */
   const rootIds = ref<string[]>([]);
   /** Currently selected node id in the node panel. */
@@ -176,19 +184,33 @@ export const useNodesStore = defineStore("nodes", () => {
     selectedNodeId.value = id;
   }
 
+  function setTargetBuffer(id: string, buffer: AudioBuffer | null): void {
+    const node = nodesById.value.get(id);
+    if (node && "targetBuffer" in node) {
+      (node as ProjectNodeWithOutput).targetBuffer = buffer;
+      for (const listener of targetBufferListeners) {
+        listener(id, buffer);
+      }
+    }
+  }
+
+  /**
+   * Register a listener called whenever setTargetBuffer writes a new buffer.
+   * Returns an unsubscribe function.
+   */
+  function onTargetBufferChange(listener: TargetBufferListener): () => void {
+    targetBufferListeners.add(listener);
+    return () => {
+      targetBufferListeners.delete(listener);
+    };
+  }
+
   // ── Node content updates ──────────────────────────────────────────────────
 
   function setRecordedSourceBuffer(id: string, buffer: AudioBuffer | null): void {
     const node = nodesById.value.get(id);
     if (node && node.kind === "recorded") {
       (node as RecordedNode).sourceBuffer = buffer;
-    }
-  }
-
-  function _setRecordedTargetBuffer(id: string, buffer: AudioBuffer | null): void {
-    const node = nodesById.value.get(id);
-    if (node && node.kind === "recorded") {
-      (node as RecordedNode).targetBuffer = buffer;
     }
   }
 
@@ -264,13 +286,6 @@ export const useNodesStore = defineStore("nodes", () => {
   }
 
   // ── Instrument node specific ──────────────────────────────────────────────
-
-  function _setInstrumentTargetBuffer(id: string, buffer: AudioBuffer | null): void {
-    const node = nodesById.value.get(id);
-    if (node && node.kind === "instrument") {
-      (node as InstrumentNode).targetBuffer = buffer;
-    }
-  }
 
   function setInstrumentNotes(id: string, notes: PlacedNote[]): void {
     const node = nodesById.value.get(id);
@@ -376,16 +391,16 @@ export const useNodesStore = defineStore("nodes", () => {
     renameNode,
     moveNode,
     selectNode,
+    setTargetBuffer,
+    onTargetBufferChange,
     // node content updates
     setRecordedSourceBuffer,
-    _setRecordedTargetBuffer,
     setRecordingState,
     setNodeEffects,
     addEffect,
     removeEffect,
     reorderEffects,
     // instrument specific
-    _setInstrumentTargetBuffer,
     setInstrumentNotes,
     setInstrumentBpm,
     setInstrumentTimeSignature,

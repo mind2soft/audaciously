@@ -136,12 +136,14 @@ The same node can appear multiple times on the timeline as separate segments —
 
 Every Instrument and Recorded node has an effects chain, visible in the **Node Properties** panel when a node is selected.
 
-| Effect       | What it does                                                     |
-| ------------ | ---------------------------------------------------------------- |
-| **Gain**     | Volume multiplier. 1.0 = unity. Values above 1.0 amplify.        |
-| **Balance**  | Stereo pan. -1 = full left · 0 = centre · +1 = full right        |
-| **Fade In**  | Linear ramp from silence over N seconds at the start of playback |
-| **Fade Out** | Linear ramp to silence over N seconds at the end of playback     |
+| Effect                | What it does                                                     |
+| --------------------- | ---------------------------------------------------------------- |
+| **Gain**              | Volume multiplier. 1.0 = unity. Values above 1.0 amplify.        |
+| **Balance**           | Stereo pan. -1 = full left · 0 = centre · +1 = full right        |
+| **Fade In**           | Linear ramp from silence over N seconds at the start of playback |
+| **Fade Out**          | Linear ramp to silence over N seconds at the end of playback     |
+| **Volume Automation** | Draw keyframes to control volume over time. Bezier interpolation between points. Seekable SVG visualization shows the envelope curve. Drag keyframes to adjust. |
+| **Split**             | Separates audio into independent left and right channels, each with its own sub-effects chain. Apply different effects to each stereo channel independently. |
 
 Effects can be toggled on/off individually. They apply in order during playback.
 

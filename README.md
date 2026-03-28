@@ -61,7 +61,7 @@ Notes aren't organised in a flat track list — they live in a **node tree**: fo
 
 ### 🎚️ Per-node effects chain
 
-Every node in the tree can carry: **Gain**, **Balance**, **Fade In**, **Fade Out**.
+Every node in the tree can carry: **Gain**, **Balance**, **Fade In**, **Fade Out**, **Volume Automation**, **Split**.
 
 ### 💾 Projects
 
@@ -98,6 +98,8 @@ The interesting parts — the things that required working around the Web Audio 
 
 **MP3 encoding in-browser** — Export to MP3 runs via lamejs, entirely client-side, after an offline AudioContext renders the full mix.
 
+**Effect pipeline in Web Workers** — Effects are processed as pure DSP functions on `Float32Array` data inside Web Workers — no Web Audio API dependency in the DSP layer. For long audio (≥ 30 s), a chunked pipeline splits processing into 10-second segments, keeping memory bounded at ~50 MB regardless of total duration. Short audio (< 30 s) takes a faster single-shot path.
+
 ---
 
 ## Tech stack
@@ -129,6 +131,7 @@ pnpm install
 pnpm dev      # dev server at http://localhost:5173
 pnpm build    # type-check + bundle → dist/
 pnpm preview  # preview the production build locally
+pnpm test     # run test suite (59 tests: DSP pipeline, volume automation, chunked processing)
 ```
 
 The project deploys automatically to GitHub Pages on every push to `main` via `.github/workflows/static.yml`.

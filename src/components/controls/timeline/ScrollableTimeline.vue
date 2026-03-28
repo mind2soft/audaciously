@@ -14,7 +14,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } f
 import {
   type ScrollableTimelineContext,
   scrollableTimelineKey,
-} from "../../lib/scrollable-timeline";
+} from "../../../lib/scrollable-timeline";
 import TimelineRuler from "./TimelineRuler.vue";
 
 const props = withDefaults(

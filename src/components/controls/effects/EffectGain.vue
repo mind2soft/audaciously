@@ -5,7 +5,7 @@
  * Props: effect: GainEffect
  * Emits: update:effect(GainEffect), remove()
  */
-import type { GainEffect } from "../../features/effects/types";
+import type { GainEffect } from "../../../features/effects/types";
 
 const props = defineProps<{
   effect: GainEffect;

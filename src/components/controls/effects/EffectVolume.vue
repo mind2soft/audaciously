@@ -21,8 +21,12 @@
  * useNodePlayback or usePlayerStore under the same interface.
  */
 import { computed, inject, onMounted, onUnmounted, ref, watch } from "vue";
-import { nullPlaybackContext, PlaybackContextKey } from "../../composables/usePlaybackContext";
-import type { VolumeEffect, VolumeKeyframe, VolumeTransition } from "../../features/effects/types";
+import { nullPlaybackContext, PlaybackContextKey } from "../../../composables/usePlaybackContext";
+import type {
+  VolumeEffect,
+  VolumeKeyframe,
+  VolumeTransition,
+} from "../../../features/effects/types";
 
 // ── Props & emits ──────────────────────────────────────────────────────────────
 
@@ -402,82 +406,89 @@ const CURVE_OPTIONS: { value: VolumeTransition; label: string }[] = [
       </svg>
     </div>
 
-    <!-- ── 2. Navigation ──────────────────────────────────────────────────── -->
-    <div class="flex items-center gap-1">
-      <span class="text-[10px] font-medium text-base-content/50 shrink-0"
-        >Steps</span
-      >
-      <span class="flex-1" />
-
-      <!-- Prev -->
-      <button
-        class="btn btn-xs btn-ghost min-h-0 h-6 w-6 p-0"
-        title="Previous step"
-        :disabled="clampedIndex <= 0"
-        @click="prevStep"
-      >
-        <i class="iconify mdi--chevron-left size-3" aria-hidden="true" />
-      </button>
-
-      <!-- Add step at playhead -->
-      <button
-        v-if="canAddAtPlayhead"
-        class="btn btn-xs btn-ghost gap-0.5 min-h-0 h-6 px-1.5"
-        title="Add step at playhead"
-        @click="addStep"
-      >
-        <i class="iconify mdi--plus size-3" aria-hidden="true" />
-        Add
-      </button>
-
-      <!-- Remove step at playhead (or placeholder when no currentTime) -->
-      <button
-        v-else
-        class="btn btn-xs btn-ghost gap-0.5 min-h-0 h-6 px-1.5 hover:text-error"
-        title="Remove step at playhead"
-        :disabled="!canRemoveAtPlayhead"
-        @click="removeStep"
-      >
-        <i class="iconify mdi--minus size-3" aria-hidden="true" />
-        Remove
-      </button>
-
-      <!-- Next -->
-      <button
-        class="btn btn-xs btn-ghost min-h-0 h-6 w-6 p-0"
-        title="Next step"
-        :disabled="clampedIndex >= sorted.length - 1"
-        @click="nextStep"
-      >
-        <i class="iconify mdi--chevron-right size-3" aria-hidden="true" />
-      </button>
-    </div>
-
-    <!-- ── 3. Properties ─────────────────────────────────────────────────── -->
     <div
       v-if="selectedKeyframe"
       class="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-0.5 w-full text-xs"
     >
+      <!-- ── 2. Navigation ──────────────────────────────────────────────────── -->
+
+      <span class="text-[10px] font-medium text-base-content/50 shrink-0"
+        >Steps</span
+      >
+      <span class="flex">
+        <span class="inline-flex w-full max-w-xs justify-end">
+          <!-- Prev -->
+          <button
+            class="btn btn-xs btn-ghost min-h-0 h-6 w-6 p-0"
+            title="Previous step"
+            :disabled="clampedIndex <= 0"
+            @click="prevStep"
+          >
+            <i class="iconify mdi--chevron-left size-3" aria-hidden="true" />
+          </button>
+
+          <!-- Add step at playhead -->
+          <button
+            v-if="canAddAtPlayhead"
+            class="btn btn-xs btn-ghost gap-0.5 min-h-0 h-6 px-1.5"
+            title="Add step at playhead"
+            @click="addStep"
+          >
+            <i class="iconify mdi--plus size-3" aria-hidden="true" />
+            Add
+          </button>
+
+          <!-- Remove step at playhead (or placeholder when no currentTime) -->
+          <button
+            v-else
+            class="btn btn-xs btn-ghost gap-0.5 min-h-0 h-6 px-1.5 hover:text-error"
+            title="Remove step at playhead"
+            :disabled="!canRemoveAtPlayhead"
+            @click="removeStep"
+          >
+            <i class="iconify mdi--minus size-3" aria-hidden="true" />
+            Remove
+          </button>
+
+          <!-- Next -->
+          <button
+            class="btn btn-xs btn-ghost min-h-0 h-6 w-6 p-0"
+            title="Next step"
+            :disabled="clampedIndex >= sorted.length - 1"
+            @click="nextStep"
+          >
+            <i class="iconify mdi--chevron-right size-3" aria-hidden="true" />
+          </button>
+        </span>
+      </span>
+
+      <!-- ── 3. Properties ─────────────────────────────────────────────────── -->
+
       <!-- Step — read-only position indicator -->
       <span class="text-base-content/50 whitespace-nowrap py-0.5">Step</span>
-      <span
-        class="font-mono tabular-nums text-right py-0.5 text-base-content/70"
-      >
-        {{ clampedIndex + 1 }}&thinsp;/&thinsp;{{
-          sorted.length
-        }}&ensp;&middot;&ensp;{{ formatTime(selectedKeyframe.time) }}
+      <span class="flex">
+        <span
+          class="font-mono tabular-nums text-right py-0.5 text-base-content/70 w-full max-w-xs"
+        >
+          {{ clampedIndex + 1 }}&thinsp;/&thinsp;{{
+            sorted.length
+          }}&ensp;&middot;&ensp;{{ formatTime(selectedKeyframe.time) }}
+        </span>
       </span>
 
       <!-- Volume -->
-      <span class="text-base-content/50 whitespace-nowrap py-0.5">Volume</span>
-      <span class="mb-1">
+      <span
+        class="flex flex-col justify-start text-base-content/50 whitespace-nowrap py-0.5 h-full"
+        >Volume</span
+      >
+      <span class="flex flex-col mb-2">
         <input
           type="number"
           min="0"
           max="2"
           step="0.01"
           :value="selectedKeyframe.value.toFixed(2)"
-          class="input input-xs w-full font-mono tabular-nums text-right"
+          class="input input-xs w-full max-w-xs font-mono tabular-nums text-right"
           aria-label="Volume level (0 – 2)"
           @change="updateSelectedValue"
         />
@@ -488,7 +499,7 @@ const CURVE_OPTIONS: { value: VolumeTransition; label: string }[] = [
           max="2"
           step="0.01"
           :value="selectedKeyframe.value"
-          class="range range-xs col-span-2 w-full range-primary"
+          class="range range-xs col-span-2 w-full max-w-xs range-primary"
           aria-label="Volume level slider (0 – 2)"
           @input="updateSelectedValue"
         />
@@ -498,20 +509,22 @@ const CURVE_OPTIONS: { value: VolumeTransition; label: string }[] = [
       <span class="text-base-content/50 whitespace-nowrap py-0.5"
         >Transition</span
       >
-      <select
-        :value="selectedKeyframe.curve"
-        class="select select-xs w-full"
-        aria-label="Transition curve to next step"
-        @change="updateSelectedCurve"
-      >
-        <option
-          v-for="opt in CURVE_OPTIONS"
-          :key="opt.value"
-          :value="opt.value"
+      <span class="flex">
+        <select
+          :value="selectedKeyframe.curve"
+          class="select select-xs w-full max-w-xs"
+          aria-label="Transition curve to next step"
+          @change="updateSelectedCurve"
         >
-          {{ opt.label }}
-        </option>
-      </select>
+          <option
+            v-for="opt in CURVE_OPTIONS"
+            :key="opt.value"
+            :value="opt.value"
+          >
+            {{ opt.label }}
+          </option>
+        </select>
+      </span>
     </div>
   </div>
 </template>

@@ -3,6 +3,8 @@
 //
 // Uses a mock processFn (injected via options) so tests are synchronous,
 // deterministic, and independent of the Web Worker / Web Audio API.
+//
+// The processFn signature is (source, effects, signal: AbortSignal).
 
 import { describe, expect, test, vi } from "vitest";
 import { nextTick, ref, shallowRef } from "vue";
@@ -31,7 +33,7 @@ function fakeBuffer(tag: string, duration = 1): FakeAudioBuffer {
 function mockProcessFn(
   source: AudioBuffer,
   effects: AudioEffect[],
-  _nodeId: string,
+  _signal: AbortSignal,
 ): Promise<AudioBuffer> {
   const enabled = effects.filter((e) => e.enabled);
   if (enabled.length === 0) return Promise.resolve(source);
@@ -54,9 +56,8 @@ describe("useAudioPipeline", () => {
   test("null source → targetBuffer is null", async () => {
     const source = shallowRef<AudioBuffer | null>(null);
     const effects = ref<AudioEffect[]>([]);
-    const nodeId = ref("n1");
 
-    const { targetBuffer } = useAudioPipeline(source, effects, nodeId, {
+    const { targetBuffer } = useAudioPipeline(source, effects, {
       processFn: mockProcessFn,
     });
 
@@ -68,9 +69,8 @@ describe("useAudioPipeline", () => {
     const buf = fakeBuffer("raw") as unknown as AudioBuffer;
     const source = shallowRef<AudioBuffer | null>(buf);
     const effects = ref<AudioEffect[]>([]);
-    const nodeId = ref("n1");
 
-    const { targetBuffer } = useAudioPipeline(source, effects, nodeId, {
+    const { targetBuffer } = useAudioPipeline(source, effects, {
       processFn: mockProcessFn,
     });
 
@@ -82,9 +82,8 @@ describe("useAudioPipeline", () => {
     const buf = fakeBuffer("raw") as unknown as AudioBuffer;
     const source = shallowRef<AudioBuffer | null>(buf);
     const effects = ref<AudioEffect[]>([volumeEffect("v1", 0.5)]);
-    const nodeId = ref("n1");
 
-    const { targetBuffer } = useAudioPipeline(source, effects, nodeId, {
+    const { targetBuffer } = useAudioPipeline(source, effects, {
       processFn: mockProcessFn,
     });
 
@@ -98,9 +97,8 @@ describe("useAudioPipeline", () => {
     const buf = fakeBuffer("raw") as unknown as AudioBuffer;
     const source = shallowRef<AudioBuffer | null>(buf);
     const effects = ref<AudioEffect[]>([volumeEffect("v1", 0, false)]);
-    const nodeId = ref("n1");
 
-    const { targetBuffer } = useAudioPipeline(source, effects, nodeId, {
+    const { targetBuffer } = useAudioPipeline(source, effects, {
       processFn: mockProcessFn,
     });
 
@@ -112,10 +110,9 @@ describe("useAudioPipeline", () => {
     const buf = fakeBuffer("raw") as unknown as AudioBuffer;
     const source = shallowRef<AudioBuffer | null>(buf);
     const effects = ref<AudioEffect[]>([volumeEffect("v1", 1)]);
-    const nodeId = ref("n1");
     const spy = vi.fn(mockProcessFn);
 
-    const { targetBuffer } = useAudioPipeline(source, effects, nodeId, {
+    const { targetBuffer } = useAudioPipeline(source, effects, {
       processFn: spy,
     });
 
@@ -137,10 +134,9 @@ describe("useAudioPipeline", () => {
     const buf1 = fakeBuffer("buf1") as unknown as AudioBuffer;
     const source = shallowRef<AudioBuffer | null>(buf1);
     const effects = ref<AudioEffect[]>([volumeEffect("v1", 0.5)]);
-    const nodeId = ref("n1");
     const spy = vi.fn(mockProcessFn);
 
-    const { targetBuffer } = useAudioPipeline(source, effects, nodeId, {
+    const { targetBuffer } = useAudioPipeline(source, effects, {
       processFn: spy,
     });
 
@@ -160,9 +156,8 @@ describe("useAudioPipeline", () => {
     const buf = fakeBuffer("raw") as unknown as AudioBuffer;
     const source = shallowRef<AudioBuffer | null>(buf);
     const effects = ref<AudioEffect[]>([volumeEffect("v1", 0.5)]);
-    const nodeId = ref("n1");
 
-    const { targetBuffer } = useAudioPipeline(source, effects, nodeId, {
+    const { targetBuffer } = useAudioPipeline(source, effects, {
       processFn: mockProcessFn,
     });
 
@@ -184,9 +179,8 @@ describe("useAudioPipeline", () => {
     const buf = fakeBuffer("raw") as unknown as AudioBuffer;
     const source = shallowRef<AudioBuffer | null>(buf);
     const effects = ref<AudioEffect[]>([volumeEffect("v1", 0.5)]);
-    const nodeId = ref("n1");
 
-    const { isProcessing, targetBuffer } = useAudioPipeline(source, effects, nodeId, {
+    const { isProcessing, targetBuffer } = useAudioPipeline(source, effects, {
       processFn: slowProcess,
     });
 
@@ -203,7 +197,7 @@ describe("useAudioPipeline", () => {
     expect((targetBuffer.value as unknown as FakeAudioBuffer)._tag).toBe("done");
   });
 
-  test("stale result is discarded when a newer change arrives", async () => {
+  test("stale result is discarded via abort when a newer change arrives", async () => {
     const resolvers: Array<(buf: AudioBuffer) => void> = [];
     const slowProcess: typeof mockProcessFn = () =>
       new Promise((resolve) => {
@@ -213,9 +207,8 @@ describe("useAudioPipeline", () => {
     const buf = fakeBuffer("raw") as unknown as AudioBuffer;
     const source = shallowRef<AudioBuffer | null>(buf);
     const effects = ref<AudioEffect[]>([volumeEffect("v1", 0.5)]);
-    const nodeId = ref("n1");
 
-    const { targetBuffer } = useAudioPipeline(source, effects, nodeId, {
+    const { targetBuffer } = useAudioPipeline(source, effects, {
       processFn: slowProcess,
     });
 
@@ -228,7 +221,8 @@ describe("useAudioPipeline", () => {
     await nextTick();
     expect(resolvers).toHaveLength(2);
 
-    // Resolve the FIRST (stale) bake.
+    // Resolve the FIRST (stale) bake — its signal was aborted, so the
+    // result should be ignored.
     resolvers[0](fakeBuffer("stale") as unknown as AudioBuffer);
     await nextTick();
     await nextTick();
@@ -248,9 +242,8 @@ describe("useAudioPipeline", () => {
     const buf = fakeBuffer("raw") as unknown as AudioBuffer;
     const source = shallowRef<AudioBuffer | null>(buf);
     const effects = ref<AudioEffect[]>([volumeEffect("v1", 0.5)]);
-    const nodeId = ref("n1");
 
-    const { targetBuffer, isProcessing } = useAudioPipeline(source, effects, nodeId, {
+    const { targetBuffer, isProcessing } = useAudioPipeline(source, effects, {
       processFn: failingProcess,
     });
 
@@ -264,14 +257,33 @@ describe("useAudioPipeline", () => {
     const buf = fakeBuffer("raw") as unknown as AudioBuffer;
     const source = shallowRef<AudioBuffer | null>(buf);
     const effects = ref<AudioEffect[]>([volumeEffect("v1", 0.5), volumeEffect("v2", 0.8)]);
-    const nodeId = ref("n1");
 
-    const { targetBuffer } = useAudioPipeline(source, effects, nodeId, {
+    const { targetBuffer } = useAudioPipeline(source, effects, {
       processFn: mockProcessFn,
     });
 
     await nextTick();
     const result = targetBuffer.value as unknown as FakeAudioBuffer;
     expect(result._tag).toBe("processed(raw+v1,v2)");
+  });
+
+  test("processFn receives AbortSignal as third argument", async () => {
+    let receivedSignal: AbortSignal | undefined;
+    const capturingProcess: typeof mockProcessFn = (source, _effects, signal) => {
+      receivedSignal = signal;
+      return Promise.resolve(source);
+    };
+
+    const buf = fakeBuffer("raw") as unknown as AudioBuffer;
+    const source = shallowRef<AudioBuffer | null>(buf);
+    const effects = ref<AudioEffect[]>([volumeEffect("v1", 0.5)]);
+
+    useAudioPipeline(source, effects, {
+      processFn: capturingProcess,
+    });
+
+    await nextTick();
+    expect(receivedSignal).toBeInstanceOf(AbortSignal);
+    expect(receivedSignal!.aborted).toBe(false);
   });
 });

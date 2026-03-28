@@ -35,7 +35,7 @@ import {
   createGainEffect,
   createSplitEffect,
   createVolumeEffect,
-} from "../../features/effects";
+} from "../../../features/effects";
 import type {
   AudioEffect,
   AudioEffectType,
@@ -45,7 +45,7 @@ import type {
   GainEffect,
   SplitEffect,
   VolumeEffect,
-} from "../../features/effects/types";
+} from "../../../features/effects/types";
 import EffectBalance from "./EffectBalance.vue";
 import EffectFadeIn from "./EffectFadeIn.vue";
 import EffectFadeOut from "./EffectFadeOut.vue";

@@ -27,9 +27,9 @@
  */
 
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import type { InstrumentNode, ProjectNode, RecordedNode } from "../../features/nodes/node";
-import type { Segment } from "../../features/sequence/segment";
-import { createWaveformProcessor } from "../../lib/audio/waveform";
+import type { InstrumentNode, ProjectNode, RecordedNode } from "../../../features/nodes/node";
+import type { Segment } from "../../../features/sequence/segment";
+import { createWaveformProcessor } from "../../../lib/audio/waveform";
 
 const props = defineProps<{
   segment: Segment;
