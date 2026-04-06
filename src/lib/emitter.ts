@@ -26,19 +26,21 @@ type EventCreator<EventMap> = <Type extends EventType<EventMap>>(
   event: EventArg<EventMap[Type]>,
 ) => EventArg<EventMap[Type]>;
 
-export interface Emitter<EventMap extends EventHandlers<Record<string, never>>> {
+// biome-ignore lint/complexity/noBannedTypes: {} is the correct constraint here — Record<string, never> resolves all values to never
+export interface Emitter<EventMap extends EventHandlers<{}>> {
   addEventListener<Type extends EventType<EventMap>>(type: Type, callback: EventMap[Type]): void;
   removeEventListener<Type extends EventType<EventMap>>(type: Type, callback: EventMap[Type]): void;
 }
 
-export interface EmitterDispatcher<EventMap extends EventHandlers<Record<string, never>>>
-  extends Emitter<EventMap> {
+// biome-ignore lint/complexity/noBannedTypes: {} is the correct constraint here — Record<string, never> resolves all values to never
+export interface EmitterDispatcher<EventMap extends EventHandlers<{}>> extends Emitter<EventMap> {
   dispatchEvent<Type extends Extract<keyof EventMap, string>>(
     event: EventArgDispatch<EventMap[Type]>,
   ): void;
 }
 
-function createEmitter<EventMap extends EventHandlers<Record<string, never>>>(
+// biome-ignore lint/complexity/noBannedTypes: {} is the correct constraint here — Record<string, never> resolves all values to never
+function createEmitter<EventMap extends EventHandlers<{}>>(
   createEvent: EventCreator<EventMap>,
 ): EmitterDispatcher<EventMap> {
   // biome-ignore lint/suspicious/noExplicitAny: listeners map stores heterogeneous callback types per event key — can't be typed further

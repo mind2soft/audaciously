@@ -86,7 +86,7 @@ const updateWaveform = () => {
   if (!rect.width || !rect.height) return;
 
   waveform
-    .getLinearPath(buffer, {
+    .getLinearPath(buffer.getChannelData(0), {
       channel: 0,
       samples: Math.max(1, rect.width / 2),
       type: "steps",

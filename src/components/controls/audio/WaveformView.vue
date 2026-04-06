@@ -363,7 +363,6 @@ const onPanDragDocMouseup = () => {
 const pastePreviewPcts = computed(() => {
   if (!props.pastePreviewActive || hoverPct.value === null || !props.pastePreviewDuration)
     return null;
-  const offset = effectiveOffsetTime.value;
   const visDur = effectiveVisibleDuration.value;
   if (visDur <= 0) return null;
   const startPct = hoverPct.value;

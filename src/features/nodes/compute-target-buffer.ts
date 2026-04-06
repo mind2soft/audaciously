@@ -46,7 +46,10 @@ export async function computeTargetBuffer(
     const ctx = new OfflineAudioContext(numberOfChannels, length, sampleRate);
     const copy = ctx.createBuffer(numberOfChannels, length, sampleRate);
     for (let ch = 0; ch < numberOfChannels; ch++) {
-      copy.copyToChannel(pristineChannels?.[ch] ?? source.getChannelData(ch), ch);
+      copy.copyToChannel(
+        (pristineChannels?.[ch] ?? source.getChannelData(ch)) as Float32Array<ArrayBuffer>,
+        ch,
+      );
     }
     return copy;
   }
