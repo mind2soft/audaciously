@@ -1,6 +1,6 @@
 // composables/sync-watch-store.test.ts
-// Tests proving whether the sync watch pattern used in useInstrumentNode and
-// useRecordedNode correctly propagates useAudioPipeline.targetBuffer → store.
+// Tests proving whether the sync watch pattern used in useInstrumentAudioNode and
+// useRecordedAudioNode correctly propagates useAudioPipeline.targetBuffer → store.
 //
 // This exercises the EXACT reactive chain:
 //   useAudioPipeline.targetBuffer (shallowRef)
@@ -15,6 +15,8 @@ import { describe, expect, test } from "vitest";
 import { computed, nextTick, ref, shallowRef, watch } from "vue";
 import type { AudioEffect, VolumeEffect } from "../features/effects/types";
 import { createInstrumentNode } from "../features/nodes";
+import type { InstrumentNode } from "../features/nodes/instrument/instrument-node";
+import { getBuffer } from "../lib/audio/audio-buffer-repository";
 import { useNodesStore } from "../stores/nodes";
 import { useAudioPipeline } from "./useAudioPipeline";
 
@@ -72,7 +74,7 @@ describe("sync watch → store (instrument node pattern)", () => {
     const rawBuffer = shallowRef<AudioBuffer | null>(null);
     const effects = computed(() => {
       const n = nodesStore.nodesById.get("test-node-1");
-      return n?.kind === "instrument" ? ((n as any).effects ?? []) : [];
+      return n?.kind === "instrument" ? (n.effects ?? []) : [];
     });
 
     const { targetBuffer } = useAudioPipeline(rawBuffer, effects, {
@@ -92,11 +94,12 @@ describe("sync watch → store (instrument node pattern)", () => {
     await nextTick(); // extra tick for async processFn resolution
 
     // Assert — store should have the processed buffer
-    const storeNode = nodesStore.nodesById.get("test-node-1") as any;
-    expect(storeNode.targetBuffer).not.toBeNull();
+    const storeNode = nodesStore.nodesById.get("test-node-1") as InstrumentNode | undefined;
+    expect(storeNode?.targetBufferId).not.toBeNull();
+    const resolvedBuffer = getBuffer(storeNode?.targetBufferId ?? "");
     // Vue reactive proxy wraps the buffer inside the store, so reference
     // equality (toBe) won't hold. Use deep equality to verify content.
-    expect(storeNode.targetBuffer).toStrictEqual(buf);
+    expect(resolvedBuffer).toStrictEqual(buf);
   });
 
   test("pipeline targetBuffer with effects propagates to store", async () => {
@@ -110,7 +113,7 @@ describe("sync watch → store (instrument node pattern)", () => {
     const rawBuffer = shallowRef<AudioBuffer | null>(null);
     const effects = computed(() => {
       const n = nodesStore.nodesById.get("test-node-2");
-      return n?.kind === "instrument" ? ((n as any).effects ?? []) : [];
+      return n?.kind === "instrument" ? (n.effects ?? []) : [];
     });
 
     const { targetBuffer } = useAudioPipeline(rawBuffer, effects, {
@@ -128,11 +131,10 @@ describe("sync watch → store (instrument node pattern)", () => {
     await nextTick();
 
     // Assert — store should have the PROCESSED buffer (with effect baked in)
-    const storeNode = nodesStore.nodesById.get("test-node-2") as any;
-    expect(storeNode.targetBuffer).not.toBeNull();
-    expect((storeNode.targetBuffer as unknown as FakeAudioBuffer)._tag).toBe(
-      "processed(synth-output+v1)",
-    );
+    const storeNode = nodesStore.nodesById.get("test-node-2") as InstrumentNode | undefined;
+    expect(storeNode?.targetBufferId).not.toBeNull();
+    const resolvedBuffer = getBuffer(storeNode?.targetBufferId ?? "");
+    expect((resolvedBuffer as unknown as FakeAudioBuffer)?._tag).toBe("processed(synth-output+v1)");
   });
 
   test("effect change updates store targetBuffer without source change", async () => {
@@ -146,7 +148,7 @@ describe("sync watch → store (instrument node pattern)", () => {
     const rawBuffer = shallowRef<AudioBuffer | null>(fakeBuffer("raw") as unknown as AudioBuffer);
     const effects = computed(() => {
       const n = nodesStore.nodesById.get("test-node-3");
-      return n?.kind === "instrument" ? ((n as any).effects ?? []) : [];
+      return n?.kind === "instrument" ? (n.effects ?? []) : [];
     });
 
     const { targetBuffer } = useAudioPipeline(rawBuffer, effects, {
@@ -162,18 +164,25 @@ describe("sync watch → store (instrument node pattern)", () => {
     await nextTick();
     await nextTick();
 
-    const storeNode = nodesStore.nodesById.get("test-node-3") as any;
-    expect(storeNode.targetBuffer).not.toBeNull();
-    expect((storeNode.targetBuffer as unknown as FakeAudioBuffer)._tag).toBe("processed(raw+v1)");
+    const storeNode = nodesStore.nodesById.get("test-node-3") as InstrumentNode | undefined;
+    expect(storeNode?.targetBufferId).not.toBeNull();
+    expect((getBuffer(storeNode?.targetBufferId ?? "") as unknown as FakeAudioBuffer)?._tag).toBe(
+      "processed(raw+v1)",
+    );
 
-    // Act — change effects via the store (same path as UI edits)
-    nodesStore.setNodeEffects("test-node-3", [volumeEffect("v2", 0.3)]);
+    // Act — change effects via direct mutation (same path as composable edits)
+    const storeNodeForMutation = nodesStore.nodesById.get("test-node-3") as
+      | InstrumentNode
+      | undefined;
+    if (storeNodeForMutation) storeNodeForMutation.effects = [volumeEffect("v2", 0.3)];
     await nextTick();
     await nextTick();
 
     // Assert — store should have the NEW processed buffer
-    const updated = nodesStore.nodesById.get("test-node-3") as any;
-    expect((updated.targetBuffer as unknown as FakeAudioBuffer)._tag).toBe("processed(raw+v2)");
+    const updated = nodesStore.nodesById.get("test-node-3") as InstrumentNode | undefined;
+    expect((getBuffer(updated?.targetBufferId ?? "") as unknown as FakeAudioBuffer)?._tag).toBe(
+      "processed(raw+v2)",
+    );
   });
 
   test("initial pipeline output reaches store (immediate behavior)", async () => {
@@ -207,9 +216,10 @@ describe("sync watch → store (instrument node pattern)", () => {
     await nextTick();
 
     // Assert — does the store have the buffer?
-    const storeNode = nodesStore.nodesById.get("test-node-4") as any;
-    expect(storeNode.targetBuffer).not.toBeNull();
+    const storeNode = nodesStore.nodesById.get("test-node-4") as InstrumentNode | undefined;
+    expect(storeNode?.targetBufferId).not.toBeNull();
+    const resolvedBuffer = getBuffer(storeNode?.targetBufferId ?? "");
     // Vue reactive proxy wraps the buffer, so use deep equality.
-    expect(storeNode.targetBuffer).toStrictEqual(rawBuffer.value);
+    expect(resolvedBuffer).toStrictEqual(rawBuffer.value);
   });
 });

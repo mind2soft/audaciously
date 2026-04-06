@@ -8,7 +8,8 @@
 
 import { computed, nextTick, ref, watch } from "vue";
 import type { AudioEffect } from "../../features/effects";
-import type { InstrumentNode, RecordedNode } from "../../features/nodes";
+import type { InstrumentNode } from "../../features/nodes";
+import { getBuffer } from "../../lib/audio/audio-buffer-repository";
 import type { MusicInstrumentType } from "../../lib/music/instruments";
 import { useNodesStore } from "../../stores/nodes";
 import EffectsPipeline from "../controls/effects/EffectsPipeline.vue";
@@ -21,10 +22,7 @@ const nodes = useNodesStore();
 
 const selectedNode = computed(() => nodes.selectedNode);
 
-const selectedRecorded = computed((): RecordedNode | null => {
-  const n = selectedNode.value;
-  return n?.kind === "recorded" ? (n as RecordedNode) : null;
-});
+const selectedNodeKind = computed(() => selectedNode.value?.kind ?? null);
 
 const selectedInstrument = computed((): InstrumentNode<MusicInstrumentType> | null => {
   const n = selectedNode.value;
@@ -67,11 +65,15 @@ const instrumentSourceIcon = computed((): string => {
   return inst.instrumentType === "drums" ? "mdi--drum" : "mdi--piano";
 });
 
-const bufferDuration = computed(() => selectedInstrument.value?.targetBuffer?.duration);
+const bufferDuration = computed(() => {
+  const id = selectedInstrument.value?.targetBufferId;
+  return id ? getBuffer(id)?.duration : undefined;
+});
 
 function onUpdateEffects(effects: AudioEffect[]): void {
-  if (selectedInstrument.value) {
-    nodes.setNodeEffects(selectedInstrument.value.id, effects);
+  const n = selectedInstrument.value;
+  if (n) {
+    n.effects = effects;
   }
 }
 
@@ -159,8 +161,8 @@ watch(confirmDelete, async (val) => {
 
       <!-- RecordedNode: effects panel -->
       <RecordedNodeProperties
-        v-else-if="selectedRecorded"
-        :node="selectedRecorded"
+        v-else-if="selectedNodeKind === 'recorded'"
+        :node-id="nodes.selectedNodeId!"
       />
 
       <!-- InstrumentNode: pipeline (source slot contains common + specific properties) -->
@@ -179,13 +181,13 @@ watch(confirmDelete, async (val) => {
           <template #source-properties>
             <div class="flex flex-col">
               <!-- 1. Common: Tempo & Meter -->
-              <InstrumentNodeProperties :node="selectedInstrument" />
+              <InstrumentNodeProperties :node-id="nodes.selectedNodeId!" />
               <!-- 2. Specific: Piano (octave range + note duration) or Drum (step size) -->
               <template v-if="instrumentSubPanel">
                 <div class="border-t border-base-300/40" />
                 <component
                   :is="instrumentSubPanel"
-                  :node="selectedInstrument"
+                  :node-id="nodes.selectedNodeId!"
                 />
               </template>
             </div>

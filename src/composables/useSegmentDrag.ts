@@ -18,9 +18,10 @@
 //   @mousedown.prevent="drag.startTrimEndDrag(seg.id, $event)"
 
 import { onUnmounted, type Ref, ref } from "vue";
-import type { InstrumentNode, RecordedNode } from "../features/nodes";
+import { isAudioNode } from "../features/nodes";
 import type { Segment } from "../features/sequence/segment";
 import type { Track } from "../features/sequence/track";
+import { getBuffer } from "../lib/audio/audio-buffer-repository";
 import { useNodesStore } from "../stores/nodes";
 import { useSequenceStore } from "../stores/sequence";
 
@@ -109,8 +110,8 @@ export function useSegmentDrag(pixelsPerSecond: Ref<number>): UseSegmentDragRetu
   /** Effective playback duration of a segment (respects trim). */
   function _segmentDuration(segment: Segment): number {
     const node = nodesStore.nodesById.get(segment.nodeId);
-    if (!node || node.kind === "folder") return 0;
-    const bufferDuration = (node as RecordedNode | InstrumentNode).targetBuffer?.duration ?? 0;
+    if (!node || !isAudioNode(node)) return 0;
+    const bufferDuration = getBuffer(node.targetBufferId ?? "")?.duration ?? 0;
     return Math.max(0, bufferDuration - segment.trimStart - segment.trimEnd);
   }
 

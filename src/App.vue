@@ -24,7 +24,6 @@ import AppShell from "./components/layout/AppShell.vue";
 import SplitPanel from "./components/layout/SplitPanel.vue";
 import ProjectMetadataForm from "./components/ProjectMetadataForm.vue";
 import SettingsDialog from "./components/SettingsDialog.vue";
-import { useAllNodes } from "./composables/useAllNodes";
 import { useNodePlayback } from "./composables/useNodePlayback";
 import { NodePlaybackContextKey, PlaybackContextKey } from "./composables/usePlaybackContext";
 import type { InstrumentNode, RecordedNode } from "./features/nodes";
@@ -34,10 +33,6 @@ import { useNodesStore } from "./stores/nodes";
 import { useProjectStore } from "./stores/project";
 
 const project = useProjectStore();
-
-// Wire reactive buffer-recompute loops for ALL nodes in the tree so every
-// node maintains a live targetBuffer regardless of which node is selected.
-useAllNodes();
 
 // ── Node playback context ─────────────────────────────────────────────────────
 // A single useNodePlayback instance is created here — the only ancestor of

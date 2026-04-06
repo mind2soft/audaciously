@@ -1,19 +1,18 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import type { InstrumentNode } from "../../../features/nodes";
-import type { MusicInstrumentType, NoteDuration } from "../../../lib/music/instruments";
+import { useInstrumentAudioNode } from "../../../composables/useInstrumentAudioNode";
+import type { NoteDuration } from "../../../lib/music/instruments";
 import { NOTE_TYPE_LIST } from "../../../lib/music/instruments";
-import { useNodesStore } from "../../../stores/nodes";
 
-const props = defineProps<{ node: InstrumentNode<MusicInstrumentType> }>();
-const nodes = useNodesStore();
+const props = defineProps<{ nodeId: string }>();
+const instrumentNode = useInstrumentAudioNode(props.nodeId);
 
 const DRUM_STEP_SIZES = new Set<NoteDuration>(["quarter", "eighth", "sixteenth", "thirty-second"]);
 
 const drumStepItems = computed(() => NOTE_TYPE_LIST.filter((nt) => DRUM_STEP_SIZES.has(nt.id)));
 
 function selectNoteType(type: NoteDuration): void {
-  nodes.setInstrumentSelectedNoteType(props.node.id, type);
+  instrumentNode.setSelectedNoteType(type);
 }
 </script>
 
@@ -29,7 +28,7 @@ function selectNoteType(type: NoteDuration): void {
         v-for="nt in drumStepItems"
         :key="nt.id"
         class="btn btn-xs"
-        :class="node.selectedNoteType === nt.id ? 'btn-primary' : 'btn-ghost'"
+        :class="instrumentNode.selectedNoteType.value === nt.id ? 'btn-primary' : 'btn-ghost'"
         :title="nt.label"
         @click="selectNoteType(nt.id)"
       >

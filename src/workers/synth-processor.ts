@@ -508,7 +508,8 @@ function renderTrack(req: SynthRequest): SynthResponse {
       const [l, r] = engine.renderNote(note.pitchKey, durationSec, sampleRate);
       // Evict oldest entry if cache is full (FIFO — Map preserves insertion order).
       if (noteCache.size >= NOTE_CACHE_MAX_SIZE) {
-        noteCache.delete(noteCache.keys().next().value!);
+        const oldest = noteCache.keys().next().value;
+        if (oldest !== undefined) noteCache.delete(oldest);
       }
       noteCache.set(fp, [l, r]);
     }

@@ -29,6 +29,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import type { InstrumentNode, ProjectNode, RecordedNode } from "../../../features/nodes/node";
 import type { Segment } from "../../../features/sequence/segment";
+import { getBuffer } from "../../../lib/audio/audio-buffer-repository";
 import { createWaveformProcessor } from "../../../lib/audio/waveform";
 
 const props = defineProps<{
@@ -49,10 +50,12 @@ const emit = defineEmits<{
 /** Duration of the underlying audio buffer (or 0 if no buffer). */
 const rawDuration = computed((): number => {
   if (props.node.kind === "recorded") {
-    return (props.node as RecordedNode).targetBuffer?.duration ?? 0;
+    const id = (props.node as RecordedNode).targetBufferId;
+    return id ? (getBuffer(id)?.duration ?? 0) : 0;
   }
   if (props.node.kind === "instrument") {
-    return (props.node as InstrumentNode).targetBuffer?.duration ?? 0;
+    const id = (props.node as InstrumentNode).targetBufferId;
+    return id ? (getBuffer(id)?.duration ?? 0) : 0;
   }
   return 0;
 });
@@ -76,7 +79,8 @@ const waveform = createWaveformProcessor();
 
 const updateWaveform = () => {
   if (props.node.kind !== "recorded") return;
-  const buffer = (props.node as RecordedNode).sourceBuffer;
+  const bufferId = (props.node as RecordedNode).sourceBufferId;
+  const buffer = bufferId ? getBuffer(bufferId) : undefined;
   if (!buffer || !svgRef.value) return;
   const rect = svgRef.value.getBoundingClientRect();
   if (!rect.width || !rect.height) return;

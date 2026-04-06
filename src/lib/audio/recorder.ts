@@ -360,7 +360,18 @@ const createRecorder = (options?: RecorderOptions): Recorder => {
         offset = offset + arrayBuffer.byteLength;
       }
 
-      return audioContext.decodeAudioData(arrayBuffer);
+      const decoded = await audioContext.decodeAudioData(arrayBuffer);
+
+      // Detach from the AudioContext: copy decoded data into a standalone
+      // AudioBuffer (created via constructor, no AudioContext) so the
+      // browser's audio engine cannot mutate the backing sample data.
+      const { numberOfChannels, length, sampleRate } = decoded;
+      const standalone = new AudioBuffer({ numberOfChannels, length, sampleRate });
+      for (let ch = 0; ch < numberOfChannels; ch++) {
+        standalone.copyToChannel(decoded.getChannelData(ch), ch);
+      }
+
+      return standalone;
     },
     getRecordedData() {
       return internal.blobs.slice();

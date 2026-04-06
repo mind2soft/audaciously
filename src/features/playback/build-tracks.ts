@@ -12,10 +12,10 @@
 // without modifying src/lib/audio/player.ts (which is kept as-is per spec).
 // They are therefore not applied here. A comment marks the integration point.
 
+import { getBuffer } from "../../lib/audio/audio-buffer-repository";
 import type { AudioTrack } from "../../lib/audio/track/index";
 import { createRecordedTrack } from "../../lib/audio/track/recorded/recorded-track";
-import type { MusicInstrumentType } from "../../lib/music/instruments";
-import type { InstrumentNode, ProjectNode, RecordedNode } from "../nodes";
+import { isAudioNode, type ProjectNode } from "../nodes";
 import type { Track } from "../sequence/track";
 import { createEffectSequence } from "./effect-sequence";
 
@@ -50,10 +50,9 @@ export function buildTracksFromStore(
     // Add a sequence for each segment that has a playable buffer
     for (const segment of track.segments) {
       const node = nodesById.get(segment.nodeId);
-      if (!node || node.kind === "folder") continue;
+      if (!node || !isAudioNode(node)) continue;
 
-      const audioNode = node as RecordedNode | InstrumentNode<MusicInstrumentType>;
-      const buffer = audioNode.targetBuffer;
+      const buffer = getBuffer(node.targetBufferId ?? "");
       if (!buffer) continue; // no buffer yet (e.g. instrument still rendering)
 
       const effectSequence = createEffectSequence(

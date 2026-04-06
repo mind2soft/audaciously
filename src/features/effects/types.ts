@@ -6,43 +6,38 @@ export type AudioEffectType = "gain" | "balance" | "fadeIn" | "fadeOut" | "split
 
 export type FadeCurve = "linear" | "logarithmic" | "exponential" | "sine";
 
-export interface AudioEffectBase {
+export interface AudioEffectBase<T extends AudioEffectType = AudioEffectType> {
   readonly id: string;
-  type: AudioEffectType;
+  type: T;
   /** Whether this effect is active. Default: true. */
   enabled: boolean;
 }
 
-export interface GainEffect extends AudioEffectBase {
-  type: "gain";
+export interface GainEffect extends AudioEffectBase<"gain"> {
   /** >= 0. 1 = unity, < 1 = attenuate, > 1 = amplify. Default: 1. */
   value: number;
 }
 
-export interface BalanceEffect extends AudioEffectBase {
-  type: "balance";
+export interface BalanceEffect extends AudioEffectBase<"balance"> {
   /** -1 (full left) to 1 (full right). Default: 0. */
   value: number;
 }
 
-export interface FadeInEffect extends AudioEffectBase {
-  type: "fadeIn";
+export interface FadeInEffect extends AudioEffectBase<"fadeIn"> {
   /** Duration of the fade in seconds from the playback offset. Default: 0.5. */
   duration: number;
   /** Shape of the fade curve. Default: 'linear'. */
   curve: FadeCurve;
 }
 
-export interface FadeOutEffect extends AudioEffectBase {
-  type: "fadeOut";
+export interface FadeOutEffect extends AudioEffectBase<"fadeOut"> {
   /** Duration of the fade in seconds ending at offset + totalDuration. Default: 0.5. */
   duration: number;
   /** Shape of the fade curve. Default: 'linear'. */
   curve: FadeCurve;
 }
 
-export interface SplitEffect extends AudioEffectBase {
-  type: "split";
+export interface SplitEffect extends AudioEffectBase<"split"> {
   /**
    * Effects applied to the L (left) channel mono path.
    * Only mono-compatible effects (gain, fadeIn, fadeOut, volume) are allowed.
@@ -67,8 +62,7 @@ export interface VolumeKeyframe {
   curve: VolumeTransition;
 }
 
-export interface VolumeEffect extends AudioEffectBase {
-  type: "volume";
+export interface VolumeEffect extends AudioEffectBase<"volume"> {
   /** Always sorted by time. The first keyframe is always at time=0 and is immovable. */
   keyframes: VolumeKeyframe[];
 }

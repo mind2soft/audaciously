@@ -257,23 +257,32 @@ export function playDrumHit(
 ): void {
   switch (pitchId) {
     case "kick":
-      return playKick(ctx, output, startTime);
+      playKick(ctx, output, startTime);
+      break;
     case "snare":
-      return playSnare(ctx, output, startTime);
+      playSnare(ctx, output, startTime);
+      break;
     case "hihat-open":
-      return playHiHat(ctx, output, startTime, true);
+      playHiHat(ctx, output, startTime, true);
+      break;
     case "hihat-closed":
-      return playHiHat(ctx, output, startTime, false);
+      playHiHat(ctx, output, startTime, false);
+      break;
     case "crash":
-      return playCymbal(ctx, output, startTime, true);
+      playCymbal(ctx, output, startTime, true);
+      break;
     case "ride":
-      return playCymbal(ctx, output, startTime, false);
+      playCymbal(ctx, output, startTime, false);
+      break;
     case "tom-hi":
-      return playTom(ctx, output, startTime, "hi");
+      playTom(ctx, output, startTime, "hi");
+      break;
     case "tom-mid":
-      return playTom(ctx, output, startTime, "mid");
+      playTom(ctx, output, startTime, "mid");
+      break;
     case "tom-lo":
-      return playTom(ctx, output, startTime, "lo");
+      playTom(ctx, output, startTime, "lo");
+      break;
     default:
       break; // unknown pad — silently ignore
   }

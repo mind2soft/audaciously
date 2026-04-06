@@ -24,11 +24,34 @@ export interface ProjectNodeBase<NodeKind extends ProjectNodeKind> {
 
 export interface ProjectNodeWithOutput {
   /**
-   * The node's audio buffer with applied effects pre-baked, ready for playback.
-   * Never persisted — recomputed on demand by the relevant composable (useRecordedNode or useInstrumentNode).
+   * ID referencing the pre-baked audio buffer in the AudioBuffer repository.
+   * Never persisted — recomputed on demand by the relevant composable
+   * (useRecordedAudioNode or useInstrumentAudioNode).
    */
-  targetBuffer: AudioBuffer | null;
+  targetBufferId: string | null;
 }
 
 /** Union of all concrete node types. */
 export type ProjectNode = FolderNode | RecordedNode | InstrumentNode<MusicInstrumentType>;
+
+/** Any ProjectNode that produces audio output (has targetBuffer + effects). */
+export type AudioProjectNode = RecordedNode | InstrumentNode<MusicInstrumentType>;
+
+// ── Type guards ───────────────────────────────────────────────────────────────
+
+export function isFolderNode(node: ProjectNode): node is FolderNode {
+  return node.kind === "folder";
+}
+
+export function isRecordedNode(node: ProjectNode): node is RecordedNode {
+  return node.kind === "recorded";
+}
+
+export function isInstrumentNode(node: ProjectNode): node is InstrumentNode<MusicInstrumentType> {
+  return node.kind === "instrument";
+}
+
+/** True when the node produces audio output (recorded or instrument). */
+export function isAudioNode(node: ProjectNode): node is AudioProjectNode {
+  return node.kind === "recorded" || node.kind === "instrument";
+}

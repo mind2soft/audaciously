@@ -1,10 +1,10 @@
 type BaseEventArg<Type> = { type: Type };
 
-type EventArgType<Event> = Event extends (event: infer U extends BaseEventArg<string>) => any
+type EventArgType<Event> = Event extends (event: infer U extends BaseEventArg<string>) => unknown
   ? U["type"]
   : never;
 
-type EventArg<Event> = Event extends (event: infer U extends BaseEventArg<string>) => any
+type EventArg<Event> = Event extends (event: infer U extends BaseEventArg<string>) => unknown
   ? U
   : never;
 
@@ -15,7 +15,7 @@ type EventArgDispatch<Event> = { type: EventArgType<Event> } & Partial<
 type EventType<EventMap> = Extract<keyof EventMap, string>;
 
 export type EventHandlers<EventMap> = {
-  [K in Extract<keyof EventMap, string>]: EventMap[K] extends (event: infer U) => any
+  [K in Extract<keyof EventMap, string>]: EventMap[K] extends (event: infer U) => unknown
     ? U extends BaseEventArg<K>
       ? EventMap[K]
       : never
@@ -26,26 +26,29 @@ type EventCreator<EventMap> = <Type extends EventType<EventMap>>(
   event: EventArg<EventMap[Type]>,
 ) => EventArg<EventMap[Type]>;
 
-export interface Emitter<EventMap extends EventHandlers<{}>> {
+export interface Emitter<EventMap extends EventHandlers<Record<string, never>>> {
   addEventListener<Type extends EventType<EventMap>>(type: Type, callback: EventMap[Type]): void;
   removeEventListener<Type extends EventType<EventMap>>(type: Type, callback: EventMap[Type]): void;
 }
 
-export interface EmitterDispatcher<EventMap extends EventHandlers<{}>> extends Emitter<EventMap> {
+export interface EmitterDispatcher<EventMap extends EventHandlers<Record<string, never>>>
+  extends Emitter<EventMap> {
   dispatchEvent<Type extends Extract<keyof EventMap, string>>(
     event: EventArgDispatch<EventMap[Type]>,
   ): void;
 }
 
-function createEmitter<EventMap extends EventHandlers<{}>>(
+function createEmitter<EventMap extends EventHandlers<Record<string, never>>>(
   createEvent: EventCreator<EventMap>,
 ): EmitterDispatcher<EventMap> {
+  // biome-ignore lint/suspicious/noExplicitAny: listeners map stores heterogeneous callback types per event key — can't be typed further
   const listeners: Map<string, Set<any>> = new Map();
 
   return {
     dispatchEvent(event) {
-      event = createEvent(event as any) as any;
-      listeners.get(event.type)?.forEach((callback) => callback(event));
+      // biome-ignore lint/suspicious/noExplicitAny: internal dispatch coercion — union event types can't be narrowed further here
+      event = createEvent(event as any) as unknown as typeof event;
+      for (const callback of listeners.get(event.type) ?? []) callback(event);
     },
     addEventListener(type, callback) {
       if (!listeners.has(type)) {

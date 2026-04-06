@@ -47,25 +47,30 @@ const CHUNK_DURATION_SEC = 10;
  * processing for long buffers (≥30s) — this is an internal implementation
  * detail, not an API boundary.
  *
- * @param source   The unprocessed AudioBuffer.
- * @param effects  Ordered effect list.
- * @param signal   AbortSignal — abort to cancel and reject.
- * @param nodeId   Unique node identifier — the worker uses this for per-node
- *                 seqNum cancellation so concurrent nodes don't cancel each other.
- * @returns        Processed AudioBuffer with effects baked in.
+ * @param source           The unprocessed AudioBuffer.
+ * @param effects          Ordered effect list.
+ * @param signal           AbortSignal — abort to cancel and reject.
+ * @param nodeId           Unique node identifier — the worker uses this for
+ *                         per-node seqNum cancellation so concurrent nodes
+ *                         don't cancel each other.
+ * @param pristineChannels Optional pristine Float32Array[] snapshots to use
+ *                         instead of source.getChannelData() — immune to
+ *                         browser-level AudioBuffer sample data corruption.
+ * @returns                Processed AudioBuffer with effects baked in.
  */
 export function processEffects(
   source: AudioBuffer,
   effects: AudioEffect[],
   signal: AbortSignal,
   nodeId = "effect-pipeline",
+  pristineChannels?: Float32Array[],
 ): Promise<AudioBuffer> {
   signal.throwIfAborted();
 
   if (source.duration < CHUNK_THRESHOLD_SEC) {
-    return singleShot(source, effects, signal, nodeId);
+    return singleShot(source, effects, signal, nodeId, pristineChannels);
   }
-  return chunked(source, effects, signal, nodeId);
+  return chunked(source, effects, signal, nodeId, pristineChannels);
 }
 
 // ─── Single-shot (short buffers) ──────────────────────────────────────────────
@@ -75,6 +80,7 @@ function singleShot(
   effects: AudioEffect[],
   signal: AbortSignal,
   nodeId: string,
+  pristineChannels?: Float32Array[],
 ): Promise<AudioBuffer> {
   const seqNum = ++seqCounter;
   const sampleRate = source.sampleRate;
@@ -82,7 +88,7 @@ function singleShot(
 
   const channels: Float32Array[] = [];
   for (let ch = 0; ch < numChannels; ch++) {
-    channels.push(new Float32Array(source.getChannelData(ch)));
+    channels.push(new Float32Array(pristineChannels?.[ch] ?? source.getChannelData(ch)));
   }
 
   return new Promise<AudioBuffer>((resolve, reject) => {
@@ -137,6 +143,7 @@ function chunked(
   effects: AudioEffect[],
   signal: AbortSignal,
   nodeId: string,
+  pristineChannels?: Float32Array[],
 ): Promise<AudioBuffer> {
   const seqNum = ++seqCounter;
   const sampleRate = source.sampleRate;
@@ -192,9 +199,14 @@ function chunked(
       const len = end - start;
       const channels: Float32Array[] = [];
       for (let ch = 0; ch < numChannels; ch++) {
-        const slice = new Float32Array(len);
-        source.copyFromChannel(slice, ch, start);
-        channels.push(slice);
+        if (pristineChannels?.[ch]) {
+          // Use pristine data — immune to browser-level corruption.
+          channels.push(pristineChannels[ch].slice(start, end));
+        } else {
+          const slice = new Float32Array(len);
+          source.copyFromChannel(slice, ch, start);
+          channels.push(slice);
+        }
       }
       return channels;
     }

@@ -102,51 +102,41 @@ defineExpose({ isValid });
 <template>
   <div class="flex flex-col gap-4">
     <!-- Name -->
-    <label class="form-control w-full">
-      <div class="label">
-        <span class="label-text font-medium">Project Name</span>
-      </div>
+    <fieldset class="fieldset w-full">
+      <legend class="fieldset-legend font-medium">Project Name</legend>
       <input
         type="text"
         maxlength="64"
-        class="input input-bordered w-full"
+        class="input w-full"
         :class="{ 'input-error': nameError }"
         placeholder="My awesome track"
         :value="modelValue.name"
         @input="update('name', ($event.target as HTMLInputElement).value)"
       />
-      <div v-if="nameError" class="label">
-        <span class="label-text-alt text-error">{{ nameError }}</span>
-      </div>
-    </label>
+      <p v-if="nameError" class="fieldset-legend text-xs text-error">{{ nameError }}</p>
+    </fieldset>
 
     <!-- Author -->
-    <label class="form-control w-full">
-      <div class="label">
-        <span class="label-text font-medium">Author</span>
-      </div>
+    <fieldset class="fieldset w-full">
+      <legend class="fieldset-legend font-medium">Author</legend>
       <input
         type="text"
-        class="input input-bordered w-full"
+        class="input w-full"
         :class="{ 'input-error': authorError }"
         placeholder="Your name"
         :value="modelValue.author"
         @input="update('author', ($event.target as HTMLInputElement).value)"
       />
-      <div v-if="authorError" class="label">
-        <span class="label-text-alt text-error">{{ authorError }}</span>
-      </div>
-    </label>
+      <p v-if="authorError" class="fieldset-legend text-xs text-error">{{ authorError }}</p>
+    </fieldset>
 
     <!-- Genre -->
-    <label class="form-control w-full">
-      <div class="label">
-        <span class="label-text font-medium">Genre</span>
-      </div>
+    <fieldset class="fieldset w-full">
+      <legend class="fieldset-legend font-medium">Genre</legend>
       <input
         type="text"
         list="genre-suggestions"
-        class="input input-bordered w-full"
+        class="input w-full"
         :class="{ 'input-error': genreError }"
         placeholder="Select or type a genre"
         :value="modelValue.genre"
@@ -155,16 +145,12 @@ defineExpose({ isValid });
       <datalist id="genre-suggestions">
         <option v-for="g in GENRE_SUGGESTIONS" :key="g" :value="g" />
       </datalist>
-      <div v-if="genreError" class="label">
-        <span class="label-text-alt text-error">{{ genreError }}</span>
-      </div>
-    </label>
+      <p v-if="genreError" class="fieldset-legend text-xs text-error">{{ genreError }}</p>
+    </fieldset>
 
     <!-- Tags -->
-    <div class="form-control w-full">
-      <div class="label">
-        <span class="label-text font-medium">Tags</span>
-      </div>
+    <fieldset class="fieldset w-full">
+      <legend class="fieldset-legend font-medium">Tags</legend>
 
       <!-- Tag badges -->
       <div
@@ -191,7 +177,7 @@ defineExpose({ isValid });
       <div class="relative">
         <input
           type="text"
-          class="input input-bordered w-full"
+          class="input w-full"
           :class="{ 'input-error': tagsError }"
           placeholder="Type a tag and press Enter"
           v-model="tagInput"
@@ -218,18 +204,14 @@ defineExpose({ isValid });
         </ul>
       </div>
 
-      <div v-if="tagsError" class="label">
-        <span class="label-text-alt text-error">{{ tagsError }}</span>
-      </div>
-    </div>
+      <p v-if="tagsError" class="fieldset-legend text-xs text-error">{{ tagsError }}</p>
+    </fieldset>
 
     <!-- Description -->
-    <label class="form-control w-full">
-      <div class="label">
-        <span class="label-text font-medium">Description</span>
-      </div>
+    <fieldset class="fieldset w-full">
+      <legend class="fieldset-legend font-medium">Description</legend>
       <textarea
-        class="textarea textarea-bordered w-full h-24 resize-y"
+        class="textarea w-full h-24 resize-y"
         :class="{ 'textarea-error': descriptionError }"
         placeholder="Describe your project..."
         :value="modelValue.description"
@@ -237,9 +219,7 @@ defineExpose({ isValid });
           update('description', ($event.target as HTMLTextAreaElement).value)
         "
       />
-      <div v-if="descriptionError" class="label">
-        <span class="label-text-alt text-error">{{ descriptionError }}</span>
-      </div>
-    </label>
+      <p v-if="descriptionError" class="fieldset-legend text-xs text-error">{{ descriptionError }}</p>
+    </fieldset>
   </div>
 </template>

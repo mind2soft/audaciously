@@ -7,7 +7,6 @@
  */
 
 import { computed } from "vue";
-import type { InstrumentNode, RecordedNode } from "../../features/nodes";
 import { useNodesStore } from "../../stores/nodes";
 import DrumNodeView from "./node-views/DrumNodeView.vue";
 import EmptyNodeView from "./node-views/EmptyNodeView.vue";
@@ -16,14 +15,11 @@ import RecordedNodeView from "./node-views/RecordedNodeView.vue";
 
 const nodes = useNodesStore();
 
-const selectedRecorded = computed((): RecordedNode | null => {
-  const n = nodes.selectedNode;
-  return n?.kind === "recorded" ? (n as RecordedNode) : null;
-});
+const selectedNodeKind = computed(() => nodes.selectedNode?.kind ?? null);
 
-const selectedInstrument = computed((): InstrumentNode | null => {
+const selectedInstrumentType = computed(() => {
   const n = nodes.selectedNode;
-  return n?.kind === "instrument" ? (n as InstrumentNode) : null;
+  return n?.kind === "instrument" ? n.instrumentType : null;
 });
 </script>
 
@@ -31,22 +27,22 @@ const selectedInstrument = computed((): InstrumentNode | null => {
   <div class="flex flex-col h-full w-full overflow-hidden bg-base-100">
     <!-- Recorded node -->
     <RecordedNodeView
-      v-if="selectedRecorded"
-      :node="selectedRecorded"
+      v-if="selectedNodeKind === 'recorded'"
+      :node-id="nodes.selectedNodeId!"
       class="w-full h-full"
     />
 
     <!-- Piano instrument -->
     <PianoNodeView
-      v-else-if="selectedInstrument?.instrumentType === 'piano'"
-      :node="selectedInstrument"
+      v-else-if="selectedInstrumentType === 'piano'"
+      :node-id="nodes.selectedNodeId!"
       class="w-full h-full"
     />
 
     <!-- Drum instrument -->
     <DrumNodeView
-      v-else-if="selectedInstrument?.instrumentType === 'drums'"
-      :node="selectedInstrument"
+      v-else-if="selectedInstrumentType === 'drums'"
+      :node-id="nodes.selectedNodeId!"
       class="w-full h-full"
     />
 

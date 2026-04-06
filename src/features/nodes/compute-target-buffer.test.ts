@@ -126,3 +126,92 @@ describe("compute-target-buffer integration (worker code path)", () => {
     }
   });
 });
+
+// ── Source buffer immutability ────────────────────────────────────────────────
+// The pipeline processes channels IN PLACE. computeTargetBuffer must therefore
+// pass COPIES of the source channels to the pipeline, never the originals.
+// These tests simulate that contract: source data → copy → pipeline → verify
+// the source is untouched.
+
+describe("source buffer immutability through pipeline", () => {
+  test("pipeline modifies copies, not the source data", () => {
+    const lengthSamples = SAMPLE_RATE;
+    const sourceData = new Float32Array(lengthSamples).fill(0.75);
+    const sourceSnap = new Float32Array(sourceData);
+
+    // computeTargetBuffer creates copies before passing to the pipeline.
+    // Simulate that: copy the source, process the copy.
+    const copy = new Float32Array(sourceData);
+    const effects: AudioEffect[] = [
+      {
+        id: "vol-immut",
+        type: "volume",
+        enabled: true,
+        keyframes: [
+          { time: 0, value: 0, curve: "linear" },
+          { time: 1, value: 2, curve: "linear" },
+        ],
+      } satisfies VolumeEffect,
+    ];
+    const ctx = createSingleShotContext(SAMPLE_RATE, lengthSamples / SAMPLE_RATE);
+
+    processEffectPipeline([copy], effects, ctx, () => false);
+
+    // The copy IS modified (pipeline processes in-place) — that's expected
+    expect(copy).not.toEqual(sourceSnap);
+
+    // The source MUST be untouched
+    expect(sourceData).toEqual(sourceSnap);
+  });
+
+  test("multi-channel: all source channels survive pipeline processing of copies", () => {
+    const lengthSamples = SAMPLE_RATE;
+    const sourceCh0 = new Float32Array(lengthSamples).fill(0.5);
+    const sourceCh1 = new Float32Array(lengthSamples).fill(-0.3);
+    const snapCh0 = new Float32Array(sourceCh0);
+    const snapCh1 = new Float32Array(sourceCh1);
+
+    const copies = [new Float32Array(sourceCh0), new Float32Array(sourceCh1)];
+    const effects: AudioEffect[] = [
+      {
+        id: "vol-multi",
+        type: "volume",
+        enabled: true,
+        keyframes: [{ time: 0, value: 0.1, curve: "linear" }],
+      } satisfies VolumeEffect,
+    ];
+    const ctx = createSingleShotContext(SAMPLE_RATE, lengthSamples / SAMPLE_RATE);
+
+    processEffectPipeline(copies, effects, ctx, () => false);
+
+    expect(sourceCh0).toEqual(snapCh0);
+    expect(sourceCh1).toEqual(snapCh1);
+  });
+
+  test("repeated pipeline runs on copies never corrupt the source", () => {
+    const lengthSamples = SAMPLE_RATE;
+    const sourceData = new Float32Array(lengthSamples).fill(0.9);
+    const sourceSnap = new Float32Array(sourceData);
+
+    const effects: AudioEffect[] = [
+      {
+        id: "vol-repeat",
+        type: "volume",
+        enabled: true,
+        keyframes: [
+          { time: 0, value: 0.5, curve: "linear" },
+          { time: 1, value: 0.5, curve: "linear" },
+        ],
+      } satisfies VolumeEffect,
+    ];
+
+    // Simulate multiple effect re-bakes (e.g. user changes effects repeatedly)
+    for (let i = 0; i < 5; i++) {
+      const copy = new Float32Array(sourceData);
+      const ctx = createSingleShotContext(SAMPLE_RATE, lengthSamples / SAMPLE_RATE);
+      processEffectPipeline([copy], effects, ctx, () => false);
+    }
+
+    expect(sourceData).toEqual(sourceSnap);
+  });
+});

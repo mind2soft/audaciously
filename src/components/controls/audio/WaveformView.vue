@@ -2,26 +2,38 @@
 /**
  * WaveformView — seekable audio buffer peak graph.
  *
- * Replaces Waveform.vue. Adds click/drag seek support, zoom, and scroll.
- *
  * Props
  * ─────
  * buffer            AudioBuffer to visualise.
  * currentTime       Current playback position in seconds.
  * ratio             Zoom ratio (1 = full buffer, 4 = 4× zoom). Default 1.
  * offsetTime        Scroll offset in seconds (start of visible window). Default 0.
- * zoomSelectActive  When true, mousedown starts a rubber-band zoom-select drag
- *                   instead of seeking.
+ * zoomSelectActive  When true, mousedown starts a rubber-band zoom-select drag.
+ * selectionActive   When true, mousedown starts a time-range selection drag
+ *                   (used by recorded-node cut/copy tools).
+ * selectionRange    Externally-provided [start, end] range to highlight.
+ * selectionColor    CSS colour for the selection band. Defaults to primary.
+ * panDragActive     When true, mousedown starts a pan-drag (drag right to define
+ *                   silence duration at the mousedown position). Matches the
+ *                   instrument-node pan tool UX.
+ * pastePreviewActive When true, hover shows a paste-indicator line and click
+ *                    emits paste-at. Matches the instrument-node paste tool UX.
+ * pastePreviewDuration Duration of the clipboard content (seconds) — used to
+ *                      render a visual indicator showing the paste region width.
  *
  * Emits
  * ─────
  * seek(time)              User clicked or dragged to seek to a time position.
- * zoom-select(start, end) User completed a rubber-band drag while in zoom-select
- *                         mode; start/end are times in seconds.
+ * zoom-select(start, end) Completed a rubber-band zoom-select drag.
+ * selection(start, end)   Completed a time-range selection drag.
+ * pan-commit(at, dur)     Pan-drag completed — insert silence at `at` for `dur` s.
+ * pan-preview(at, dur)    Pan-drag in progress — live preview values.
+ * paste-at(time)          User clicked to paste at the given time.
  */
 
 import { computed, inject, onBeforeUnmount, onMounted, ref, useId, watch, watchEffect } from "vue";
 import { createWaveformProcessor } from "../../../lib/audio/waveform";
+import { getWaveformChunk } from "../../../lib/audio/waveform-window";
 import { scrollableTimelineKey } from "../../../lib/scrollable-timeline";
 
 const props = defineProps<{
@@ -30,11 +42,24 @@ const props = defineProps<{
   ratio?: number;
   offsetTime?: number;
   zoomSelectActive?: boolean;
+  selectionActive?: boolean;
+  selectionRange?: { start: number; end: number } | null;
+  selectionColor?: string;
+  panDragActive?: boolean;
+  pastePreviewActive?: boolean;
+  pastePreviewDuration?: number;
+  /** Pristine Float32Array channel data — used instead of buffer.getChannelData()
+   *  to avoid browser-level AudioBuffer sample data corruption. */
+  pristineChannels?: Float32Array[];
 }>();
 
 const emit = defineEmits<{
   seek: [time: number];
   "zoom-select": [startTime: number, endTime: number];
+  selection: [startTime: number, endTime: number];
+  "pan-commit": [atTime: number, duration: number];
+  "pan-preview": [atTime: number, duration: number];
+  "paste-at": [time: number];
 }>();
 
 const ctx = inject(scrollableTimelineKey, null);
@@ -80,20 +105,23 @@ const updatePath = () => {
   // Guard against degenerate frames (e.g. during resize or before layout)
   if (rect.width < 10 || !rect.height) return;
 
-  updatePosition();
+  const timeFrom = effectiveOffsetTime.value;
+  const timeTo = timeFrom + effectiveVisibleDuration.value;
+  const numSamples = Math.round(rect.width / 3);
 
-  const offsetTime = effectiveOffsetTime.value;
-  const visibleDuration = effectiveVisibleDuration.value;
-  const sampleRate = props.buffer.sampleRate;
-  const totalSamples = props.buffer.length;
-
-  const startSample = Math.floor(offsetTime * sampleRate);
-  const endSample = Math.min(Math.ceil((offsetTime + visibleDuration) * sampleRate), totalSamples);
+  // Use pristine channel data when available — immune to browser-level
+  // AudioBuffer sample data corruption.
+  const pristine = props.pristineChannels?.[0];
+  const chunk = pristine
+    ? getWaveformChunk(pristine, timeFrom, timeTo, numSamples, {
+        sampleRate: props.buffer.sampleRate,
+        length: props.buffer.length,
+      })
+    : getWaveformChunk(props.buffer, timeFrom, timeTo, numSamples);
 
   waveform
-    .getLinearPath(props.buffer, {
-      channel: 0,
-      samples: rect.width / 3,
+    .getLinearPath(chunk, {
+      samples: numSamples,
       type: "steps",
       top: 0,
       height: rect.height,
@@ -104,8 +132,6 @@ const updatePath = () => {
       ],
       animation: false,
       normalize: false,
-      start: startSample,
-      end: endSample,
     })
     .then(
       (nextPath) => {
@@ -131,6 +157,7 @@ watch(
       props.buffer,
       props.ratio,
       props.offsetTime,
+      props.pristineChannels,
       effectiveOffsetTime.value,
       effectiveVisibleDuration.value,
     ] as const,
@@ -151,6 +178,10 @@ onBeforeUnmount(() => {
   document.removeEventListener("mouseup", onDocMouseup);
   document.removeEventListener("mousemove", onZoomDocMousemove);
   document.removeEventListener("mouseup", onZoomDocMouseup);
+  document.removeEventListener("mousemove", onTimeSelDocMousemove);
+  document.removeEventListener("mouseup", onTimeSelDocMouseup);
+  document.removeEventListener("mousemove", onPanDragDocMousemove);
+  document.removeEventListener("mouseup", onPanDragDocMouseup);
 });
 
 // ── Hover ghost cursor ──────────────────────────────────────────────────────
@@ -166,7 +197,7 @@ const formatTime = (s: number): string => {
 };
 
 const onHoverMove = (evt: MouseEvent) => {
-  if (isZoomSelecting.value) return; // suppress hover during zoom-select drag
+  if (isZoomSelecting.value || isTimeSelecting.value || isPanDragging.value) return; // suppress hover during drags
   if (!svgRef.value) return;
   const rect = svgRef.value.getBoundingClientRect();
   const pct = Math.min(Math.max((evt.clientX - rect.left) / rect.width, 0), 1);
@@ -233,6 +264,126 @@ const onZoomDocMouseup = () => {
   zoomBandEndPct.value = 0;
 };
 
+// ── Time-range selection (for recorded-node cut/copy) ───────────────────────
+
+const isTimeSelecting = ref(false);
+const timeSelStartPct = ref(0);
+const timeSelEndPct = ref(0);
+
+const onTimeSelDocMousemove = (evt: MouseEvent) => {
+  if (!svgRef.value) return;
+  const rect = svgRef.value.getBoundingClientRect();
+  timeSelEndPct.value = Math.min(Math.max((evt.clientX - rect.left) / rect.width, 0), 1);
+};
+
+const onTimeSelDocMouseup = () => {
+  document.removeEventListener("mousemove", onTimeSelDocMousemove);
+  document.removeEventListener("mouseup", onTimeSelDocMouseup);
+  isTimeSelecting.value = false;
+  hoverPct.value = null;
+
+  const start = Math.min(timeSelStartPct.value, timeSelEndPct.value);
+  const end = Math.max(timeSelStartPct.value, timeSelEndPct.value);
+  // Ignore tiny drags (< 0.5% of visible width)
+  if (end - start < 0.005) {
+    timeSelStartPct.value = 0;
+    timeSelEndPct.value = 0;
+    return;
+  }
+
+  const visibleDuration = effectiveVisibleDuration.value;
+  const startTime = effectiveOffsetTime.value + start * visibleDuration;
+  const endTime = effectiveOffsetTime.value + end * visibleDuration;
+  emit("selection", startTime, endTime);
+
+  timeSelStartPct.value = 0;
+  timeSelEndPct.value = 0;
+};
+
+// ── Pan silence preview ─────────────────────────────────────────────────────
+
+/**
+ * Computed percentage positions for the optimistic silence gap visual.
+ * Renders from props (external control) OR from live pan-drag state.
+ */
+const panGapPcts = computed(() => {
+  if (!isPanDragging.value) return null;
+  const at = panDragStartTime.value;
+  const dur = panDragDuration.value;
+  if (dur <= 0) return null;
+  const offset = effectiveOffsetTime.value;
+  const visDur = effectiveVisibleDuration.value;
+  if (visDur <= 0) return null;
+  const startPct = ((at - offset) / visDur) * 100;
+  const endPct = ((at + dur - offset) / visDur) * 100;
+  return { startPct: Math.max(0, startPct), endPct: Math.min(100, endPct) };
+});
+
+// ── Pan-drag interaction ────────────────────────────────────────────────────
+// Matches instrument-node pan tool: mousedown captures the insertion point,
+// drag right defines the silence duration, mouseup commits.
+
+const isPanDragging = ref(false);
+const panDragStartTime = ref(0);
+const panDragDuration = ref(0);
+
+const onPanDragDocMousemove = (evt: MouseEvent) => {
+  const currentTime = clientXToTime(evt.clientX);
+  // Only allow dragging rightward from the start point (positive silence)
+  panDragDuration.value = Math.max(0, currentTime - panDragStartTime.value);
+  emit("pan-preview", panDragStartTime.value, panDragDuration.value);
+};
+
+const onPanDragDocMouseup = () => {
+  document.removeEventListener("mousemove", onPanDragDocMousemove);
+  document.removeEventListener("mouseup", onPanDragDocMouseup);
+  isPanDragging.value = false;
+  hoverPct.value = null;
+
+  const dur = panDragDuration.value;
+  // Ignore tiny drags (< 10ms)
+  if (dur < 0.01) {
+    panDragStartTime.value = 0;
+    panDragDuration.value = 0;
+    return;
+  }
+
+  emit("pan-commit", panDragStartTime.value, dur);
+
+  panDragStartTime.value = 0;
+  panDragDuration.value = 0;
+};
+
+// ── Paste preview ───────────────────────────────────────────────────────────
+
+/**
+ * Computed percentage positions for the paste preview indicator.
+ * Shows the region that would be filled by pasting at the current hover.
+ */
+const pastePreviewPcts = computed(() => {
+  if (!props.pastePreviewActive || hoverPct.value === null || !props.pastePreviewDuration)
+    return null;
+  const offset = effectiveOffsetTime.value;
+  const visDur = effectiveVisibleDuration.value;
+  if (visDur <= 0) return null;
+  const startPct = hoverPct.value;
+  const durPct = (props.pastePreviewDuration / visDur) * 100;
+  return { startPct, endPct: Math.min(100, startPct + durPct) };
+});
+
+// ── External selection range → percentage positions ─────────────────────────
+
+const externalSelPcts = computed(() => {
+  const range = props.selectionRange;
+  if (!range) return null;
+  const offset = effectiveOffsetTime.value;
+  const visDur = effectiveVisibleDuration.value;
+  if (visDur <= 0) return null;
+  const startPct = ((range.start - offset) / visDur) * 100;
+  const endPct = ((range.end - offset) / visDur) * 100;
+  return { startPct: Math.max(0, startPct), endPct: Math.min(100, endPct) };
+});
+
 // ── Unified mousedown ───────────────────────────────────────────────────────
 
 const onMousedown = (evt: MouseEvent) => {
@@ -250,6 +401,39 @@ const onMousedown = (evt: MouseEvent) => {
     return;
   }
 
+  if (props.panDragActive) {
+    // Start pan-drag (drag right to define silence duration at click point)
+    const time = clientXToTime(evt.clientX);
+    panDragStartTime.value = time;
+    panDragDuration.value = 0;
+    isPanDragging.value = true;
+    hoverPct.value = null;
+    document.addEventListener("mousemove", onPanDragDocMousemove);
+    document.addEventListener("mouseup", onPanDragDocMouseup);
+    return;
+  }
+
+  if (props.pastePreviewActive) {
+    // Click to paste at the clicked time position
+    const time = clientXToTime(evt.clientX);
+    emit("paste-at", time);
+    return;
+  }
+
+  if (props.selectionActive) {
+    // Start time-range selection drag (for recorded-node cut/copy)
+    if (!svgRef.value) return;
+    const rect = svgRef.value.getBoundingClientRect();
+    const pct = Math.min(Math.max((evt.clientX - rect.left) / rect.width, 0), 1);
+    timeSelStartPct.value = pct;
+    timeSelEndPct.value = pct;
+    isTimeSelecting.value = true;
+    hoverPct.value = null;
+    document.addEventListener("mousemove", onTimeSelDocMousemove);
+    document.addEventListener("mouseup", onTimeSelDocMouseup);
+    return;
+  }
+
   // Normal seek drag
   isSeeking.value = true;
   emit("seek", clientXToTime(evt.clientX));
@@ -262,7 +446,18 @@ const onMousedown = (evt: MouseEvent) => {
   <svg
     ref="svgRef"
     class="w-full h-full"
-    :style="{ cursor: zoomSelectActive ? 'crosshair' : 'pointer' }"
+    :style="{
+      cursor:
+        panDragActive || isPanDragging
+          ? 'col-resize'
+          : pastePreviewActive
+            ? 'cell'
+            : zoomSelectActive
+              ? 'crosshair'
+              : selectionActive
+                ? 'text'
+                : 'pointer',
+    }"
     @mousedown="onMousedown"
     @mousemove="onHoverMove"
     @mouseleave="onHoverLeave"
@@ -276,35 +471,22 @@ const onMousedown = (evt: MouseEvent) => {
         y2="0"
         gradientUnits="objectBoundingBox"
       >
-        <template v-if="positionVisible">
-          <!-- Played portion: accent colour -->
-          <stop offset="0%" stop-color="var(--color-accent)" />
-          <stop :offset="`${positionPct}%`" stop-color="var(--color-accent)" />
-          <!-- Unplayed portion: muted -->
-          <stop
-            :offset="`${positionPct}%`"
-            stop-color="var(--color-base-content)"
-            stop-opacity="0.3"
-          />
-          <stop
-            offset="100%"
-            stop-color="var(--color-base-content)"
-            stop-opacity="0.3"
-          />
-        </template>
-        <!-- Playhead outside visible window: uniform muted colour -->
-        <template v-else>
-          <stop
-            offset="0%"
-            stop-color="var(--color-base-content)"
-            stop-opacity="0.3"
-          />
-          <stop
-            offset="100%"
-            stop-color="var(--color-base-content)"
-            stop-opacity="0.3"
-          />
-        </template>
+        <!-- Played portion: accent colour (positionPct is clamped to [0, 100]
+             so when the playhead is past the view the entire waveform is accent,
+             and when it's before the view the entire waveform is muted) -->
+        <stop offset="0%" stop-color="var(--color-accent)" />
+        <stop :offset="`${positionPct}%`" stop-color="var(--color-accent)" />
+        <!-- Unplayed portion: muted -->
+        <stop
+          :offset="`${positionPct}%`"
+          stop-color="var(--color-base-content)"
+          stop-opacity="0.3"
+        />
+        <stop
+          offset="100%"
+          stop-color="var(--color-base-content)"
+          stop-opacity="0.3"
+        />
       </linearGradient>
     </defs>
     <path class="stroke-1 fill-none" :stroke="`url(#wfGrad_${id})`" :d="path" />
@@ -356,6 +538,64 @@ const onMousedown = (evt: MouseEvent) => {
       stroke="var(--color-primary)"
       stroke-opacity="0.6"
       stroke-width="1"
+      pointer-events="none"
+    />
+    <!-- Time-range selection drag rectangle (active drag) -->
+    <rect
+      v-if="isTimeSelecting"
+      :x="`${Math.min(timeSelStartPct, timeSelEndPct) * 100}%`"
+      :width="`${Math.abs(timeSelEndPct - timeSelStartPct) * 100}%`"
+      y="0"
+      height="100%"
+      :fill="selectionColor ?? 'var(--color-primary)'"
+      fill-opacity="0.15"
+      :stroke="selectionColor ?? 'var(--color-primary)'"
+      stroke-opacity="0.6"
+      stroke-width="1"
+      pointer-events="none"
+    />
+    <!-- External selection range (committed selection from parent) -->
+    <rect
+      v-if="externalSelPcts && !isTimeSelecting"
+      :x="`${externalSelPcts.startPct}%`"
+      :width="`${externalSelPcts.endPct - externalSelPcts.startPct}%`"
+      y="0"
+      height="100%"
+      :fill="selectionColor ?? 'var(--color-primary)'"
+      fill-opacity="0.15"
+      :stroke="selectionColor ?? 'var(--color-primary)'"
+      stroke-opacity="0.6"
+      stroke-width="1"
+      pointer-events="none"
+    />
+    <!-- Pan tool optimistic silence gap -->
+    <rect
+      v-if="panGapPcts"
+      :x="`${panGapPcts.startPct}%`"
+      :width="`${panGapPcts.endPct - panGapPcts.startPct}%`"
+      y="0"
+      height="100%"
+      fill="var(--color-base-300)"
+      fill-opacity="0.5"
+      stroke="var(--color-accent)"
+      stroke-opacity="0.6"
+      stroke-width="1"
+      stroke-dasharray="4 2"
+      pointer-events="none"
+    />
+    <!-- Paste preview band (shows region that would be filled) -->
+    <rect
+      v-if="pastePreviewPcts"
+      :x="`${pastePreviewPcts.startPct}%`"
+      :width="`${pastePreviewPcts.endPct - pastePreviewPcts.startPct}%`"
+      y="0"
+      height="100%"
+      fill="var(--color-success)"
+      fill-opacity="0.15"
+      stroke="var(--color-success)"
+      stroke-opacity="0.6"
+      stroke-width="1"
+      stroke-dasharray="4 2"
       pointer-events="none"
     />
   </svg>

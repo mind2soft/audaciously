@@ -9,6 +9,8 @@ import type { PlacedNote } from "../../features/nodes";
 
 export type PianoRollToolId = "place" | "pan" | "copy" | "cut" | "paste" | "zoom-select";
 
+export type RecordedToolId = "pan" | "copy" | "cut" | "paste";
+
 // ── Clipboard payload types ───────────────────────────────────────────────────
 
 /**
@@ -29,8 +31,25 @@ export interface PianoNotesClipboard {
 }
 
 /**
- * Union of all clipboard payload types.
- * Extend here when drum-roll or audio-segment copying is implemented.
+ * Clipboard payload for audio segments (recorded node copy/cut).
+ *
+ * AudioBuffer cannot be JSON-serialised, so we store the raw channel data
+ * as plain number arrays plus the metadata needed to reconstruct an
+ * AudioBuffer (sampleRate, numberOfChannels).
+ *
+ * `durationSeconds` is pre-computed for convenience (paste shift-amount).
  */
-export type ClipboardEntry = PianoNotesClipboard;
-// Future: | DrumNotesClipboard | AudioSegmentClipboard
+export interface AudioSegmentClipboard {
+  readonly type: "audio-segment";
+  /** Per-channel sample data (Float32Array → number[] for JSON round-trip). */
+  readonly channels: readonly number[][];
+  readonly sampleRate: number;
+  readonly numberOfChannels: number;
+  /** Duration of the segment in seconds. */
+  readonly durationSeconds: number;
+}
+
+/**
+ * Union of all clipboard payload types.
+ */
+export type ClipboardEntry = PianoNotesClipboard | AudioSegmentClipboard;

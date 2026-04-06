@@ -1,37 +1,39 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import type { InstrumentNode } from "../../../features/nodes";
+import { useInstrumentAudioNode } from "../../../composables/useInstrumentAudioNode";
 import type { OctaveRange } from "../../../lib/music/instruments";
 import {
   PIANO_OCTAVE_MAX,
   PIANO_OCTAVE_MIN,
   PIANO_OCTAVE_PRESETS,
 } from "../../../lib/music/instruments";
-import { useNodesStore } from "../../../stores/nodes";
 import DualRangeSlider from "../../controls/DualRangeSlider.vue";
 
-const props = defineProps<{ node: InstrumentNode }>();
-const nodes = useNodesStore();
+const props = defineProps<{ nodeId: string }>();
+const instrumentNode = useInstrumentAudioNode(props.nodeId);
 
 // ── Octave range ──────────────────────────────────────────────────────────────
 
 const octaveRangeModel = computed({
-  get: () => props.node.octaveRange,
-  set: (range: OctaveRange) => nodes.setInstrumentOctaveRange(props.node.id, range),
+  get: () => instrumentNode.octaveRange.value,
+  set: (range: OctaveRange) => instrumentNode.setOctaveRange(range),
 });
 
 const rangeLabel = computed(() => {
-  const { low, high } = props.node.octaveRange;
+  const { low, high } = instrumentNode.octaveRange.value;
   const octaves = high - low + 1;
   return `C${low} – B${high} · ${octaves} oct`;
 });
 
 function applyPreset(range: OctaveRange): void {
-  nodes.setInstrumentOctaveRange(props.node.id, { ...range });
+  instrumentNode.setOctaveRange({ ...range });
 }
 
 function isActivePreset(range: OctaveRange): boolean {
-  return props.node.octaveRange.low === range.low && props.node.octaveRange.high === range.high;
+  return (
+    instrumentNode.octaveRange.value.low === range.low &&
+    instrumentNode.octaveRange.value.high === range.high
+  );
 }
 </script>
 

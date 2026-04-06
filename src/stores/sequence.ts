@@ -16,11 +16,12 @@ import {
   createSplitEffect,
   createVolumeEffect,
 } from "../features/effects";
-import type { InstrumentNode, RecordedNode } from "../features/nodes";
+import { isAudioNode } from "../features/nodes";
 import type { Segment } from "../features/sequence/segment";
 import { createSegment } from "../features/sequence/segment";
 import type { Track } from "../features/sequence/track";
 import { createTrack } from "../features/sequence/track";
+import { getBuffer } from "../lib/audio/audio-buffer-repository";
 import { useNodesStore } from "./nodes";
 
 // ── Serialization types ────────────────────────────────────────────────────────
@@ -52,9 +53,7 @@ export const useSequenceStore = defineStore("sequence", () => {
       for (const seg of track.segments) {
         const node = nodesStore.nodesById.get(seg.nodeId);
         const bufferDuration =
-          node && node.kind !== "folder"
-            ? ((node as RecordedNode | InstrumentNode).targetBuffer?.duration ?? 0)
-            : 0;
+          node && isAudioNode(node) ? (getBuffer(node.targetBufferId ?? "")?.duration ?? 0) : 0;
         const end = seg.time + Math.max(0, bufferDuration - seg.trimStart - seg.trimEnd);
         if (end > max) max = end;
       }
@@ -91,7 +90,7 @@ export const useSequenceStore = defineStore("sequence", () => {
     if (idx !== -1) {
       tracks.value.splice(idx, 1);
       // Update sortOrders
-      tracks.value.forEach((t, i) => (t.sortOrder = i));
+      for (let i = 0; i < tracks.value.length; i++) tracks.value[i].sortOrder = i;
     }
   }
 
@@ -110,7 +109,7 @@ export const useSequenceStore = defineStore("sequence", () => {
       return;
     const [moved] = tracks.value.splice(fromIndex, 1);
     tracks.value.splice(toIndex, 0, moved);
-    tracks.value.forEach((t, i) => (t.sortOrder = i));
+    for (let i = 0; i < tracks.value.length; i++) tracks.value[i].sortOrder = i;
   }
 
   function setTrackHeight(id: string, height: number): void {
@@ -253,6 +252,7 @@ export const useSequenceStore = defineStore("sequence", () => {
   function setTimelineEffectValue(id: string, key: string, value: number): void {
     const effect = timelineEffects.value.find((e) => e.id === id);
     if (effect && key in effect) {
+      // biome-ignore lint/suspicious/noExplicitAny: dynamic property set on discriminated union — can't narrow by key string
       (effect as any)[key] = value;
     }
   }
