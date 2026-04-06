@@ -7,13 +7,14 @@
 // never interferes with main timeline playback.
 //
 // Effects are NOT applied here — they are pre-baked into `targetBuffer` by
-// useInstrumentNode / useRecordedNode. This composable simply plays targetBuffer.
+// useInstrumentAudioNode / useRecordedAudioNode. This composable simply plays targetBuffer.
 //
 // Usage:
 //   const { state, currentTime, play, pause, stop, seek } = useNodePlayback(nodeRef)
 
 import { onUnmounted, type Ref, ref, watch } from "vue";
 import type { InstrumentNode, RecordedNode } from "../features/nodes";
+import { getBuffer } from "../lib/audio/audio-buffer-repository";
 import { useNodesStore } from "../stores/nodes";
 
 // ── Public types ───────────────────────────────────────────────────────────────
@@ -57,6 +58,13 @@ export function useNodePlayback(
   const currentTime = ref(0);
 
   // ── Isolated playback internals (non-reactive) ─────────────────────────────
+  /** Resolve the target AudioBuffer for the current node from the repository. */
+  function _resolveTargetBuffer(): AudioBuffer | null {
+    const node = nodeRef.value;
+    if (!node?.targetBufferId) return null;
+    return getBuffer(node.targetBufferId) ?? null;
+  }
+
   /** The isolated AudioContext for this preview. Replaced on each play(). */
   let ctx: AudioContext | null = null;
   /** The source node currently scheduled. */
@@ -96,8 +104,7 @@ export function useNodePlayback(
   function _tick(): void {
     if (ctx && state.value === "playing") {
       const elapsed = ctx.currentTime - startCtxTime;
-      const node = nodeRef.value;
-      const duration = node?.targetBuffer?.duration ?? 0;
+      const duration = _resolveTargetBuffer()?.duration ?? 0;
       const t = resumeFrom + elapsed;
 
       currentTime.value = Math.min(t, duration);
@@ -120,14 +127,14 @@ export function useNodePlayback(
   async function play(): Promise<void> {
     if (state.value === "playing") return;
 
-    const node = nodeRef.value;
-    if (!node || !node.targetBuffer) return;
+    const buffer = _resolveTargetBuffer();
+    if (!buffer) return;
 
     // Create an isolated AudioContext for this preview session.
     ctx = new AudioContext();
     source = ctx.createBufferSource();
     // Effects are pre-baked — play targetBuffer directly into destination.
-    source.buffer = node.targetBuffer;
+    source.buffer = buffer;
     source.connect(ctx.destination);
 
     const contextTime = ctx.currentTime;
@@ -156,8 +163,7 @@ export function useNodePlayback(
     // Snapshot the current position before tearing down the context.
     if (ctx) {
       const elapsed = ctx.currentTime - startCtxTime;
-      const node = nodeRef.value;
-      const duration = node?.targetBuffer?.duration ?? 0;
+      const duration = _resolveTargetBuffer()?.duration ?? 0;
       resumeFrom = Math.min(resumeFrom + elapsed, duration);
       currentTime.value = resumeFrom;
     }
@@ -187,8 +193,7 @@ export function useNodePlayback(
    * existing graph and restarts from the new position.
    */
   async function seek(time: number): Promise<void> {
-    const node = nodeRef.value;
-    const duration = node?.targetBuffer?.duration ?? 0;
+    const duration = _resolveTargetBuffer()?.duration ?? 0;
     const clampedTime = Math.max(0, Math.min(time, duration));
 
     const wasPlaying = state.value === "playing";

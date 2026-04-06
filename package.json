@@ -16,28 +16,28 @@
   },
   "dependencies": {
     "@breezystack/lamejs": "^1.2.7",
-    "dexie": "^4.4.1",
+    "dexie": "^4.4.2",
     "fflate": "^0.8.2",
     "nanoid": "^5.1.7",
-    "pinia": "^2.3.0",
-    "vue": "^3.5.31",
+    "pinia": "^3.0.4",
+    "vue": "^3.5.32",
     "waveform-path": "^0.0.2"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.4.7",
+    "@biomejs/biome": "^2.4.10",
     "@iconify-json/file-icons": "^1.2.2",
     "@iconify-json/mdi": "^1.2.3",
     "@iconify/tailwind4": "^1.2.3",
     "@tailwindcss/vite": "^4.2.2",
-    "@vitejs/plugin-vue": "^5.2.4",
+    "@vitejs/plugin-vue": "^6.0.5",
     "@vue/tsconfig": "^0.9.1",
-    "daisyui": "5.0.0-beta.7",
+    "daisyui": "^5.5.19",
     "husky": "^9.1.7",
     "postcss": "^8.5.8",
     "tailwindcss": "^4.2.2",
-    "typescript": "^5.9.3",
-    "vite": "^6.4.1",
+    "typescript": "^6.0.2",
+    "vite": "^8.0.5",
     "vitest": "^4.1.2",
-    "vue-tsc": "^2.2.12"
+    "vue-tsc": "^3.2.6"
   }
 }

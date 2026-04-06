@@ -9,6 +9,7 @@
  */
 
 import { computed, inject, onMounted, onUnmounted, ref } from "vue";
+import { useInstrumentAudioNode } from "../../../composables/useInstrumentAudioNode";
 import { usePianoClipboard } from "../../../composables/usePianoClipboard";
 import { NodePlaybackContextKey, nullNodePlayback } from "../../../composables/usePlaybackContext";
 import type { InstrumentNode } from "../../../features/nodes";
@@ -28,12 +29,17 @@ import ZoomToolbar from "../../controls/timeline/ZoomToolbar.vue";
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
-const props = defineProps<{ node: InstrumentNode }>();
+const props = defineProps<{ nodeId: string }>();
 
 // ── Stores / composables ──────────────────────────────────────────────────────
 
 const nodes = useNodesStore();
-// targetBuffer recompute is handled app-wide by useAllNodes() in App.vue.
+const instrumentNode = useInstrumentAudioNode(props.nodeId, { pipeline: true });
+
+// Transitional: PianoRollCanvas still expects a full InstrumentNode prop.
+const rawNode = computed(() => nodes.nodesById.get(props.nodeId) as InstrumentNode);
+
+// targetBuffer recompute is handled by useInstrumentAudioNode(nodeId, { pipeline: true }).
 // The single useNodePlayback instance is created in App.vue and provided via
 // NodePlaybackContextKey so this view and EffectVolume share the same cursor.
 
@@ -95,13 +101,13 @@ function onZoomSelect(startTime: number, endTime: number): void {
 // ── Note-type selection ───────────────────────────────────────────────────────
 
 function selectNoteType(type: NoteDuration): void {
-  nodes.setInstrumentSelectedNoteType(props.node.id, type);
+  instrumentNode.setSelectedNoteType(type);
 }
 
 // ── Note edits ────────────────────────────────────────────────────────────────
 
-function onUpdateNotes(notes: InstrumentNode["notes"]): void {
-  nodes.setInstrumentNotes(props.node.id, notes);
+function onUpdateNotes(updatedNotes: InstrumentNode["notes"]): void {
+  instrumentNode.setNotes(updatedNotes);
 }
 
 // ── Active tool ───────────────────────────────────────────────────────────────
@@ -238,7 +244,7 @@ function onCut(noteCount: number): void {
       @update:scale-factor="scaleFactor = $event"
     >
       <PianoRoll
-        :node="node"
+        :node="rawNode"
         :active-tool="activeTool"
         :current-time="previewCurrentTime"
         :readonly="previewState === 'playing'"
@@ -259,19 +265,19 @@ function onCut(noteCount: number): void {
       <button
         class="btn btn-sm btn-ghost btn-square"
         :title="
-          !node.targetBuffer && node.notes.length > 0
+          !instrumentNode.targetBuffer.value && instrumentNode.notes.value.length > 0
             ? 'Preparing audio…'
             : previewState === 'playing'
               ? 'Pause'
               : 'Play'
         "
-        :disabled="!node.targetBuffer && node.notes.length > 0"
+        :disabled="!instrumentNode.targetBuffer.value && instrumentNode.notes.value.length > 0"
         @click="previewState === 'playing' ? previewPause() : previewPlay()"
       >
         <i
           class="iconify size-4"
           :class="
-            !node.targetBuffer && node.notes.length > 0
+            !instrumentNode.targetBuffer.value && instrumentNode.notes.value.length > 0
               ? 'mdi--loading animate-spin'
               : previewState === 'playing'
                 ? 'mdi--pause'
@@ -287,7 +293,7 @@ function onCut(noteCount: number): void {
       <!-- Note-type selector -->
       <ButtonGroup
         :items="noteTypeItems"
-        :model-value="node.selectedNoteType"
+        :model-value="instrumentNode.selectedNoteType.value"
         :compact="row3Compact"
         @update:model-value="onNoteTypeSelected"
       />

@@ -5,7 +5,7 @@
  * Layout when buffer exists (top-to-bottom):
  *   Row 1  Header: [TimelineRuler flex-1]
  *   Row 2  Waveform (flex-1)
- *   Row 3  Player controls … [divider] [ZoomToolbar]
+ *   Row 3  Player controls … [tools] [divider] [ZoomToolbar]
  *
  * Layout when no buffer (idle / recording):
  *   Row 1  AudioAnalyzerView (flex-1)
@@ -17,31 +17,48 @@
  */
 
 import { computed, inject, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import {
+  audioBufferFromClipboardEntry,
+  useAudioClipboard,
+} from "../../../composables/useAudioClipboard";
 import { NodePlaybackContextKey, nullNodePlayback } from "../../../composables/usePlaybackContext";
-import type { RecordedNode } from "../../../features/nodes";
+import { useRecordedAudioNode } from "../../../composables/useRecordedAudioNode";
+import { getPristineChannels } from "../../../lib/audio/audio-buffer-repository";
+import { cutRegion, insertSegment, insertSilence } from "../../../lib/audio/buffer-utils";
 import { recorder } from "../../../lib/audio/recorder-singleton";
+import type { RecordedToolId } from "../../../lib/piano-roll/tool-types";
 import { ZOOM_PX_PER_MIN_MS } from "../../../lib/zoom-constants";
 import { useNodesStore } from "../../../stores/nodes";
 import { usePlayerStore } from "../../../stores/player";
 import AudioAnalyzerView from "../../controls/audio/AudioAnalyzerView.vue";
 import WaveformView from "../../controls/audio/WaveformView.vue";
+import ButtonGroup, { type ButtonGroupItem } from "../../controls/ButtonGroup.vue";
 import ScrollableTimeline from "../../controls/timeline/ScrollableTimeline.vue";
 import ZoomToolbar from "../../controls/timeline/ZoomToolbar.vue";
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
-const props = defineProps<{ node: RecordedNode }>();
+const props = defineProps<{ nodeId: string }>();
 
 // ── Stores ────────────────────────────────────────────────────────────────────
 
-const nodes = useNodesStore();
+const recordedNode = useRecordedAudioNode(props.nodeId, { pipeline: true });
 const player = usePlayerStore();
+const nodesStore = useNodesStore();
+
+// ── Pristine channels for corruption-immune waveform rendering ───────────────
+
+const sourcePristineChannels = computed(() => {
+  const node = nodesStore.nodesById.get(props.nodeId);
+  if (!node || node.kind !== "recorded" || !node.sourceBufferId) return undefined;
+  return getPristineChannels(node.sourceBufferId);
+});
 
 // ── Zoom + scroll ─────────────────────────────────────────────────────────────
 
 // scaleFactor = 1 means full buffer visible.
 const scaleFactor = ref(1);
-const totalDurationSeconds = computed(() => props.node.sourceBuffer?.duration ?? 0);
+const totalDurationSeconds = computed(() => recordedNode.sourceBuffer.value?.duration ?? 0);
 
 // Container width (measured via ResizeObserver) drives maxRatio for ZoomToolbar.
 const viewRef = ref<HTMLElement | null>(null);
@@ -80,7 +97,7 @@ function onZoomSelect(startTime: number, endTime: number): void {
 
 // ── Node playback ─────────────────────────────────────────────────────────────
 
-// targetBuffer recompute is handled app-wide by useAllNodes() in App.vue.
+// targetBuffer recompute is handled by useRecordedAudioNode(nodeId, { pipeline: true }).
 // The single useNodePlayback instance is created in App.vue and provided via
 // NodePlaybackContextKey so this view and EffectVolume share the same cursor.
 const {
@@ -138,11 +155,10 @@ onMounted(() => {
       clearInterval(recorderDurationTimer);
       recorderDurationTimer = null;
     }
-    const nodeId = props.node.id;
     try {
       const buf = await recorder?.getAudioBuffer();
-      nodes.setRecordedSourceBuffer(nodeId, buf);
-      nodes.setRecordingState(nodeId, false);
+      recordedNode.setSourceBuffer(buf);
+      recordedNode.setRecordingState(false);
     } catch {
       // ignore decode errors
     }
@@ -165,13 +181,11 @@ onMounted(() => {
 
 // Stop recording and clear live state when the node changes
 watch(
-  () => props.node,
-  (next, prev) => {
-    if (next?.id !== prev?.id) {
-      analyserBuffer.value = null;
-      if (isRecording.value) {
-        recorder?.stop();
-      }
+  () => props.nodeId,
+  () => {
+    analyserBuffer.value = null;
+    if (isRecording.value) {
+      recorder?.stop();
     }
   },
 );
@@ -180,8 +194,7 @@ watch(
 
 async function startRecording(): Promise<void> {
   if (!recorder) return;
-  const nodeId = props.node.id;
-  nodes.setRecordingState(nodeId, true);
+  recordedNode.setRecordingState(true);
 
   if (includeTimeline.value && player.state !== "playing") {
     void player.play();
@@ -190,7 +203,7 @@ async function startRecording(): Promise<void> {
   try {
     await recorder.record(250);
   } catch {
-    nodes.setRecordingState(nodeId, false);
+    recordedNode.setRecordingState(false);
   }
 }
 
@@ -213,7 +226,7 @@ function cancelReset(): void {
 
 function doReset(): void {
   confirmReset.value = false;
-  nodes.setRecordedSourceBuffer(props.node.id, null);
+  recordedNode.setSourceBuffer(null);
 }
 
 watch(confirmReset, async (val) => {
@@ -226,7 +239,7 @@ watch(confirmReset, async (val) => {
 // ── Playback label ────────────────────────────────────────────────────────────
 
 const playbackLabel = computed(() => {
-  const dur = props.node.sourceBuffer?.duration ?? 0;
+  const dur = recordedNode.sourceBuffer.value?.duration ?? 0;
   const cur = previewTime.value;
   const fmt = (s: number) => {
     const m = Math.floor(s / 60);
@@ -236,6 +249,178 @@ const playbackLabel = computed(() => {
   return `${fmt(cur)} / ${fmt(dur)}`;
 });
 
+// ── Active tool ───────────────────────────────────────────────────────────────
+
+const activeTool = ref<RecordedToolId | null>(null);
+
+// ── Audio clipboard ───────────────────────────────────────────────────────────
+
+const { hasAudioSegment, audioSegmentEntry, copyAudioSegment } = useAudioClipboard();
+
+// ── Tool button items ─────────────────────────────────────────────────────────
+
+const toolItems = computed<ButtonGroupItem[]>(() => [
+  {
+    id: "pan",
+    label: "Pan",
+    title: "Pan — drag to insert silence",
+    icon: "mdi--hand-front-left-outline",
+  },
+  {
+    id: "cut",
+    label: "Cut",
+    title: "Cut — select and remove a region",
+    icon: "mdi--content-cut",
+    activeClass: "btn-warning",
+  },
+  {
+    id: "copy",
+    label: "Copy",
+    title: "Copy — select a region to clipboard",
+    icon: "mdi--content-copy",
+  },
+  {
+    id: "paste",
+    label: "Paste",
+    title: "Paste — click to place audio from clipboard",
+    icon: "mdi--content-paste",
+    disabled: !hasAudioSegment.value,
+  },
+]);
+
+function onToolSelected(id: string): void {
+  const newTool = id as RecordedToolId;
+  // Toggle off if clicking the already-active tool
+  if (activeTool.value === newTool) {
+    activeTool.value = null;
+    selectionRange.value = null;
+    return;
+  }
+  activeTool.value = newTool;
+  selectionRange.value = null;
+}
+
+// ── Selection range (shared by cut/copy) ──────────────────────────────────────
+
+const selectionRange = ref<{ start: number; end: number } | null>(null);
+
+/** WaveformView should enter selection-drag mode when cut or copy is active. */
+const isSelectionMode = computed(() => activeTool.value === "cut" || activeTool.value === "copy");
+
+const selectionColor = computed(() => {
+  if (activeTool.value === "cut") return "var(--color-warning)";
+  if (activeTool.value === "copy") return "var(--color-info)";
+  return undefined;
+});
+
+function onWaveformSelection(start: number, end: number): void {
+  if (!isSelectionMode.value) return;
+  selectionRange.value = { start, end };
+
+  // Immediately execute the action after selection completes
+  if (activeTool.value === "copy") {
+    doCopy(start, end);
+  } else if (activeTool.value === "cut") {
+    doCut(start, end);
+  }
+}
+
+// ── Pan tool (insert silence — drag-based) ────────────────────────────────────
+
+/**
+ * Pan behaviour: matches instrument-node UX.  When the Pan tool is active,
+ * mousedown on the waveform captures the insertion point, dragging right
+ * defines the silence duration with a live visual preview, and mouseup
+ * commits the silence insertion to the source buffer.
+ */
+
+const isPanMode = computed(() => activeTool.value === "pan");
+
+function onPanCommit(atTime: number, duration: number): void {
+  const buf = recordedNode.sourceBuffer.value;
+  if (!buf) return;
+  const newBuffer = insertSilence(buf, atTime, duration);
+  recordedNode.setSourceBuffer(newBuffer);
+  showToast(`${duration.toFixed(1)}s silence inserted`);
+}
+
+// ── Cut tool ──────────────────────────────────────────────────────────────────
+
+function doCut(startSec: number, endSec: number): void {
+  const buf = recordedNode.sourceBuffer.value;
+  if (!buf) return;
+
+  // First copy to clipboard, then cut
+  const duration = copyAudioSegment(buf, startSec, endSec);
+
+  const newBuffer = cutRegion(buf, startSec, endSec);
+  recordedNode.setSourceBuffer(newBuffer);
+
+  // Seek to cut point
+  previewSeek(Math.min(startSec, newBuffer?.duration ?? 0));
+
+  selectionRange.value = null;
+  activeTool.value = null;
+
+  showToast(`${duration.toFixed(1)}s cut to clipboard`);
+}
+
+// ── Copy tool ─────────────────────────────────────────────────────────────────
+
+function doCopy(startSec: number, endSec: number): void {
+  const buf = recordedNode.sourceBuffer.value;
+  if (!buf) return;
+
+  const duration = copyAudioSegment(buf, startSec, endSec);
+
+  selectionRange.value = null;
+  activeTool.value = null;
+
+  showToast(`${duration.toFixed(1)}s copied to clipboard`);
+}
+
+// ── Paste tool (hover+click mode) ─────────────────────────────────────────────
+
+/**
+ * Paste behaviour: matches instrument-node UX.  When the Paste tool is active,
+ * hovering the waveform shows a preview band of the clipboard duration,
+ * and clicking inserts the audio at that position.  The tool stays active
+ * after paste — it's repeatable.
+ */
+
+const isPasteMode = computed(() => activeTool.value === "paste");
+
+const pastePreviewDuration = computed(() => {
+  const entry = audioSegmentEntry.value;
+  return entry ? entry.durationSeconds : 0;
+});
+
+function onPasteAt(time: number): void {
+  const buf = recordedNode.sourceBuffer.value;
+  const entry = audioSegmentEntry.value;
+  if (!buf || !entry) return;
+
+  const segment = audioBufferFromClipboardEntry(entry);
+  const newBuffer = insertSegment(buf, segment, time);
+  recordedNode.setSourceBuffer(newBuffer);
+
+  showToast(`${entry.durationSeconds.toFixed(1)}s pasted`);
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+
+const toastMessage = ref<string | null>(null);
+let _toastTimer: ReturnType<typeof setTimeout> | null = null;
+
+function showToast(message: string): void {
+  if (_toastTimer !== null) clearTimeout(_toastTimer);
+  toastMessage.value = message;
+  _toastTimer = setTimeout(() => {
+    toastMessage.value = null;
+    _toastTimer = null;
+  }, 3000);
+}
+
 // ── Cleanup ───────────────────────────────────────────────────────────────────
 
 onUnmounted(() => {
@@ -244,6 +429,7 @@ onUnmounted(() => {
   _removeRecorderListeners?.();
   _viewObserver?.disconnect();
   _viewObserver = null;
+  if (_toastTimer !== null) clearTimeout(_toastTimer);
 });
 </script>
 
@@ -253,7 +439,7 @@ onUnmounted(() => {
     class="flex flex-col h-full w-full overflow-hidden bg-base-100"
   >
     <!-- ── Has buffer: 3-row layout ──────────────────────────────────────── -->
-    <template v-if="node.sourceBuffer">
+    <template v-if="recordedNode.sourceBuffer.value">
       <!-- Row 1+2: ScrollableTimeline wraps ruler + waveform -->
       <ScrollableTimeline
         class="flex-1 min-h-0"
@@ -267,12 +453,22 @@ onUnmounted(() => {
         @update:scale-factor="scaleFactor = $event"
       >
         <WaveformView
-          :buffer="node.sourceBuffer"
+          :buffer="recordedNode.sourceBuffer.value"
           :currentTime="previewTime"
-          :zoom-select-active="zoomSelectActive"
+          :zoom-select-active="zoomSelectActive && activeTool == null"
+          :selection-active="isSelectionMode"
+          :selection-range="selectionRange"
+          :selection-color="selectionColor"
+          :pan-drag-active="isPanMode"
+          :paste-preview-active="isPasteMode"
+          :paste-preview-duration="pastePreviewDuration"
+          :pristine-channels="sourcePristineChannels"
           class="w-full h-full"
           @seek="previewSeek"
           @zoom-select="onZoomSelect"
+          @selection="onWaveformSelection"
+          @pan-commit="onPanCommit"
+          @paste-at="onPasteAt"
         />
       </ScrollableTimeline>
 
@@ -283,19 +479,19 @@ onUnmounted(() => {
         <button
           class="btn btn-sm btn-ghost btn-square"
           :title="
-            !node.targetBuffer
+            !recordedNode.targetBuffer.value
               ? 'Preparing audio…'
               : previewState === 'playing'
                 ? 'Pause'
                 : 'Play'
           "
-          :disabled="!node.targetBuffer"
+          :disabled="!recordedNode.targetBuffer.value"
           @click="previewState === 'playing' ? previewPause() : previewPlay()"
         >
           <i
             class="iconify size-4"
             :class="
-              !node.targetBuffer
+              !recordedNode.targetBuffer.value
                 ? 'mdi--loading animate-spin'
                 : previewState === 'playing'
                   ? 'mdi--pause'
@@ -310,30 +506,12 @@ onUnmounted(() => {
 
         <div class="flex-1" />
 
-        <button
-          class="btn btn-xs btn-ghost"
-          title="Insert silence — coming soon"
-          disabled
-        >
-          <i class="iconify mdi--format-pilcrow size-3.5" aria-hidden="true" />
-        </button>
-        <button class="btn btn-xs btn-ghost" title="Cut — coming soon" disabled>
-          <i class="iconify mdi--content-cut size-3.5" aria-hidden="true" />
-        </button>
-        <button
-          class="btn btn-xs btn-ghost"
-          title="Copy — coming soon"
-          disabled
-        >
-          <i class="iconify mdi--content-copy size-3.5" aria-hidden="true" />
-        </button>
-        <button
-          class="btn btn-xs btn-ghost"
-          title="Paste — coming soon"
-          disabled
-        >
-          <i class="iconify mdi--content-paste size-3.5" aria-hidden="true" />
-        </button>
+        <!-- Tool selector -->
+        <ButtonGroup
+          :items="toolItems"
+          :model-value="activeTool ?? ''"
+          @update:model-value="onToolSelected"
+        />
 
         <div class="w-px h-5 bg-base-300/60 mx-1" aria-hidden="true" />
 
@@ -442,5 +620,16 @@ onUnmounted(() => {
         <button>close</button>
       </form>
     </dialog>
+
+    <!-- ── Toast notification ─────────────────────────────────────────────── -->
+    <div
+      v-if="toastMessage"
+      class="toast toast-center z-50 pointer-events-none"
+      aria-live="polite"
+    >
+      <div class="alert alert-info py-2 px-4 text-sm">
+        <span>{{ toastMessage }}</span>
+      </div>
+    </div>
   </div>
 </template>

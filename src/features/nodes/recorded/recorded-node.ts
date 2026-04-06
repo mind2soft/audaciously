@@ -8,10 +8,11 @@ import type { ProjectNodeBase, ProjectNodeWithOutput } from "../node";
 
 export interface RecordedNode extends ProjectNodeWithOutput, ProjectNodeBase<"recorded"> {
   /**
-   * The original captured audio buffer. Null = not yet recorded.
-   * Persisted to IndexedDB. Never modified after recording completes.
+   * ID referencing the original captured audio buffer in the AudioBuffer
+   * repository. Null = not yet recorded. The actual AudioBuffer and its
+   * pristine Float32Array[] channel snapshots live in the repository.
    */
-  sourceBuffer: AudioBuffer | null;
+  sourceBufferId: string | null;
   /** True while actively recording. */
   isRecording: boolean;
   /** Effects applied during playback of this node's buffer. */
@@ -24,8 +25,8 @@ export function createRecordedNode(name: string, id?: string): RecordedNode {
     id: id ?? nanoid(),
     name,
     kind: "recorded",
-    sourceBuffer: null,
-    targetBuffer: null,
+    sourceBufferId: null,
+    targetBufferId: null,
     isRecording: false,
     effects: [],
   };

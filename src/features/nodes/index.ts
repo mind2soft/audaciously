@@ -11,6 +11,12 @@ export {
   createInstrumentNode,
   DEFAULT_TIME_SIGNATURE,
 } from "./instrument/instrument-node";
-export type { ProjectNode, ProjectNodeBase, ProjectNodeKind } from "./node";
+export type { AudioProjectNode, ProjectNode, ProjectNodeBase, ProjectNodeKind } from "./node";
+export {
+  isAudioNode,
+  isFolderNode,
+  isInstrumentNode,
+  isRecordedNode,
+} from "./node";
 export type { RecordedNode } from "./recorded/recorded-node";
 export { createRecordedNode } from "./recorded/recorded-node";

@@ -4,20 +4,21 @@
 
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
-import type { AudioEffect, AudioEffectType } from "../features/effects";
-import {
-  createBalanceEffect,
-  createFadeInEffect,
-  createFadeOutEffect,
-  createGainEffect,
-  createSplitEffect,
-  createVolumeEffect,
-} from "../features/effects";
 import type { FolderNode, InstrumentNode, ProjectNode, RecordedNode } from "../features/nodes";
-import { createFolderNode, createInstrumentNode, createRecordedNode } from "../features/nodes";
-import type { PlacedNote, TimeSignature } from "../features/nodes/instrument/instrument-node";
-import type { ProjectNodeWithOutput } from "../features/nodes/node";
-import type { MusicInstrumentType, NoteDuration, OctaveRange } from "../lib/music/instruments";
+import {
+  createFolderNode,
+  createInstrumentNode,
+  createRecordedNode,
+  isAudioNode,
+  isFolderNode,
+  isRecordedNode,
+} from "../features/nodes";
+import {
+  clearAllBuffers,
+  registerBuffer,
+  removeBuffer,
+} from "../lib/audio/audio-buffer-repository";
+import type { MusicInstrumentType } from "../lib/music/instruments";
 
 // ── Serialization types ────────────────────────────────────────────────────────
 
@@ -52,7 +53,7 @@ export const useNodesStore = defineStore("nodes", () => {
   );
 
   const rootNodes = computed((): ProjectNode[] =>
-    rootIds.value.map((id) => nodesById.value.get(id)!).filter(Boolean),
+    rootIds.value.map((id) => nodesById.value.get(id)).filter((n): n is ProjectNode => n != null),
   );
 
   // ── Internal helpers ──────────────────────────────────────────────────────
@@ -62,8 +63,8 @@ export const useNodesStore = defineStore("nodes", () => {
     nodesById.value.set(node.id, node);
     if (parentId) {
       const parent = nodesById.value.get(parentId);
-      if (parent && parent.kind === "folder") {
-        (parent as FolderNode).childIds.push(node.id);
+      if (parent && isFolderNode(parent)) {
+        parent.childIds.push(node.id);
       }
     } else {
       rootIds.value.push(node.id);
@@ -80,10 +81,10 @@ export const useNodesStore = defineStore("nodes", () => {
     }
     // Remove from any folder's childIds
     for (const node of nodesById.value.values()) {
-      if (node.kind === "folder") {
-        const ci = (node as FolderNode).childIds.indexOf(id);
+      if (isFolderNode(node)) {
+        const ci = node.childIds.indexOf(id);
         if (ci !== -1) {
-          (node as FolderNode).childIds.splice(ci, 1);
+          node.childIds.splice(ci, 1);
           return;
         }
       }
@@ -132,12 +133,17 @@ export const useNodesStore = defineStore("nodes", () => {
     if (!node) return;
 
     // Recursively remove children for folders
-    if (node.kind === "folder") {
-      const folder = node as FolderNode;
+    if (isFolderNode(node)) {
       // Copy array since we'll be mutating it
-      for (const childId of [...folder.childIds]) {
+      for (const childId of [...node.childIds]) {
         removeNode(childId);
       }
+    }
+
+    // Clean up buffer repository entries before removing the node
+    if (isAudioNode(node)) {
+      if (node.targetBufferId) removeBuffer(node.targetBufferId);
+      if (isRecordedNode(node) && node.sourceBufferId) removeBuffer(node.sourceBufferId);
     }
 
     _detach(id);
@@ -163,12 +169,11 @@ export const useNodesStore = defineStore("nodes", () => {
 
     if (newParentId) {
       const parent = nodesById.value.get(newParentId);
-      if (parent && parent.kind === "folder") {
-        const folder = parent as FolderNode;
+      if (parent && isFolderNode(parent)) {
         if (insertIndex !== undefined) {
-          folder.childIds.splice(insertIndex, 0, id);
+          parent.childIds.splice(insertIndex, 0, id);
         } else {
-          folder.childIds.push(id);
+          parent.childIds.push(id);
         }
       }
     } else {
@@ -186,8 +191,13 @@ export const useNodesStore = defineStore("nodes", () => {
 
   function setTargetBuffer(id: string, buffer: AudioBuffer | null): void {
     const node = nodesById.value.get(id);
-    if (node && "targetBuffer" in node) {
-      (node as ProjectNodeWithOutput).targetBuffer = buffer;
+    if (node && isAudioNode(node)) {
+      // Remove old buffer from repository
+      if (node.targetBufferId) {
+        removeBuffer(node.targetBufferId);
+      }
+      // Register new buffer (or clear)
+      node.targetBufferId = buffer ? registerBuffer(buffer) : null;
       for (const listener of targetBufferListeners) {
         listener(id, buffer);
       }
@@ -203,123 +213,6 @@ export const useNodesStore = defineStore("nodes", () => {
     return () => {
       targetBufferListeners.delete(listener);
     };
-  }
-
-  // ── Node content updates ──────────────────────────────────────────────────
-
-  function setRecordedSourceBuffer(id: string, buffer: AudioBuffer | null): void {
-    const node = nodesById.value.get(id);
-    if (node && node.kind === "recorded") {
-      (node as RecordedNode).sourceBuffer = buffer;
-    }
-  }
-
-  function setRecordingState(id: string, isRecording: boolean): void {
-    const node = nodesById.value.get(id);
-    if (node && node.kind === "recorded") {
-      (node as RecordedNode).isRecording = isRecording;
-    }
-  }
-
-  function setNodeEffects(id: string, effects: AudioEffect[]): void {
-    const node = nodesById.value.get(id);
-    if (node && (node.kind === "recorded" || node.kind === "instrument")) {
-      (node as RecordedNode | InstrumentNode).effects = effects;
-    }
-  }
-
-  function addEffect(id: string, type: AudioEffectType): void {
-    const node = nodesById.value.get(id);
-    if (!node || (node.kind !== "recorded" && node.kind !== "instrument")) return;
-    const target = node as RecordedNode | InstrumentNode;
-
-    // Enforce one instance per type
-    if (target.effects.some((e) => e.type === type)) return;
-
-    let effect: AudioEffect;
-    switch (type) {
-      case "gain":
-        effect = createGainEffect();
-        break;
-      case "balance":
-        effect = createBalanceEffect();
-        break;
-      case "fadeIn":
-        effect = createFadeInEffect();
-        break;
-      case "fadeOut":
-        effect = createFadeOutEffect();
-        break;
-      case "split":
-        effect = createSplitEffect();
-        break;
-      case "volume":
-        effect = createVolumeEffect();
-        break;
-    }
-    target.effects.push(effect);
-  }
-
-  function removeEffect(id: string, effectId: string): void {
-    const node = nodesById.value.get(id);
-    if (!node || (node.kind !== "recorded" && node.kind !== "instrument")) return;
-    const target = node as RecordedNode | InstrumentNode;
-    const idx = target.effects.findIndex((e) => e.id === effectId);
-    if (idx !== -1) {
-      target.effects.splice(idx, 1);
-    }
-  }
-
-  function reorderEffects(id: string, fromIndex: number, toIndex: number): void {
-    const node = nodesById.value.get(id);
-    if (!node || (node.kind !== "recorded" && node.kind !== "instrument")) return;
-    const target = node as RecordedNode | InstrumentNode;
-    if (
-      fromIndex < 0 ||
-      fromIndex >= target.effects.length ||
-      toIndex < 0 ||
-      toIndex >= target.effects.length
-    )
-      return;
-    const [moved] = target.effects.splice(fromIndex, 1);
-    target.effects.splice(toIndex, 0, moved);
-  }
-
-  // ── Instrument node specific ──────────────────────────────────────────────
-
-  function setInstrumentNotes(id: string, notes: PlacedNote[]): void {
-    const node = nodesById.value.get(id);
-    if (node && node.kind === "instrument") {
-      (node as InstrumentNode).notes = notes;
-    }
-  }
-
-  function setInstrumentBpm(id: string, bpm: number): void {
-    const node = nodesById.value.get(id);
-    if (node && node.kind === "instrument") {
-      (node as InstrumentNode).bpm = bpm;
-    }
-  }
-
-  function setInstrumentTimeSignature(id: string, ts: TimeSignature): void {
-    const node = nodesById.value.get(id);
-    if (node && node.kind === "instrument") {
-      (node as InstrumentNode).timeSignature = { ...ts };
-    }
-  }
-
-  function setInstrumentSelectedNoteType(id: string, noteType: NoteDuration): void {
-    const node = nodesById.value.get(id);
-    if (node && node.kind === "instrument") {
-      (node as InstrumentNode).selectedNoteType = noteType;
-    }
-  }
-
-  function setInstrumentOctaveRange(id: string, range: OctaveRange): void {
-    const node = nodesById.value.get(id);
-    if (node && node.kind === "instrument") {
-      (node as InstrumentNode).octaveRange = { ...range };
-    }
   }
 
   // ── Auto-naming helpers ────────────────────────────────────────────────────
@@ -347,11 +240,12 @@ export const useNodesStore = defineStore("nodes", () => {
     const obj: Record<string, ProjectNode> = {};
     nodesById.value.forEach((node, id) => {
       // Shallow-copy to strip Vue reactive proxy.
-      // Explicitly null targetBuffer — it is never persisted (recomputed on load)
-      // and AudioBuffer is not JSON-serialisable.
-      const copy: any = { ...node };
-      if ("targetBuffer" in copy) copy.targetBuffer = null;
-      obj[id] = copy as ProjectNode;
+      // Explicitly null targetBufferId — it is never persisted (recomputed on load).
+      if (isAudioNode(node)) {
+        obj[id] = { ...node, targetBufferId: null };
+      } else {
+        obj[id] = { ...node };
+      }
     });
     return {
       nodesById: obj,
@@ -370,6 +264,7 @@ export const useNodesStore = defineStore("nodes", () => {
   }
 
   function clear(): void {
+    clearAllBuffers();
     nodesById.value.clear();
     rootIds.value = [];
     selectedNodeId.value = null;
@@ -393,19 +288,6 @@ export const useNodesStore = defineStore("nodes", () => {
     selectNode,
     setTargetBuffer,
     onTargetBufferChange,
-    // node content updates
-    setRecordedSourceBuffer,
-    setRecordingState,
-    setNodeEffects,
-    addEffect,
-    removeEffect,
-    reorderEffects,
-    // instrument specific
-    setInstrumentNotes,
-    setInstrumentBpm,
-    setInstrumentTimeSignature,
-    setInstrumentSelectedNoteType,
-    setInstrumentOctaveRange,
     // auto-naming
     nextFolderName,
     nextRecordedName,

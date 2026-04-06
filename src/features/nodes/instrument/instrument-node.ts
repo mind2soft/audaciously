@@ -3,7 +3,7 @@
 // See: .opencode/context/refactor/01-terminology.md
 //
 // NOTE: The reactive synth render loop (watchEffect + synthWorker) is NOT here.
-// It lives in composables/useInstrumentNode.ts (P4-02). This file is pure data.
+// It lives in composables/useInstrumentAudioNode.ts. This file is pure data.
 
 import { nanoid } from "nanoid";
 import type {
@@ -79,7 +79,7 @@ export function createInstrumentNode<InstrumentType extends MusicInstrumentType>
     pitchScrollTop: 0,
     octaveRange: { ...PIANO_DEFAULT_OCTAVE_RANGE },
     showWaveform: false,
-    targetBuffer: null,
+    targetBufferId: null,
     effects: [],
   };
 }

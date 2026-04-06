@@ -210,7 +210,8 @@ function buildTrackEntries(
   // Recorded entry — one entry combining all recorded segments on this track.
   if (recordedSegs.length > 0) {
     const seqEntries: AwpSequenceEntry[] = recordedSegs.map((seg) => {
-      const node = nodeMap.get(seg.nodeId)!;
+      const node = nodeMap.get(seg.nodeId);
+      if (!node) throw new Error(`Node missing for segment ${seg.nodeId} after pre-filter`);
       const blobRec = node.audioBlobId ? audioBlobMap.get(node.audioBlobId) : undefined;
 
       const audioMeta: AwpAudioMeta = blobRec

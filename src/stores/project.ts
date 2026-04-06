@@ -5,7 +5,7 @@
 import { nanoid } from "nanoid";
 import { defineStore } from "pinia";
 import { computed, ref, watch } from "vue";
-import type { InstrumentNode, RecordedNode } from "../features/nodes";
+import { getBuffer } from "../lib/audio/audio-buffer-repository";
 import { type AutoSave, createAutoSave } from "../lib/storage/auto-save";
 import { createDefaultMetadata, type ProjectMetadata } from "../lib/storage/project-metadata";
 import { loadProject, saveProject } from "../lib/storage/project-repository";
@@ -63,10 +63,10 @@ export const useProjectStore = defineStore("project", () => {
     let totalSamples = 0;
     nodesStore.nodesById.forEach((node) => {
       if (node.kind === "recorded") {
-        const buf = (node as RecordedNode).sourceBuffer;
+        const buf = node.sourceBufferId ? getBuffer(node.sourceBufferId) : undefined;
         if (buf) totalSamples += buf.length * buf.numberOfChannels;
       } else if (node.kind === "instrument") {
-        const buf = (node as InstrumentNode).targetBuffer;
+        const buf = node.targetBufferId ? getBuffer(node.targetBufferId) : undefined;
         if (buf) totalSamples += buf.length * buf.numberOfChannels;
       }
     });
@@ -92,11 +92,12 @@ export const useProjectStore = defineStore("project", () => {
         nodesStore.nodesById.forEach((node, id) => {
           if (node.kind === "recorded") {
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const { targetBuffer: _tb, isRecording: _ir, ...rest } = node as RecordedNode;
-            snap[id] = rest;
+            const { targetBufferId: _tb, isRecording: _ir, sourceBufferId: _sb, ...rest } = node;
+            // Track whether a buffer exists without deep-watching the native object.
+            snap[id] = { ...rest, _hasBuffer: !!_sb };
           } else if (node.kind === "instrument") {
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const { targetBuffer: _tb, ...rest } = node as InstrumentNode;
+            const { targetBufferId: _tb, ...rest } = node;
             snap[id] = rest;
           } else {
             snap[id] = node;

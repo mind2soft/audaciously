@@ -12,7 +12,7 @@
 // The processing function is injectable (required) for testability — production
 // callers pass computeTargetBuffer; tests pass a synchronous mock.
 
-import { onScopeDispose, type Ref, ref, shallowRef, watch } from "vue";
+import { markRaw, onScopeDispose, type Ref, ref, shallowRef, watch } from "vue";
 import type { AudioEffect } from "../features/effects/types";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -23,6 +23,7 @@ export type ProcessFn = (
   effects: AudioEffect[],
   signal: AbortSignal,
   nodeId?: string,
+  pristineChannels?: Float32Array[],
 ) => Promise<AudioBuffer>;
 
 export interface UseAudioPipelineOptions {
@@ -39,6 +40,11 @@ export interface UseAudioPipelineOptions {
    * seqNum cancellation. Without this, all nodes share a single seqNum namespace.
    */
   nodeId?: Ref<string>;
+  /**
+   * Optional pristine channel snapshots — forwarded to processFn so it can
+   * use corruption-immune Float32Array data instead of AudioBuffer.getChannelData().
+   */
+  pristineChannels?: Ref<Float32Array[] | undefined>;
 }
 
 export interface UseAudioPipelineReturn {
@@ -70,6 +76,7 @@ export function useAudioPipeline(
 ): UseAudioPipelineReturn {
   const processFn = options.processFn;
   const nodeIdRef = options.nodeId;
+  const pristineRef = options.pristineChannels;
 
   const targetBuffer = shallowRef<AudioBuffer | null>(null);
   const isProcessing = ref(false);
@@ -104,12 +111,18 @@ export function useAudioPipeline(
       isProcessing.value = true;
 
       try {
-        const result = await processFn(curr.source, curr.effects, signal, nodeIdRef?.value);
+        const result = await processFn(
+          curr.source,
+          curr.effects,
+          signal,
+          nodeIdRef?.value,
+          pristineRef?.value,
+        );
 
         // If aborted between await and here, signal.aborted is true.
         if (signal.aborted) return;
 
-        targetBuffer.value = result;
+        targetBuffer.value = markRaw(result);
       } catch {
         // Aborted or worker error — retain previous targetBuffer so playback
         // continues uninterrupted until the next successful bake.

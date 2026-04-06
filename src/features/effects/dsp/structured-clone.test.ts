@@ -85,7 +85,7 @@ describe("structuredClone of VolumeEffect", () => {
   });
 
   test("shallow-spread then clone (simulates watcher snapshot path)", () => {
-    // This is the exact pattern used in useInstrumentNode.ts line 85:
+    // This is the exact pattern used in useInstrumentAudioNode.ts:
     //   effects: node.effects.map((e) => ({ ...e }))
     // The spread copies keyframes as a reference, then postMessage clones it.
     const storeEffect: VolumeEffect = {

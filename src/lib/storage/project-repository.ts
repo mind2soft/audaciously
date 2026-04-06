@@ -1,6 +1,7 @@
 import { nanoid } from "nanoid";
 import type { NodeTreeJSON } from "../../stores/nodes";
 import type { SequenceJSON } from "../../stores/sequence";
+import { getPristineChannels } from "../audio/audio-buffer-repository";
 import { compressFloat32Array, decompressBlobToFloat32Array } from "./compression";
 import {
   type AudioBlobRecord,
@@ -70,7 +71,10 @@ export async function saveProject(
       const channelData: Blob[] = [];
 
       for (let ch = 0; ch < numberOfChannels; ch++) {
-        channelData.push(await compressFloat32Array(ref.buffer.getChannelData(ch)));
+        // Use pristine channel snapshots when available — AudioBuffer
+        // getChannelData() is subject to browser-level corruption.
+        const source = ref.pristineChannels?.[ch] ?? ref.buffer.getChannelData(ch);
+        channelData.push(await compressFloat32Array(source));
       }
 
       return {
@@ -372,6 +376,7 @@ export async function updateProjectMetadata(id: string, metadata: ProjectMetadat
   await db.projects.update(id, {
     ...serializeMetadata(metadata),
     updatedAt: new Date(),
+    // biome-ignore lint/suspicious/noExplicitAny: required to bypass Dexie's recursive KeyPaths<ProjectRecord> limitation
   } as any);
 }
 
@@ -463,17 +468,23 @@ export async function deleteSegmentRecord(projectId: string, segmentId: string):
  * `audioBlobId`). Otherwise a new blob ID is minted and the node record is
  * updated to reference it.
  *
+ * When `sourceBufferId` is provided, pristine channel snapshots from the
+ * audio-buffer-repository are used instead of `buffer.getChannelData()`,
+ * avoiding browser-level sample data corruption.
+ *
  * This is the slow path — called only when the buffer has actually changed.
  */
 export async function upsertAudioBlob(
   projectId: string,
   nodeId: string,
   buffer: AudioBuffer,
+  sourceBufferId?: string,
 ): Promise<void> {
   const { sampleRate, numberOfChannels, length } = buffer;
+  const pristine = sourceBufferId ? getPristineChannels(sourceBufferId) : undefined;
   const channelData: Blob[] = await Promise.all(
     Array.from({ length: numberOfChannels }, (_, ch) =>
-      compressFloat32Array(buffer.getChannelData(ch)),
+      compressFloat32Array(pristine?.[ch] ?? buffer.getChannelData(ch)),
     ),
   );
 

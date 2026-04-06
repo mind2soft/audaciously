@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import type { InstrumentNode } from "../../../features/nodes";
-import { useNodesStore } from "../../../stores/nodes";
+import { useInstrumentAudioNode } from "../../../composables/useInstrumentAudioNode";
 
-const props = defineProps<{ node: InstrumentNode }>();
-const nodes = useNodesStore();
+const props = defineProps<{ nodeId: string }>();
+const instrumentNode = useInstrumentAudioNode(props.nodeId);
 
 function beatUnitLabel(unit: number): string {
   const map: Record<number, string> = {
@@ -17,14 +16,14 @@ function beatUnitLabel(unit: number): string {
 
 function onBpmInput(event: Event): void {
   const v = parseFloat((event.target as HTMLInputElement).value);
-  if (!Number.isNaN(v)) nodes.setInstrumentBpm(props.node.id, Math.max(20, Math.min(300, v)));
+  if (!Number.isNaN(v)) instrumentNode.setBpm(Math.max(20, Math.min(300, v)));
 }
 
 function onBeatsPerMeasureChange(event: Event): void {
   const v = parseInt((event.target as HTMLSelectElement).value, 10);
   if (!Number.isNaN(v)) {
-    nodes.setInstrumentTimeSignature(props.node.id, {
-      ...props.node.timeSignature,
+    instrumentNode.setTimeSignature({
+      ...instrumentNode.timeSignature.value,
       beatsPerMeasure: v,
     });
   }
@@ -33,8 +32,8 @@ function onBeatsPerMeasureChange(event: Event): void {
 function onBeatUnitChange(event: Event): void {
   const v = parseInt((event.target as HTMLSelectElement).value, 10);
   if (!Number.isNaN(v)) {
-    nodes.setInstrumentTimeSignature(props.node.id, {
-      ...props.node.timeSignature,
+    instrumentNode.setTimeSignature({
+      ...instrumentNode.timeSignature.value,
       beatUnit: v,
     });
   }
@@ -60,12 +59,12 @@ function onBeatUnitChange(event: Event): void {
           class="range range-xs range-primary flex-1"
           min="20"
           max="300"
-          :value="node.bpm"
+          :value="instrumentNode.bpm.value"
           @input="onBpmInput"
         />
         <span
           class="text-xs tabular-nums text-base-content/70 w-8 text-right"
-          >{{ node.bpm }}</span
+          >{{ instrumentNode.bpm.value }}</span
         >
       </div>
 
@@ -75,7 +74,7 @@ function onBeatUnitChange(event: Event): void {
       <div class="flex items-center gap-1.5 text-xs text-base-content/60">
         <select
           class="select select-xs max-w-20 tabular-nums"
-          :value="node.timeSignature.beatsPerMeasure"
+          :value="instrumentNode.timeSignature.value.beatsPerMeasure"
           @change="onBeatsPerMeasureChange"
         >
           <option v-for="n in [2, 3, 4, 5, 6, 7, 8, 9, 12]" :key="n" :value="n">
@@ -85,7 +84,7 @@ function onBeatUnitChange(event: Event): void {
         <span class="px-0.5">/</span>
         <select
           class="select select-xs max-w-20"
-          :value="node.timeSignature.beatUnit"
+          :value="instrumentNode.timeSignature.value.beatUnit"
           @change="onBeatUnitChange"
         >
           <option

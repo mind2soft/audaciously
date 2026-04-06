@@ -1,6 +1,4 @@
 import { nanoid } from "nanoid";
-import type { InstrumentNode, RecordedNode } from "../../features/nodes";
-import type { FolderNode } from "../../features/nodes/folder/folder-node";
 import { createFolderNode } from "../../features/nodes/folder/folder-node";
 import { createInstrumentNode } from "../../features/nodes/instrument/instrument-node";
 import { createRecordedNode } from "../../features/nodes/recorded/recorded-node";
@@ -8,6 +6,7 @@ import { createSegment } from "../../features/sequence/segment";
 import { createTrack } from "../../features/sequence/track";
 import type { NodeTreeJSON } from "../../stores/nodes";
 import type { SequenceJSON } from "../../stores/sequence";
+import { getBuffer, getPristineChannels, registerBuffer } from "../audio/audio-buffer-repository";
 import type { NodeRecord, SegmentRecord, TrackRecord } from "./db";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -16,6 +15,8 @@ import type { NodeRecord, SegmentRecord, TrackRecord } from "./db";
 export interface AudioBlobRef {
   id: string;
   buffer: AudioBuffer;
+  /** Pristine channel snapshots — used for compression instead of getChannelData when available. */
+  pristineChannels?: Float32Array[];
 }
 
 /** Flat DB-ready records produced by serialization. */
@@ -52,50 +53,64 @@ export function serializeNodes(
   const audioBlobs: AudioBlobRef[] = [];
 
   for (const node of Object.values(nodesJSON.nodesById)) {
-    if (node.kind === "folder") {
-      const folder = node as FolderNode;
-      nodeRecords.push({
-        id: folder.id,
-        projectId,
-        kind: "folder",
-        name: folder.name,
-        childIds: [...folder.childIds],
-      });
-    } else if (node.kind === "recorded") {
-      const recorded = node as RecordedNode;
-      let audioBlobId: string | undefined;
+    switch (node.kind) {
+      case "folder":
+        nodeRecords.push({
+          id: node.id,
+          projectId,
+          kind: "folder",
+          name: node.name,
+          childIds: [...node.childIds],
+        });
+        break;
+      case "recorded": {
+        let audioBlobId: string | undefined;
 
-      if (recorded.sourceBuffer) {
-        audioBlobId = nanoid();
-        audioBlobs.push({ id: audioBlobId, buffer: recorded.sourceBuffer });
+        if (node.sourceBufferId) {
+          const buf = getBuffer(node.sourceBufferId);
+          if (buf) {
+            audioBlobId = nanoid();
+            audioBlobs.push({
+              id: audioBlobId,
+              buffer: buf,
+              pristineChannels: getPristineChannels(node.sourceBufferId),
+            });
+          }
+        }
+
+        nodeRecords.push({
+          id: node.id,
+          projectId,
+          kind: "recorded",
+          name: node.name,
+          effects: node.effects.length > 0 ? [...node.effects] : undefined,
+          audioBlobId,
+          isRecording: node.isRecording || undefined,
+        });
+        break;
       }
-
-      nodeRecords.push({
-        id: recorded.id,
-        projectId,
-        kind: "recorded",
-        name: recorded.name,
-        effects: recorded.effects.length > 0 ? [...recorded.effects] : undefined,
-        audioBlobId,
-        isRecording: recorded.isRecording || undefined,
-      });
-    } else if (node.kind === "instrument") {
-      const instr = node as InstrumentNode;
-      nodeRecords.push({
-        id: instr.id,
-        projectId,
-        kind: "instrument",
-        name: instr.name,
-        effects: instr.effects.length > 0 ? [...instr.effects] : undefined,
-        instrumentId: instr.instrumentType,
-        bpm: instr.bpm,
-        timeSignature: { ...instr.timeSignature },
-        notes: instr.notes.length > 0 ? [...instr.notes] : undefined,
-        selectedNoteType: instr.selectedNoteType,
-        pitchScrollTop: instr.pitchScrollTop,
-        showWaveform: instr.showWaveform || undefined,
-        octaveRange: { ...instr.octaveRange },
-      });
+      case "instrument":
+        nodeRecords.push({
+          id: node.id,
+          projectId,
+          kind: "instrument",
+          name: node.name,
+          effects: node.effects.length > 0 ? [...node.effects] : undefined,
+          instrumentId: node.instrumentType,
+          bpm: node.bpm,
+          timeSignature: { ...node.timeSignature },
+          notes: node.notes.length > 0 ? [...node.notes] : undefined,
+          selectedNoteType: node.selectedNoteType,
+          pitchScrollTop: node.pitchScrollTop,
+          showWaveform: node.showWaveform || undefined,
+          octaveRange: { ...node.octaveRange },
+        });
+        break;
+      default: {
+        const _exhaustive: never = node;
+        // biome-ignore lint/suspicious/noExplicitAny: accessing .kind on `never` for exhaustive-check error message
+        throw new Error(`Unhandled node kind: ${(_exhaustive as any).kind}`);
+      }
     }
   }
 
@@ -163,32 +178,44 @@ export function deserializeNodes(
   const nodesById: Record<string, import("../../features/nodes").ProjectNode> = {};
 
   for (const record of nodeRecords) {
-    if (record.kind === "folder") {
-      const node = createFolderNode(record.name, record.id);
-      if (record.childIds) {
-        node.childIds.push(...record.childIds);
+    switch (record.kind) {
+      case "folder": {
+        const node = createFolderNode(record.name, record.id);
+        if (record.childIds) {
+          node.childIds.push(...record.childIds);
+        }
+        nodesById[record.id] = node;
+        break;
       }
-      nodesById[record.id] = node;
-    } else if (record.kind === "recorded") {
-      const node = createRecordedNode(record.name, record.id);
-      if (record.effects) node.effects = [...record.effects];
-      if (record.audioBlobId) {
-        node.sourceBuffer = audioBuffers.get(record.audioBlobId) ?? null;
+      case "recorded": {
+        const node = createRecordedNode(record.name, record.id);
+        if (record.effects) node.effects = [...record.effects];
+        if (record.audioBlobId) {
+          const buf = audioBuffers.get(record.audioBlobId) ?? null;
+          node.sourceBufferId = buf ? registerBuffer(buf, { pristine: true }) : null;
+        }
+        nodesById[record.id] = node;
+        break;
       }
-      nodesById[record.id] = node;
-    } else if (record.kind === "instrument") {
-      if (!record.instrumentId) continue; // Corrupt record — skip.
+      case "instrument": {
+        if (!record.instrumentId) continue; // Corrupt record — skip.
 
-      const node = createInstrumentNode(record.name, record.instrumentId, record.id);
-      if (record.effects) node.effects = [...record.effects];
-      if (record.bpm !== undefined) node.bpm = record.bpm;
-      if (record.timeSignature) node.timeSignature = { ...record.timeSignature };
-      if (record.notes) node.notes = [...record.notes];
-      if (record.selectedNoteType) node.selectedNoteType = record.selectedNoteType;
-      if (record.pitchScrollTop !== undefined) node.pitchScrollTop = record.pitchScrollTop;
-      if (record.showWaveform !== undefined) node.showWaveform = record.showWaveform;
-      if (record.octaveRange) node.octaveRange = { ...record.octaveRange };
-      nodesById[record.id] = node;
+        const node = createInstrumentNode(record.name, record.instrumentId, record.id);
+        if (record.effects) node.effects = [...record.effects];
+        if (record.bpm !== undefined) node.bpm = record.bpm;
+        if (record.timeSignature) node.timeSignature = { ...record.timeSignature };
+        if (record.notes) node.notes = [...record.notes];
+        if (record.selectedNoteType) node.selectedNoteType = record.selectedNoteType;
+        if (record.pitchScrollTop !== undefined) node.pitchScrollTop = record.pitchScrollTop;
+        if (record.showWaveform !== undefined) node.showWaveform = record.showWaveform;
+        if (record.octaveRange) node.octaveRange = { ...record.octaveRange };
+        nodesById[record.id] = node;
+        break;
+      }
+      default: {
+        const _exhaustive: never = record.kind;
+        throw new Error(`Unhandled node kind in deserialize: ${_exhaustive}`);
+      }
     }
   }
 
